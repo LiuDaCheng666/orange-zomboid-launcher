@@ -13,6 +13,9 @@ namespace PZ3D {
   static string Record(string root) {return Path.Combine(root,"orange-installation.json");}
   public static int Main(string[] args) {
    try {
+    if(args.Length>0&&args[0]=="--preflight") {
+     CoreFixture.Initialize();PreflightRefusals(args.Length>1?args[1]:null);Console.WriteLine("CORE PREFLIGHT: "+CoreFixture.Passed+" PASS");return 0;
+    }
     if(args.Length>0&&args[0]=="--health") {
      Tx("ConfirmHealth",args[1],args[2],args[4],File.ReadAllText(args[3]));return 0;
     }
@@ -53,7 +56,7 @@ namespace PZ3D {
    CoreFixture.Reject(()=>Apply(root,task,exe=>true),"successful task cannot apply twice");
    PortableDeployment.Uninstall(root);
    CoreFixture.Check(File.ReadAllText(Path.Combine(root,"personal.txt"))=="keep"&&!File.Exists(CoreFixture.FileAt(root,"Web/app.js")),"legacy entry dispatches v2 owned uninstall after update");
-   Authentication();Conflicts();Interruptions();CrossProcess();Hardening();PublicationConflicts();ChildHealth();StagedRecovery();PreparationFailure();
+   Authentication();Conflicts();Interruptions();CrossProcess();Hardening();PublicationConflicts();ChildHealth();StagedRecovery();PreparationFailure();PreflightRefusals();
   }
   static void Authentication() {
    string root=CoreFixture.Install();var manifest=CoreFixture.Manifest("1.1.1",CoreFixture.B());manifest.version="9.9.9";manifest.files[1].sha256=new string('0',64);manifest.files[1].path="VERSION";
@@ -195,6 +198,29 @@ namespace PZ3D {
     using(var child=Process.Start(new ProcessStartInfo(typeof(CoreUpdateTransactionTests).Assembly.Location,args){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true}))CoreFixture.Check(child.WaitForExit(10000)&&child.ExitCode==86,"real preparation child interrupted at "+stop);
     Tx("Recover",root,CoreFixture.Key);task=Stage(root,CoreFixture.B(),CoreFixture.Changed());Apply(root,task,exe=>true);
     CoreFixture.Same(root,CoreFixture.B(),"process-interrupted preparation does not block subsequent update at "+stop);
+   }
+  }
+  static void PreflightRefusals(string only=null) {
+   foreach(string kind in new[]{"baseline","record","backup","staged"}) {
+    if(only!=null&&only!=kind)continue;
+    string root=CoreFixture.Install();string task=Stage(root,CoreFixture.B(),CoreFixture.Changed());
+    string dir=(string)CoreFixture.Field(Tx("GetTaskInfo",root,task,CoreFixture.Key),"Directory");
+    if(kind=="baseline")File.WriteAllText(CoreFixture.FileAt(root,"Web/app.css"),"independent-baseline");
+    if(kind=="record")File.WriteAllText(Record(root),"independent-record");
+    if(kind=="backup")File.WriteAllText(Path.Combine(dir,"old","Web","app.js"),"damaged-backup");
+    if(kind=="staged")File.WriteAllText(Path.Combine(dir,"new","Web","app.js"),"damaged-staging");
+    var before=CoreFixture.A.ToDictionary(pair=>pair.Key,pair=>File.ReadAllBytes(CoreFixture.FileAt(root,pair.Key)));
+    byte[] record=File.ReadAllBytes(Record(root));Exception refusal=null;
+    try{Apply(root,task,exe=>true);}catch(Exception error){refusal=error;}
+    CoreFixture.Same(root,before,"preflight refusal preserves existing installed bytes: "+kind);
+    CoreFixture.Check(File.ReadAllBytes(Record(root)).SequenceEqual(record),"preflight refusal preserves exact existing record: "+kind);
+    var info=Tx("GetTaskInfo",root,task,CoreFixture.Key);
+    CoreFixture.Check((string)CoreFixture.Field(info,"State")=="Conflicted","preflight refusal persists Conflicted: "+kind);
+    CoreFixture.Check(!string.IsNullOrWhiteSpace((string)CoreFixture.Field(info,"Error")),"preflight refusal persists nonempty diagnostic: "+kind);
+    var conflict=refusal as CoreUpdateException;
+    CoreFixture.Check(conflict!=null&&conflict.State=="Conflicted"&&conflict.InnerException!=null,"preflight refusal throws typed conflict with cause: "+kind);
+    var journal=new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(dir,"journal.json")));
+    CoreFixture.Check(Convert.ToInt32(journal["started"])==0,"preflight refusal never begins installed mutation: "+kind);
    }
   }
  }

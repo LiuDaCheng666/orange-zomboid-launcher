@@ -138,12 +138,22 @@ namespace PZ3D {
    root=CoreDeployment.Root(root);using(CoreDeployment.Acquire(root))return ApplyLocked(root,taskId,health,checkpoint,publicKeyXml);
   }
   internal static CoreUpdateResult ApplyLocked(string root,string taskId,Func<string,bool> health,Action<string> checkpoint,string key) {
-   if(health==null)throw new ArgumentNullException("health");var j=Load(root,taskId);var target=VerifyStored(root,j,key);ValidateTargetRecord(root,j,target);
+   if(health==null)throw new ArgumentNullException("health");var j=Load(root,taskId);
    if(j.state!="Staged")throw new CoreUpdateException(j.state,"This task cannot be applied again.",null);
-   var baseline=Baseline(root,j);ValidateOriginalRecord(root,j);
-   foreach(string path in (baseline==null?new List<CoreFile>():baseline.files).Select(f=>f.path).Union(target.files.Select(f=>f.path)))RequireOriginal(root,j,baseline,path);
-   var plan=PlanLocked(root,target,baseline);ValidateBackup(root,j,baseline);
-   foreach(var file in plan.Changed)if(!CoreDeployment.Matches(PathAt(root,taskId,"new/"+file.path),file))throw new InvalidDataException("Staged bytes changed: "+file.path);
+   CoreManifest target;CoreInstallRecord baseline;CoreUpdatePlan plan;
+   try {
+    target=VerifyStored(root,j,key);ValidateTargetRecord(root,j,target);
+    baseline=Baseline(root,j);ValidateOriginalRecord(root,j);
+    foreach(string path in (baseline==null?new List<CoreFile>():baseline.files).Select(f=>f.path).Union(target.files.Select(f=>f.path)))RequireOriginal(root,j,baseline,path);
+    plan=PlanLocked(root,target,baseline);ValidateBackup(root,j,baseline);
+    foreach(var file in plan.Changed)if(!CoreDeployment.Matches(PathAt(root,taskId,"new/"+file.path),file))throw new InvalidDataException("Staged bytes changed: "+file.path);
+   }catch(Exception refusal) {
+    // No installed bytes have changed. Preserve that phase and the original
+    // contents; a preflight conflict must never initiate rollback writes.
+    j.state="Conflicted";j.error="Preflight: "+refusal.Message;
+    try{Save(root,j);}catch(Exception persistence){throw new CoreUpdateException("Conflicted",j.error+"; diagnostic journal could not be saved: "+persistence.Message,new AggregateException(refusal,persistence));}
+    throw new CoreUpdateException("Conflicted",j.error,refusal);
+   }
    try {
     Checkpoint(checkpoint,"staged");j.state="Applying";j.started=1;Save(root,j);
     foreach(var file in plan.Changed) {
