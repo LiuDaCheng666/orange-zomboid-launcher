@@ -70,6 +70,10 @@ namespace PZ3D {
    var manifest=ParseManifest(raw); Validate(manifest,currentVersion); manifest.AttachProof(raw,signature,identity); return manifest;
   }
   // Parsing and validation are deliberately separate from authentication.
+  internal static Dictionary<string,object> ReadStoredObject(byte[] raw,params string[] fields) {
+   if(raw==null||raw.Length==0||raw.Length>MaxManifestBytes)throw new InvalidDataException("Stored document size is invalid.");
+   return Object(new StrictJson(Utf8.GetString(raw),true).Read(),fields);
+  }
   public static CoreManifest ParseManifest(byte[] raw) {
    if(raw==null || raw.Length==0 || raw.Length>MaxManifestBytes)throw new InvalidDataException("Manifest size is invalid.");
    var map=Object(new StrictJson(Utf8.GetString(raw)).Read(),"schema","version","platform","minimumUpdaterVersion","notes","files");
@@ -131,8 +135,8 @@ namespace PZ3D {
   // permissive JavaScript syntax. The wire schema requires only objects, arrays,
   // strings and integers; other JSON scalar types cannot occur in valid metadata.
   sealed class StrictJson {
-   readonly string text; int at;
-   internal StrictJson(string text) { this.text=text; }
+   readonly string text; readonly bool allowNull; int at;
+   internal StrictJson(string text,bool allowNull=false) { this.text=text; this.allowNull=allowNull; }
    internal object Read() { object value=Value(0); Space(); if(at!=text.Length)Bad(); return value; }
    void Bad() { throw new InvalidDataException("Invalid or ambiguous release JSON."); }
    void Space() { while(at<text.Length && (text[at]==' ' || text[at]=='\t' || text[at]=='\r' || text[at]=='\n'))at++; }
@@ -140,6 +144,7 @@ namespace PZ3D {
    void Need(char c) { if(!Take(c))Bad(); }
    object Value(int depth) {
     if(depth>8)Bad(); Space(); if(at>=text.Length)Bad();
+    if(allowNull&&at+4<=text.Length&&text.Substring(at,4)=="null"){at+=4;return null;}
     if(text[at]=='"')return Text();
     if(Take('{')) {
      var map=new Dictionary<string,object>(StringComparer.Ordinal); var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
