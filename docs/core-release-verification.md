@@ -1,6 +1,6 @@
 # 1.1.0 本地签名发布验证
 
-状态：最终集成修复及本地验证完成，等待一次限定范围复审。未上传正式渠道、未推送或合并 main；不声明真实游戏兼容性。
+状态：最终集成修复、限定范围复审及独立验收通过。未上传正式渠道、未推送或合并 main；不声明真实游戏兼容性。
 
 最终目录：`E:/Projects/OrangeLauncher/dist/1.1.0-final-verified/`。原有 `dist/1.1.0-round2-verified/` 和更早产物全部保留。上一轮独立full-healthy共享冲突失败仍保留于 `artifacts/root-final-r2-lifecycle.log`、`artifacts/TestFixtures/native-update-533bf880/full-healthy/native-fixture-error.txt`；本轮已修复并复测。
 
@@ -54,6 +54,16 @@
 | Web/WebView2Loader.dll | 194912 | 3426DCC55FDFB8B5E7AC623CF33B4CCF283FBF68A0C5A65BDDFDB4D749A8ABEE |
 | Assets/OrangeShootPresentation.jar | 17278 | 1EBF1DFC7B867F2B1F200522C4B5569D71A72C5ED54D22652536F8638B9B133F |
 | Assets/OrangeLaunchBridge.lua | 2694 | 612CB735695D6918FA0108F219F8BA3B6F036B4A23A44B1839EDECFA6C7F068A |
+
+## 独立验收与审查结论
+
+源码实现提交为 `992f0339d2fa7e475c2f77ce995ae894b9afb14f`。协调端在此提交重新编译并顺序执行：协议79、事务149、包17、服务41、助手66、新增回归267项，以及全量原生437项；随后八套浏览器测试均 exit0。日志为 `artifacts/root-accepted-*.log`。另独立执行默认旧构建实际UI启动与 `Test-CorePackageBuild.ps1`，均 exit0。
+
+独立重跑的五条真实生命周期全部通过，根目录 `artifacts/TestFixtures/native-update-e6f56e40/`，日志 `artifacts/root-accepted-lifecycle.log`：包含此前失败的full-healthy、健康后普通重启、失败原因/历史显示、完整EXE中断后普通启动恢复与单次重启、自有卸载保留无关文件。独立运行最终正式installer `--verify-setup` 和完整18文件签名验证，均 exit0；四个发布产物SHA-256与上表一致。最终两主题截图也已实际查看。
+
+整分支审查发现的四项Important及过期请求错误P3均在一次集成修复后通过限定复审；报告 `artifacts/core-final-review.md`、`artifacts/core-final-rereview.md`。没有新的Critical/Important阻断项。源码保留在本地功能分支，main仍为 `8277391c032988090c328f0eabb8fbe33cca944f`。
+
+非阻断后续项：健康确认阶段若手动点击检查更新，可能提前结束本次页面的健康结果观察，使历史暂时仍显示PendingHealth；重新读取状态或重启后恢复显示。持久结果、健康授权和安全回退不受影响。该P3已明确记录为后续修复，不以删除诊断或放宽校验规避。原有协议测试可读性、个别负面测试和运行资料保留策略等非阻断后续项同样保留。
 
 ## 信任与运行限制
 
