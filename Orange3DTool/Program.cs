@@ -44,7 +44,7 @@ namespace PZ3D {
    if(args.Length>=2 && args[0]=="--verify-cache"){try{FeatureTests.Real(args[1]);return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
    if(args.Length>=2 && args[0]=="--prepare-dlss"){try{Console.WriteLine(ComponentCache.Prepare(args[1],(v,t)=>Console.WriteLine(v+"% "+t),System.Threading.CancellationToken.None));return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
    if(args.Length>=2 && args[0]=="--fetch-workshop"){try{var paths=SteamWorkshop.Fetch(args[1],InstallWorkflow.Requested(args.Contains("--models")),(v,t)=>Console.WriteLine(v+"% "+t),System.Threading.CancellationToken.None,420);foreach(var p in paths)Console.WriteLine(p.Key+"="+p.Value);return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
-if(args.Contains("--self-test")) { try { LauncherNativeServicesTests.Run(); GameFavoritesTests.Run(); FullLauncherIntegrationTests.Run(); ModConfigurationsTests.Run(); SteamLauncherServicesTests.RunUnit(); ConcurrentSnapshotTests.Run(); JournalPrivacyTests.Run(); PhaseProgressTests.Run(); SteamUnavailableTests.Run(); PlaytimeDayTests.Run(); RoofRemovalTests.Run(); ServerRulesTests.Run(); AddonTests.Run(); AddonTests.Resolver(); ComponentEvidenceTests.Run(); SettingsChineseTests.Run(); GameVersionProbeTests.Run(); JavaApprovalsTests.Run(); SaveProfilesTests.Run(); if(ServerProfilesTests.Main()!=0)throw new Exception("服务器配置回归失败"); LaunchProfilesTests.Run(); PortableDeploymentTests.Run(); GameProcessGuardTests.Run(); HardwareProbeTests.Run(); ModernHostTests.Run(); ModernHostTests.QueuedCancel(); ModernControllerTests.Run(); LocalAddonTests.Run(); LauncherFeaturesTests.Run(); MemoryPolicyTests.Run(); LauncherMaintenanceTests.Run(); LauncherWorkshopRebuildTests.Run(); LauncherUiTests.Run(); ComponentBatchTests.Run(); ReticleSettingsTests.Run(); Test.Run(); Test.Extras(); Test.Audit(); FeatureTests.Run(); ChinesePatchTests.Run(); UiUpdateTests.Run(); PortableTests.Run(); WorkshopSubscriptionTests.Run(); SteamSubscriptionWaitTests.Run(); StatusTests.Run(); SettingsTests.Run(); ShaderTests.Run(); UpdateTests.Run(); DiscoveryTests.Run(); ShootClientTests.Run(); PresentationBridgeTests.Run(); return 0; } catch(Exception e) { Console.WriteLine(e); return 1; } }
+if(args.Contains("--self-test")) { try { SteamLaunchOptionsTests.Run(); BuddyLaunchArgumentsTests.Run(); LauncherNativeServicesTests.Run(); GameFavoritesTests.Run(); FullLauncherIntegrationTests.Run(); ModConfigurationsTests.Run(); SteamLauncherServicesTests.RunUnit(); ConcurrentSnapshotTests.Run(); JournalPrivacyTests.Run(); PhaseProgressTests.Run(); SteamUnavailableTests.Run(); PlaytimeDayTests.Run(); RoofRemovalTests.Run(); ServerRulesTests.Run(); AddonTests.Run(); AddonTests.Resolver(); ComponentEvidenceTests.Run(); SettingsChineseTests.Run(); GameVersionProbeTests.Run(); JavaApprovalsTests.Run(); SaveProfilesTests.Run(); if(ServerProfilesTests.Main()!=0)throw new Exception("服务器配置回归失败"); LaunchProfilesTests.Run(); PortableDeploymentTests.Run(); GameProcessGuardTests.Run(); HardwareProbeTests.Run(); ModernHostTests.Run(); ModernHostTests.QueuedCancel(); ModernControllerTests.Run(); LocalAddonTests.Run(); LauncherFeaturesTests.Run(); MemoryPolicyTests.Run(); LauncherMaintenanceTests.Run(); LauncherWorkshopRebuildTests.Run(); LauncherUiTests.Run(); ComponentBatchTests.Run(); ReticleSettingsTests.Run(); Test.Run(); Test.Extras(); Test.Audit(); FeatureTests.Run(); ChinesePatchTests.Run(); UiUpdateTests.Run(); PortableTests.Run(); WorkshopSubscriptionTests.Run(); SteamSubscriptionWaitTests.Run(); StatusTests.Run(); SettingsTests.Run(); ShaderTests.Run(); UpdateTests.Run(); DiscoveryTests.Run(); ShootClientTests.Run(); PresentationBridgeTests.Run(); return 0; } catch(Exception e) { Console.WriteLine(e); return 1; } }
    Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
    if(args.Length>=2 && args[0]=="--preview"){PreviewMode=true;int index=0;if(args.Length>2)int.TryParse(args[2],out index);Func<string,string> option=key=>{int at=Array.IndexOf(args,key);return at>=0&&at+1<args.Length?args[at+1]:null;};using(var f=new MainForm()){f.PreviewLauncher(args[1],index,args.Contains("--busy"),option("--theme"),option("--size"),option("--page"));}return 0;}
    if(args.Length>=2&&args[0]=="--preview-help"){PreviewMode=true;using(var form=new MainForm())form.PreviewHelp(args[1]);return 0;}return ModernBootstrap.Run(args);
@@ -68,7 +68,10 @@ if(args.Contains("--self-test")) { try { LauncherNativeServicesTests.Run(); Game
   public static void ValidateShader(string zip){using(var archive=ZipFile.OpenRead(zip)){if(!archive.Entries.Any(e=>e.FullName.Replace('\\','/').StartsWith("shaders/")))throw new Exception("光影 ZIP 根目录必须包含 shaders 文件夹："+Path.GetFileName(zip));}}
   public bool TestMode;
   public static readonly string[] ModIds={"ZombieBuddy","Viewpoint","PZVoxelStudioViewpoint"};
-  public Engine(string game,string user,string data,bool test=false){Game=Path.GetFullPath(game);User=user;Data=data;TestMode=test;}
+  readonly Func<SteamLaunchOptionsSnapshot> steamOptions;
+  public Engine(string game,string user,string data,bool test=false):this(game,user,data,test,null){}
+  internal Engine(string game,string user,string data,bool test,Func<SteamLaunchOptionsSnapshot> options){Game=Path.GetFullPath(game);User=user;Data=data;TestMode=test;steamOptions=options??(test?(Func<SteamLaunchOptionsSnapshot>)SteamLaunchOptions.Unavailable:SteamLaunchOptions.Current);}
+  internal SteamLaunchOptionsSnapshot ReadSteamOptions(){return steamOptions();}
   public string Config {get{return Path.Combine(Game,"ProjectZomboid64.json");}}
   public string Mods {get{return Path.Combine(User,"mods","default.txt");}}
   public string Workshop {get{return Path.GetFullPath(Path.Combine(Game,"..","..","workshop","content","108600"));}}
@@ -76,16 +79,15 @@ if(args.Contains("--self-test")) { try { LauncherNativeServicesTests.Run(); Game
   public bool HasView {get{string source=ViewSource??Path.Combine(Workshop,"3809306528");return Directory.Exists(source) && Directory.EnumerateFiles(source,"mod.info",SearchOption.AllDirectories).Any(p=>Regex.IsMatch(File.ReadAllText(p),@"(?m)^id\s*=\s*Viewpoint\s*$"));}}
   public bool HasModels {get{return Directory.Exists(ModelsSource??Path.Combine(Workshop,"3810302175"));}}
   static JavaScriptSerializer Json=new JavaScriptSerializer();
-  static bool Agent(string s){return s.IndexOf("zbNative",StringComparison.OrdinalIgnoreCase)>=0 || (s.StartsWith("-javaagent:") && s.IndexOf("ZombieBuddy",StringComparison.OrdinalIgnoreCase)>=0);}
+  static bool Agent(string s){return BuddyLaunchArguments.Classify(s)==BuddyArgumentKind.Known;}
   Dictionary<string,object> ReadConfig(){return Json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Config));}
   static string[] Args(Dictionary<string,object> c){return ((System.Collections.IEnumerable)c["vmArgs"]).Cast<object>().Select(o=>o.ToString()).ToArray();}
   public bool Enabled {get{try{return Args(ReadConfig()).Any(Agent) && File.Exists(Mods) && Regex.IsMatch(File.ReadAllText(Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}catch{return false;}}}
   public void Guard(){
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
    if(!TestMode && GameProcessGuard.IsRunning(Game))throw new Exception("请完全退出游戏后再切换（包括直接运行的游戏 Java 进程）。");
-   string bat=Path.Combine(Game,"ProjectZomboid64.bat");
-   if(File.Exists(bat) && Regex.IsMatch(File.ReadAllText(bat),@"(?im)^(?!\s*(?:rem|::)).*(?:zbNative|javaagent:ZombieBuddy)"))throw new Exception("备用启动 BAT 已有独立的 ZombieBuddy 参数，请先移除；本工具管理正常启动 JSON。");
-   if(!TestMode){string steam=FindSteam(); if(steam!=null){string ud=Path.Combine(steam,"userdata");if(Directory.Exists(ud))foreach(string d in Directory.GetDirectories(ud)){string f=Path.Combine(d,"config","localconfig.vdf");if(File.Exists(f) && Regex.IsMatch(File.ReadAllText(f),"(?i)\"LaunchOptions\"\\s*\"[^\"]*(?:zbNative|javaagent:ZombieBuddy)"))throw new Exception("Steam 启动选项已有独立 ZombieBuddy 参数。请清除该参数后由本工具统一管理，否则关闭无法生效。");}}}
+   foreach(string name in new[]{"ProjectZomboid64.bat","ProjectZomboid32.bat"}){string bat=Path.Combine(Game,name);LauncherMaintenance.NoReparse(bat);if(File.Exists(bat)){if(new FileInfo(bat).Length>2097152)throw new Exception("备用启动 BAT 过大，无法核实。");var cleanup=BuddyLaunchArguments.CleanBat(File.ReadAllText(bat));if(!cleanup.Safe)throw new Exception("备用启动 BAT 参数不明确，请人工检查 Buddy 启动语法。");if(cleanup.Changed)throw new Exception("备用启动 BAT 有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
+   var options=ReadSteamOptions();options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}
   }
   public static string FindSteam(){using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){return k==null?null:(k.GetValue("SteamPath") as string);}}
   public static string DetectGame(){
@@ -93,7 +95,7 @@ if(args.Contains("--self-test")) { try { LauncherNativeServicesTests.Run(); Game
   }
   public string Switch(bool on,bool models){
    Step(0,"检查游戏进程与启动配置");
-   Guard();if(!on)new PresentationBridge().Disable(this);if(!on)new DlssInstaller(Game,Data,TestMode).Disable();var cfg=ReadConfig();
+   Guard();if(!BuddyLaunchArguments.CleanJson(File.ReadAllText(Config)).Safe)throw new Exception("启动 JSON 含不明确的 Buddy 参数，未作修改，请人工检查。");if(!on)new PresentationBridge().Disable(this);if(!on)new DlssInstaller(Game,Data,TestMode).Disable();var cfg=ReadConfig();
    Step(10,"检查已下载模组与光影预设");
    if(on && (!HasView || !File.Exists(Path.Combine(BuddyLib,"ZombieBuddy.jar")) || !File.Exists(Path.Combine(BuddyLib,"zbNative.dll"))))throw new Exception("尚未下载完整依赖。请在“更新与下载”订阅 ZombieBuddy 和 Viewpoint，等待 Steam 完成下载后重试。");
    if(on && models && !HasModels)throw new Exception("可选 3D 物件包尚未下载，请先订阅或取消勾选。");

@@ -14,6 +14,7 @@ namespace PZ3D {
   static void Reject(Action work,string name){bool denied=false;try{work();}catch{denied=true;}Assert(denied,name);}
   public static int Main(string[] args){try{if(args.Length>=3&&args[0]=="--workshop-worker"){Console.SetError(new StreamWriter(Console.OpenStandardError(),new System.Text.UTF8Encoding(false)){AutoFlush=true});Console.SetOut(new StreamWriter(Console.OpenStandardOutput(),new System.Text.UTF8Encoding(false)){AutoFlush=true});return WorkshopWorker.Run(args[1],args[2],args.Contains("--force"));}if(args.Contains("--legacy-tail")){LauncherWorkshopRebuildTests.Run();LauncherUiTests.Run();ComponentBatchTests.Run();ReticleSettingsTests.Run();Test.Run();Test.Extras();Test.Audit();FeatureTests.Run();ChinesePatchTests.Run();UiUpdateTests.Run();PortableTests.Run();WorkshopSubscriptionTests.Run();StatusTests.Run();SettingsTests.Run();ShaderTests.Run();UpdateTests.Run();DiscoveryTests.Run();ShootClientTests.Run();PresentationBridgeTests.Run();return 0;}Run();return 0;}catch(Exception ex){Console.WriteLine("FAIL: "+ex.Message);return 1;}}
   public static void Run(){
+   ScopedLaunchStamp();
    Type type=typeof(Program).Assembly.GetType("PZ3D.ModernController");Assert(type!=null,"modern bridge exists");
    string root=Path.Combine(LauncherTestPaths.Root,"orange-modern-test-"+Guid.NewGuid().ToString("N"));string game=Path.Combine(root,"steamapps","common","ProjectZomboid"),user=Path.Combine(root,"User"),data=Path.Combine(root,"Data");Directory.CreateDirectory(game);Directory.CreateDirectory(Path.Combine(user,"mods"));
    string config=Path.Combine(game,"ProjectZomboid64.json"),mods=Path.Combine(user,"mods","default.txt"),props=Path.Combine(user,"viewpoint-live.properties");
@@ -34,6 +35,15 @@ namespace PZ3D {
    Extended(root);
    using(var selected=new ModernController("",user,Path.Combine(root,"SelectionData"),true)){selected.Execute("setGame",new Dictionary<string,object>{{"path",game}});Assert(File.ReadAllText(Path.Combine(root,"SelectionData","game-path.txt"))==game,"native selected game persists for next startup");}
    NetworkResponsiveness(game,user,Path.Combine(root,"NetworkData"));
+  }
+  static void ScopedLaunchStamp(){
+   string root=Path.Combine(LauncherTestPaths.Root,"stamp-steam-"+Guid.NewGuid().ToString("N")),game=Path.Combine(root,"game"),steam=Path.Combine(root,"client");Directory.CreateDirectory(game);File.WriteAllText(Path.Combine(game,"ProjectZomboid64.json"),"{\"vmArgs\":[\"-Xmx4g\"]}");
+   using(var c=new ModernController(game,Path.Combine(root,"user"),Path.Combine(root,"data"),true)){
+    typeof(ModernController).GetField("engine",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(c,new Engine(game,Path.Combine(root,"user"),Path.Combine(root,"data"),true,()=>SteamLaunchOptions.Read(steam,42)));
+    SteamLaunchOptionsTests.Fixture(steam,42,SteamLaunchOptionsTests.Wrap("\"108600\" { \"LaunchOptions\" \"-nosteam\" } \"999\" { \"LaunchOptions\" \"other\" }"));var before=D(Call(c,"memoryGet"));
+    SteamLaunchOptionsTests.Fixture(steam,42,SteamLaunchOptionsTests.Wrap("\"108600\" { \"LaunchOptions\" \"-nosteam\" } \"999\" { \"LaunchOptions\" \"refresh\" }"));SteamLaunchOptionsTests.Fixture(steam,7,"malformed other account");Assert(before["stamp"].Equals(D(Call(c,"memoryGet"))["stamp"]),"unrelated Steam updates keep memory snapshot current");
+    SteamLaunchOptionsTests.Fixture(steam,42,SteamLaunchOptionsTests.Wrap("\"108600\" { \"LaunchOptions\" \"-debug\" }"));Assert(!before["stamp"].Equals(D(Call(c,"memoryGet"))["stamp"]),"own Steam options invalidate memory snapshot");Reject(()=>Call(c,"memorySave",new Dictionary<string,object>{{"value",2},{"stamp",before["stamp"]}}),"old memory consent cannot pass changed own Steam options");
+   }
   }
   static void NetworkResponsiveness(string game,string user,string data){
    var type=typeof(ModernController);var signature=new[]{typeof(string),typeof(string),typeof(string),typeof(bool),typeof(Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>>),typeof(Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object>)};
