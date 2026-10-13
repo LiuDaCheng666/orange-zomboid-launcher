@@ -23,4 +23,4 @@ try{
     if(Test-Path -LiteralPath $notice){[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$notice,'ThirdPartyNotices/PRIVATE-RESOURCES.txt') | Out-Null}
   }
 }finally{$archive.Dispose();$stream.Dispose()}
-if(Test-Path -LiteralPath $destination){[IO.File]::Replace($file,$destination,$null)}else{[IO.File]::Move($file,$destination)}
+if(Test-Path -LiteralPath $destination){[IO.File]::Replace($file,$destination,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($file,$destination)}
