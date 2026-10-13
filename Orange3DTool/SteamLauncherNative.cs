@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -51,8 +52,9 @@ namespace PZ3D {
   // On Windows x64 C++ member calls use the same ABI, with the object pointer first.
   [UnmanagedFunctionPointer(CallingConvention.Cdecl)]delegate void ServerResponse(IntPtr self,IntPtr request,int value);
   sealed class ServerSink : IDisposable {
-   public IntPtr Address;IntPtr table;ServerResponse responded,failed,complete;public int Completion=-1;
-   public ServerSink(){responded=(self,request,value)=>{};failed=(self,request,value)=>{};complete=(self,request,value)=>{Completion=value;};table=Marshal.AllocHGlobal(IntPtr.Size*3);Address=Marshal.AllocHGlobal(IntPtr.Size);Marshal.WriteIntPtr(table,0,Marshal.GetFunctionPointerForDelegate(responded));Marshal.WriteIntPtr(table,IntPtr.Size,Marshal.GetFunctionPointerForDelegate(failed));Marshal.WriteIntPtr(table,IntPtr.Size*2,Marshal.GetFunctionPointerForDelegate(complete));Marshal.WriteIntPtr(Address,table);}
+   public IntPtr Address;IntPtr table;ServerResponse responded,failed,complete;public volatile int Completion=-1;readonly Queue<int> ready=new Queue<int>();
+   public ServerSink(){responded=(self,request,value)=>{if(value>=0&&value<30000)lock(ready)if(ready.Count<30000)ready.Enqueue(value);};failed=(self,request,value)=>{};complete=(self,request,value)=>{Completion=value;};table=Marshal.AllocHGlobal(IntPtr.Size*3);Address=Marshal.AllocHGlobal(IntPtr.Size);Marshal.WriteIntPtr(table,0,Marshal.GetFunctionPointerForDelegate(responded));Marshal.WriteIntPtr(table,IntPtr.Size,Marshal.GetFunctionPointerForDelegate(failed));Marshal.WriteIntPtr(table,IntPtr.Size*2,Marshal.GetFunctionPointerForDelegate(complete));Marshal.WriteIntPtr(Address,table);}
+   public int[] Drain(){lock(ready){int[] rows=ready.ToArray();ready.Clear();return rows;}}
    public void Dispose(){if(Address!=IntPtr.Zero){Marshal.FreeHGlobal(Address);Address=IntPtr.Zero;}if(table!=IntPtr.Zero){Marshal.FreeHGlobal(table);table=IntPtr.Zero;}GC.KeepAlive(responded);GC.KeepAlive(failed);GC.KeepAlive(complete);}
   }
   IntPtr dll,ugc,utils,user,apps,friends;bool initialized;VoidCall shutdown;CancellationToken cancel;string oldApp,oldGame,game;int pipe;PipeCall frame,free;NextCallback next;Completed completed;Result result;
@@ -116,25 +118,42 @@ namespace PZ3D {
     ulong done,total;bool known=downloadInfo(ugc,id,out done,out total);if(progress!=null&&(DateTime.UtcNow-last).TotalMilliseconds>=900){progress(!known||total==0?-1:(int)Math.Min(99,100.0*done/total),SteamWorkshop.FormatDownloadProgress(id,known?done:0,known?total:0));last=DateTime.UtcNow;}Thread.Sleep(100);
    }throw new Exception("Steam 下载等待超时；已确认的订阅可能保留，请在 Steam 检查进度。未激活模组。");
   }
-  object Hall(string query,Action<int,string> progress){
+  static int HallCount(Func<int> count){int total=count();if(total<0||total>30000)throw new Exception("Steam 服务器数量异常。");return total;}
+  static object MatchedHallRow(byte[] bytes,string query){if(bytes==null)return null;object row=SteamLauncherServices.ParseServer(bytes);if(row==null)return null;string name=SteamLauncherServices.Utf8(bytes,172,64),description=SteamLauncherServices.Utf8(bytes,78,64);return query.Length==0||name.IndexOf(query,StringComparison.OrdinalIgnoreCase)>=0||description.IndexOf(query,StringComparison.OrdinalIgnoreCase)>=0?row:null;}
+  // Read responded indices every pump; periodic sweeps also catch rows whose native callback was missed.
+  // The final scan remains authoritative and retains the original Steam index order and warning text.
+  internal static object PollHall(string query,Action pump,Func<int> completion,Func<bool> refreshing,Func<int> count,Func<int,byte[]> details,Func<int[]> responded,Action<int,string> progress,CancellationToken cancel,Action<object> hallBatch,int timeoutMilliseconds){
+   var watch=Stopwatch.StartNew();long lastSweep=-250,lastBatch=0;bool timedOut=false,first=true;var sent=new HashSet<string>(StringComparer.Ordinal);var pending=new List<object>();
+   Action flush=()=>{if(pending.Count==0)return;cancel.ThrowIfCancellationRequested();object[] rows=pending.ToArray();pending.Clear();lastBatch=watch.ElapsedMilliseconds;hallBatch(new Dictionary<string,object>{{"servers",rows}});cancel.ThrowIfCancellationRequested();};
+   Action<byte[],object> stream=(bytes,row)=>{if(hallBatch==null||row==null||sent.Count>=1000)return;string key=BitConverter.ToUInt32(bytes,4).ToString(CultureInfo.InvariantCulture)+":"+BitConverter.ToUInt16(bytes,0).ToString(CultureInfo.InvariantCulture);if(!sent.Add(key))return;pending.Add(row);if(first){first=false;flush();}else if(pending.Count>=16)flush();};
+   do{
+    cancel.ThrowIfCancellationRequested();pump();
+    if(hallBatch!=null&&sent.Count<1000){int total=HallCount(count);int[] ready=responded();bool sweep=watch.ElapsedMilliseconds-lastSweep>=250;IEnumerable<int> indices=sweep?Enumerable.Range(0,total):ready.Where(i=>i>=0&&i<total).Distinct();if(sweep)lastSweep=watch.ElapsedMilliseconds;
+     foreach(int index in indices){cancel.ThrowIfCancellationRequested();byte[] bytes=details(index);stream(bytes,MatchedHallRow(bytes,query));if(sent.Count>=1000)break;}
+    }
+    if(pending.Count>0&&watch.ElapsedMilliseconds-lastBatch>=250)flush();
+    if(completion()>=0||!refreshing())break;if(watch.ElapsedMilliseconds>timeoutMilliseconds){timedOut=true;break;}Thread.Sleep(50);
+   }while(true);
+   if(hallBatch!=null)flush();if(completion()==1)throw new Exception("Steam 公共服务器查询未成功，请重试。");
+   int finalCount=HallCount(count);var found=new List<object>();
+   for(int i=0;i<finalCount;i++){cancel.ThrowIfCancellationRequested();byte[] bytes=details(i);object row=MatchedHallRow(bytes,query);if(row==null)continue;found.Add(row);stream(bytes,row);if(found.Count>=1000)break;}
+   if(hallBatch!=null)flush();if(timedOut&&found.Count==0)throw new Exception("Steam 公共服务器查询超时且尚未收到有效服务器，请重试。");
+   if(progress!=null)progress(-1,"Steam 公共服务器已回应 · "+found.Count+" 项");return new{servers=found,message=timedOut?"Steam 已返回部分有效服务器；本次查询达到 25 秒时限，可刷新重试。":found.Count>=1000?"已显示本次查询的前 1000 个有效服务器，可使用名称筛选。":found.Count==0?"Steam 本次查询没有返回匹配的有效服务器。":"已读取 Steam App108600 公共服务器列表。"};
+  }
+  object Hall(string query,Action<int,string> progress,Action<object> hallBatch){
    IntPtr servers=Interface("SteamAPI_SteamMatchmakingServers_v002"),request=IntPtr.Zero;var release=Function<ServerHandleCall>("SteamAPI_ISteamMatchmakingServers_ReleaseRequest");var cancelRequest=Function<ServerHandleCall>("SteamAPI_ISteamMatchmakingServers_CancelQuery");var refreshing=Function<ServerRefreshing>("SteamAPI_ISteamMatchmakingServers_IsRefreshing");
    using(var sink=new ServerSink())try{
-    request=Function<ServerRequest>("SteamAPI_ISteamMatchmakingServers_RequestInternetServerList")(servers,SteamLauncherServices.App,IntPtr.Zero,0,sink.Address);if(request==IntPtr.Zero)throw new Exception("Steam 无法请求公共服务器列表。");DateTime end=DateTime.UtcNow.AddSeconds(25);bool timedOut=false;
-    do{Pump();if(sink.Completion>=0||!refreshing(servers,request))break;if(DateTime.UtcNow>end){timedOut=true;break;}Thread.Sleep(50);}while(true);
-    if(sink.Completion==1)throw new Exception("Steam 公共服务器查询未成功，请重试。");
-    int count=Function<ServerCount>("SteamAPI_ISteamMatchmakingServers_GetServerCount")(servers,request);if(count<0||count>30000)throw new Exception("Steam 服务器数量异常。");var details=Function<ServerDetails>("SteamAPI_ISteamMatchmakingServers_GetServerDetails");var found=new List<object>();
-    for(int i=0;i<count;i++){cancel.ThrowIfCancellationRequested();IntPtr pointer=details(servers,request,i);if(pointer==IntPtr.Zero)continue;var bytes=new byte[SteamLauncherServices.ServerBytes];Marshal.Copy(pointer,bytes,0,bytes.Length);object row=SteamLauncherServices.ParseServer(bytes);if(row==null)continue;string name=SteamLauncherServices.Utf8(bytes,172,64),description=SteamLauncherServices.Utf8(bytes,78,64);if(query.Length>0&&name.IndexOf(query,StringComparison.OrdinalIgnoreCase)<0&&description.IndexOf(query,StringComparison.OrdinalIgnoreCase)<0)continue;found.Add(row);if(found.Count>=1000)break;}
-    if(timedOut&&found.Count==0)throw new Exception("Steam 公共服务器查询超时且尚未收到有效服务器，请重试。");
-    if(progress!=null)progress(-1,"Steam 公共服务器已回应 · "+found.Count+" 项");return new{servers=found,message=timedOut?"Steam 已返回部分有效服务器；本次查询达到 25 秒时限，可刷新重试。":found.Count>=1000?"已显示本次查询的前 1000 个有效服务器，可使用名称筛选。":found.Count==0?"Steam 本次查询没有返回匹配的有效服务器。":"已读取 Steam App108600 公共服务器列表。"};
+    request=Function<ServerRequest>("SteamAPI_ISteamMatchmakingServers_RequestInternetServerList")(servers,SteamLauncherServices.App,IntPtr.Zero,0,sink.Address);if(request==IntPtr.Zero)throw new Exception("Steam 无法请求公共服务器列表。");var count=Function<ServerCount>("SteamAPI_ISteamMatchmakingServers_GetServerCount");var details=Function<ServerDetails>("SteamAPI_ISteamMatchmakingServers_GetServerDetails");
+    return PollHall(query,Pump,()=>sink.Completion,()=>refreshing(servers,request),()=>count(servers,request),index=>{IntPtr pointer=details(servers,request,index);if(pointer==IntPtr.Zero||Marshal.ReadByte(pointer,12)==0)return null;var bytes=new byte[SteamLauncherServices.ServerBytes];Marshal.Copy(pointer,bytes,0,bytes.Length);return bytes;},sink.Drain,progress,cancel,hallBatch,25000);
    }finally{if(request!=IntPtr.Zero){try{cancelRequest(servers,request);}finally{release(servers,request);}}}
   }
-  public object Execute(string action,Dictionary<string,object> payload,Action<int,string> progress){
+  public object Execute(string action,Dictionary<string,object> payload,Action<int,string> progress,Action<object> hallBatch=null){
    if(action=="connection"){IntPtr name=Function<StringPointer>("SteamAPI_ISteamFriends_GetPersonaName")(friends);return new{available=true,accountName=PointerUtf8(name,512),steamId=Function<ULongCall>("SteamAPI_ISteamUser_GetSteamID")(user).ToString(CultureInfo.InvariantCulture),message="已连接桌面 Steam；每次请求结束后释放游戏身份。"};}
    if(action=="subscriptions")return Subscriptions(progress);
    if(action=="search")return Search(Convert.ToString(payload["query"]),Convert.ToInt32(payload["page"]));
    if(action=="details"){ulong id=ulong.Parse(Convert.ToString(payload["id"]),CultureInfo.InvariantCulture);var page=Details(new[]{id},true);if(page.Items.Count!=1||!page.Raw.ContainsKey(id))throw new Exception("Steam 未返回所选工坊条目。");return new{item=page.Items[0],message="工坊详情来自 Steam。"};}
    if(action=="download"){ulong id=ulong.Parse(Convert.ToString(payload["id"]),CultureInfo.InvariantCulture);SteamLauncherServices.DownloadVerified(id,(bool)payload["confirmed"],item=>{var page=Details(new[]{item},false);byte[] bytes;if(page.Raw.Count!=1||!page.Raw.TryGetValue(item,out bytes))throw new Exception("Steam 详情 ID 无法验证。");return bytes;},item=>Mutate(item,progress));return new{id=id.ToString(CultureInfo.InvariantCulture),message="Steam 已订阅并确认所选条目安装；可在模组配置中手动启用。"};}
-   if(action=="hall")return Hall(Convert.ToString(payload["query"]),progress);throw new Exception("不支持的 Steam 操作。");
+   if(action=="hall")return Hall(Convert.ToString(payload["query"]),progress,hallBatch);throw new Exception("不支持的 Steam 操作。");
   }
   static string PointerUtf8(IntPtr pointer,int maximum){if(pointer==IntPtr.Zero)return "";int length=0;while(length<maximum&&Marshal.ReadByte(pointer,length)!=0)length++;var bytes=new byte[length];Marshal.Copy(pointer,bytes,0,length);return Encoding.UTF8.GetString(bytes);}
   public void Dispose(){try{if(initialized&&shutdown!=null)shutdown();}finally{initialized=false;Environment.SetEnvironmentVariable("SteamAppId",oldApp);Environment.SetEnvironmentVariable("SteamGameId",oldGame);if(dll!=IntPtr.Zero){FreeLibrary(dll);dll=IntPtr.Zero;}}}

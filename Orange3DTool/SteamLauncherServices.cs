@@ -60,24 +60,38 @@ namespace PZ3D {
    string host=((ip>>24)&255)+"."+((ip>>16)&255)+"."+((ip>>8)&255)+"."+(ip&255),name=Utf8(bytes,172,64);ulong steamId=BitConverter.ToUInt64(bytes,368);
    return new{id="hall:"+host+":"+port,name=string.IsNullOrEmpty(name)?host+":"+port:name,host=host,port=(int)port,queryPort=(int)queryPort,players=players,maxPlayers=max,ping=ping<0?-1:ping,description=Utf8(bytes,78,64),passwordRequired=bytes[160]!=0,steam=steamId!=0};
   }
-  public static object Execute(Engine engine,string action,Dictionary<string,object> payload,Action<int,string> progress,CancellationToken cancel){
+  static int HallNumber(Dictionary<string,object> row,string key,int minimum,int maximum){object value=Field(row,key);if(!(value is int)&&!(value is long))throw new Exception("Steam 服务器批次数字无效。");long number=Convert.ToInt64(value,CultureInfo.InvariantCulture);if(number<minimum||number>maximum)throw new Exception("Steam 服务器批次数字超出范围。");return (int)number;}
+  static string HallText(Dictionary<string,object> row,string key,int minimum,int maximum){object value=Field(row,key);if(!(value is string)||((string)value).Length<minimum||((string)value).Length>maximum)throw new Exception("Steam 服务器批次文本无效。");return (string)value;}
+  static List<object> HallBatchRows(object raw){
+   var rows=raw as System.Collections.IList;if(rows==null||rows.Count<1||rows.Count>16)throw new Exception("Steam 服务器批次数量无效。");var safe=new List<object>();
+   foreach(object value in rows){var row=value as Dictionary<string,object>;if(row==null)throw new Exception("Steam 服务器批次行无效。");string host=HallText(row,"host",7,15),id=HallText(row,"id",14,27);string[] parts=host.Split('.');if(parts.Length!=4)throw new Exception("Steam 服务器批次地址无效。");var octets=new int[4];for(int i=0;i<4;i++)if(!int.TryParse(parts[i],NumberStyles.None,CultureInfo.InvariantCulture,out octets[i])||octets[i]<0||octets[i]>255||parts[i]!=octets[i].ToString(CultureInfo.InvariantCulture))throw new Exception("Steam 服务器批次地址无效。");if(octets.All(v=>v==0))throw new Exception("Steam 服务器批次地址无效。");
+    int port=HallNumber(row,"port",1,65535),queryPort=HallNumber(row,"queryPort",1,65535);if(id!="hall:"+host+":"+port.ToString(CultureInfo.InvariantCulture))throw new Exception("Steam 服务器批次 ID 无效。");object password=Field(row,"passwordRequired"),steam=Field(row,"steam");if(!(password is bool)||!(steam is bool))throw new Exception("Steam 服务器批次标记无效。");
+    safe.Add(new{id=id,name=HallText(row,"name",1,64),host=host,port=port,queryPort=queryPort,players=HallNumber(row,"players",0,100000),maxPlayers=HallNumber(row,"maxPlayers",0,100000),ping=HallNumber(row,"ping",-1,int.MaxValue),description=HallText(row,"description",0,64),passwordRequired=(bool)password,steam=(bool)steam});
+   }return safe;
+  }
+  public static object Execute(Engine engine,string action,Dictionary<string,object> payload,Action<int,string> progress,CancellationToken cancel,Action<object> hallBatch=null){
    var args=Normalize(action,payload);cancel.ThrowIfCancellationRequested();if(engine==null)throw new Exception("没有选择游戏安装。");
    if(action=="download"){engine.Guard();if(!engine.TestMode&&GameProcessGuard.IsRunning(engine.Game))throw new Exception("请退出游戏后下载工坊模组。");}
    string basePath=Path.Combine(Path.GetFullPath(engine.Data),"steam-services");
-   return Transport(basePath,engine.Game,new Dictionary<string,object>{{"action",action},{"args",args}},Process.GetCurrentProcess().MainModule.FileName,action=="download"?510000:90000,progress,cancel);
+   return Transport(basePath,engine.Game,new Dictionary<string,object>{{"action",action},{"args",args}},Process.GetCurrentProcess().MainModule.FileName,action=="download"?510000:90000,progress,cancel,hallBatch);
   }
   static void NoReparse(string path){string full=Path.GetFullPath(path);for(var at=new DirectoryInfo(full);at!=null;at=at.Parent)if(at.Exists&&(at.Attributes&FileAttributes.ReparsePoint)!=0)throw new Exception("Steam 临时请求目录不能经过链接。");}
   static string Quote(string value){var quoted=new StringBuilder("\"");int slashes=0;foreach(char c in value){if(c=='\\'){slashes++;continue;}if(c=='\"'){quoted.Append('\\',slashes*2+1);quoted.Append(c);}else{quoted.Append('\\',slashes);quoted.Append(c);}slashes=0;}quoted.Append('\\',slashes*2);return quoted.Append('"').ToString();}
   static void PrivateDirectory(string directory){Directory.CreateDirectory(directory);var sid=WindowsIdentity.GetCurrent().User;var security=new DirectorySecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new FileSystemAccessRule(sid,FileSystemRights.FullControl,InheritanceFlags.ContainerInherit|InheritanceFlags.ObjectInherit,PropagationFlags.None,AccessControlType.Allow));new DirectoryInfo(directory).SetAccessControl(security);}
-  internal static object Transport(string basePath,string game,Dictionary<string,object> request,string executable,int timeoutMilliseconds,Action<int,string> progress,CancellationToken cancel){
+  internal static object Transport(string basePath,string game,Dictionary<string,object> request,string executable,int timeoutMilliseconds,Action<int,string> progress,CancellationToken cancel,Action<object> hallBatch=null){
    cancel.ThrowIfCancellationRequested();NoReparse(basePath);Directory.CreateDirectory(basePath);string owned=Path.Combine(basePath,Guid.NewGuid().ToString("N"));PrivateDirectory(owned);
    string input=Path.Combine(owned,"request.json"),output=Path.Combine(owned,"response.json"),nonce=Guid.NewGuid().ToString("N");
    string action=Text(Field(request,"action"));var args=Normalize(action,Field(request,"args") as Dictionary<string,object>);var json=Json();Process process=null;
    try{
     File.WriteAllText(input,json.Serialize(new{action=action,args=args,nonce=nonce}),new UTF8Encoding(false));
     var start=new ProcessStartInfo(executable,"--steam-service-worker "+Quote(Path.GetFullPath(game))+" "+Quote(input)+" "+Quote(output)){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8};
-    var gate=new object();string protocolError=null;process=new Process{StartInfo=start};
-    process.OutputDataReceived+=(sender,line)=>{if(line.Data==null||line.Data.Length>8192||!line.Data.StartsWith("{"))return;try{var item=Json().Deserialize<Dictionary<string,object>>(line.Data);if(Text(Field(item,"kind"))=="progress"&&progress!=null){int value=Convert.ToInt32(Field(item,"value"),CultureInfo.InvariantCulture);if(value<-1||value>100)throw new Exception("Steam 进度超出范围。");progress(value,Text(Field(item,"text")));}}catch(Exception x){lock(gate)protocolError=x.Message;}};
+    var gate=new object();string protocolError=null;int hallRows=0;process=new Process{StartInfo=start};
+    process.OutputDataReceived+=(sender,line)=>{if(line.Data==null||!line.Data.StartsWith("{"))return;try{
+     // Six-character JSON escapes can expand the native 64-byte text buffers in a 16-row batch.
+     if(line.Data.Length>32768)throw new Exception("Steam 服务事件过大。");var item=Json().Deserialize<Dictionary<string,object>>(line.Data);string kind=Text(Field(item,"kind"));
+     if(kind=="hallBatch"){lock(gate){if(protocolError!=null||cancel.IsCancellationRequested)return;object receivedNonce=Field(item,"nonce");if(action!="hall"||!(receivedNonce is string)||(string)receivedNonce!=nonce)throw new Exception("Steam 服务器批次与请求不一致。");var rows=HallBatchRows(Field(item,"servers"));hallRows+=rows.Count;if(hallRows>1000)throw new Exception("Steam 服务器批次总量超出范围。");if(hallBatch!=null)hallBatch(new{servers=rows});}}
+     else if(kind=="progress"&&progress!=null){int value=Convert.ToInt32(Field(item,"value"),CultureInfo.InvariantCulture);if(value<-1||value>100)throw new Exception("Steam 进度超出范围。");progress(value,Text(Field(item,"text")));}
+    }catch(Exception x){lock(gate)protocolError=x.Message;}};
     // Native Steam diagnostics can contain account/server information. Drain but never persist them.
     process.ErrorDataReceived+=(sender,line)=>{};
     if(progress!=null)progress(-1,"正在请求 Steam · "+(action=="hall"?"公共服务器列表":"工坊服务"));
@@ -107,7 +121,7 @@ namespace PZ3D {
     WorkerPaths(requestPath,responsePath);validPaths=true;var request=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(requestPath,Encoding.UTF8));nonce=Text(Field(request,"nonce"));Guid parsed;if(!Guid.TryParseExact(nonce,"N",out parsed))throw new Exception("Steam 请求标识无效。");string action=Text(Field(request,"action"));var args=Normalize(action,Field(request,"args") as Dictionary<string,object>);
     using(var bounded=new CancellationTokenSource(action=="download"?480000:75000)){
      object result;
-     try{using(var native=new SteamLauncherNative(game,bounded.Token)){result=native.Execute(action,args,(v,t)=>{Console.WriteLine(json.Serialize(new{kind="progress",value=v,text=t}));Console.Out.Flush();});}}
+     try{using(var native=new SteamLauncherNative(game,bounded.Token)){result=native.Execute(action,args,(v,t)=>{Console.WriteLine(json.Serialize(new{kind="progress",value=v,text=t}));Console.Out.Flush();},batch=>{Console.WriteLine(json.Serialize(new{kind="hallBatch",nonce=nonce,servers=((Dictionary<string,object>)batch)["servers"]}));Console.Out.Flush();});}}
      catch(Exception x){if(action!="connection")throw;result=new{available=false,accountName="",steamId="",message=x.Message};}
      File.WriteAllText(responsePath,json.Serialize(new{nonce=nonce,ok=true,data=result}),new UTF8Encoding(false));return 0;
     }

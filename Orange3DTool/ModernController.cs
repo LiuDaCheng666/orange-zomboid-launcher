@@ -16,10 +16,16 @@ namespace PZ3D {
   readonly Dictionary<string,ShaderSelection> shaderSnapshots=new Dictionary<string,ShaderSelection>();
   readonly HashSet<string> memorySnapshots=new HashSet<string>();
   readonly Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> fetch;
+  readonly Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> networkFetch;
+  readonly SemaphoreSlim networkLane=new SemaphoreSlim(1,1);readonly List<CancellationTokenSource> networkRequests=new List<CancellationTokenSource>();CancellationTokenSource hallRequest;
+  public static readonly HashSet<string> NativeNetworkReads=new HashSet<string>{"steamConnection","steamSubscriptions","steamSearch","steamDetails","serverHall","serverQuery","updatesGet"};
   public Action<int,string> Progress;
-  public bool Busy{get{lock(gate)return busy;}}
+  public Action<string,object> Event;
+  public bool Busy{get{lock(gate)return busy||networkRequests.Count>0;}}
+  public bool NetworkBusy{get{lock(gate)return networkRequests.Count>0;}}
   public ModernController(string game,string user,string data,bool test=false):this(game,user,data,test,null){}
-  internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download){this.user=Path.GetFullPath(user);this.data=Path.GetFullPath(data);this.test=test;journal=new LauncherJournal(this.data);fetch=download??Download;SetEngine(game);}
+  internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download):this(game,user,data,test,download,null){}
+  internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download,Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> network){this.user=Path.GetFullPath(user);this.data=Path.GetFullPath(data);this.test=test;journal=new LauncherJournal(this.data);fetch=download??Download;networkFetch=network??((e,a,p,progress,token,batch)=>a=="serverQuery"?servers.Query(Text(p,"id"),token):a=="updatesGet"?ComponentEvidence.CheckUpdates(e,token):SteamLauncherServices.Execute(e,a,p,progress,token,batch));SetEngine(game);}
   void SetEngine(string game){engine=new Engine(string.IsNullOrWhiteSpace(game)?Path.Combine(data,"unselected-game"):game,user,data,test);servers=new ServerProfiles(data);engine.Progress=(v,t)=>Report(v,t);ApplySources();settingSnapshots.Clear();shaderSnapshots.Clear();memorySnapshots.Clear();}
   void ApplySources(){engine.BuddySource=InstallWorkflow.Source(engine,3619862853);engine.ViewSource=InstallWorkflow.Source(engine,3809306528);engine.ModelsSource=InstallWorkflow.Source(engine,3810302175);}
   static string Text(Dictionary<string,object> p,string key){object v;if(!p.TryGetValue(key,out v)||!(v is string))throw new Exception("缺少有效参数："+key);return (string)v;}
@@ -29,11 +35,23 @@ namespace PZ3D {
   bool Running(){return !test&&GameProcessGuard.IsRunning(engine.Game);}
   void Report(int value,string text){journal.Update(value,text);lock(gate){progressValue=value;progressText=text;}var callback=Progress;if(callback!=null)callback(value,text);}
   void Check(){cancel.Token.ThrowIfCancellationRequested();foreach(string path in new[]{engine.Game,engine.Config,engine.Mods,user,data})LauncherMaintenance.NoReparse(path);if(LaunchProfiles.Pending(engine))throw new Exception("启动会话尚未恢复，请退出游戏并刷新状态后再修改。");engine.Guard();}
-  public void Cancel(){lock(gate){if(!disposed)cancel.Cancel();}}
+  public void Cancel(){lock(gate){if(!disposed){cancel.Cancel();foreach(var request in networkRequests)request.Cancel();}}}
+  public static bool IsHallCancel(string action,Dictionary<string,object> payload){object scope;return action=="cancel"&&payload!=null&&payload.TryGetValue("scope",out scope)&&scope is string&&(string)scope=="hall";}
+  void CancelHall(){lock(gate){if(!disposed&&hallRequest!=null)hallRequest.Cancel();}}
+  object ExecuteNetwork(string action,Dictionary<string,object> payload){
+   payload=payload??new Dictionary<string,object>();object raw;string requestId=payload.TryGetValue("requestId",out raw)?raw as string:Guid.NewGuid().ToString("N");if(string.IsNullOrEmpty(requestId)||requestId.Length>80||!Regex.IsMatch(requestId,@"^[A-Za-z0-9_-]+$"))throw new Exception("网络请求标识无效。");
+   var tokenSource=new CancellationTokenSource();Engine selected;
+   lock(gate){if(disposed){tokenSource.Dispose();throw new ObjectDisposedException("ModernController");}if(busy){tokenSource.Dispose();throw new Exception("正在修改本地文件，请完成后再查询网络。");}if(networkRequests.Count>=16){tokenSource.Dispose();throw new Exception("等待的网络请求过多，请稍后重试。");}selected=engine;if(action=="serverHall"){if(hallRequest!=null)hallRequest.Cancel();hallRequest=tokenSource;}networkRequests.Add(tokenSource);}
+   bool acquired=false;
+   try{if(action.StartsWith("steam",StringComparison.Ordinal)||action=="serverHall"){networkLane.Wait(tokenSource.Token);acquired=true;}tokenSource.Token.ThrowIfCancellationRequested();var result=networkFetch(selected,action=="serverHall"?"hall":action.StartsWith("steam",StringComparison.Ordinal)?action.Substring(5).ToLowerInvariant():action,payload,(v,t)=>{var callback=Event;if(callback!=null)callback("networkProgress",new{requestId=requestId,value=v,text=t});},tokenSource.Token,batch=>{tokenSource.Token.ThrowIfCancellationRequested();var node=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(new JavaScriptSerializer().Serialize(batch));object rows;if(!node.TryGetValue("servers",out rows))throw new Exception("大厅增量响应缺少服务器列表。");var callback=Event;if(callback!=null)callback("hallBatch",new{requestId=requestId,servers=rows});});tokenSource.Token.ThrowIfCancellationRequested();return result;}
+   catch(Exception ex){try{journal.Diagnostic(action+" · 网络读取未完成 · "+ex.Message);}catch{}throw;}
+   finally{if(acquired)networkLane.Release();lock(gate){networkRequests.Remove(tokenSource);if(hallRequest==tokenSource)hallRequest=null;}tokenSource.Dispose();}
+  }
   public object Execute(string action,Dictionary<string,object> payload){
    if(action=="taskGet")return journal.Snapshot();if(action=="playtimeGet")return PlaytimeTracker.Snapshot(data);
-   if(action=="cancel"){Cancel();return Message("已请求取消；当前安全文件阶段完成后停止。");}
-   lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");if(busy)throw new Exception("正在执行任务，请等待完成或取消。");busy=true;cancel.Dispose();cancel=new CancellationTokenSource();}
+   if(action=="cancel"){if(IsHallCancel(action,payload)){CancelHall();return Message("已停止本次大厅查询，已收到的列表保留。");}Cancel();return Message("已请求取消；当前安全文件阶段完成后停止。");}
+   if(NativeNetworkReads.Contains(action))return ExecuteNetwork(action,payload);
+   lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");if(action=="setGame"&&networkRequests.Count>0)throw new Exception("网络查询进行中，不能切换安装目录；请取消查询后再选择。");if(busy)throw new Exception("正在执行任务，请等待完成或取消。");busy=true;cancel.Dispose();cancel=new CancellationTokenSource();}
    bool mutation=!NativeReads.Contains(action);
    try{if(mutation){journal.Begin(action,TaskTitle(action,payload));Report(-1,"正在处理 "+TaskTitle(action,payload));}object result=Dispatch(action,payload??new Dictionary<string,object>());if(mutation){string message=SafeResultMessage(result,TaskTitle(action,payload));lock(gate){log.Add(DateTime.Now.ToString("HH:mm:ss")+" "+message);if(log.Count>100)log.RemoveAt(0);}bool partial=message.Contains("[失败]");journal.Finish(partial?"partial":"completed",message);Report(partial?-1:100,partial?"部分完成；请核对各组件失败原因和当前配置。":"操作完成；游戏内效果仍需验证");}return result;}
    catch(Exception ex){if(!mutation){try{journal.Diagnostic(action+" · 读取失败 · "+ex.Message);}catch{}}if(mutation){journal.Finish(ex is OperationCanceledException?"cancelled":"failed",ex.Message);lock(gate){log.Add(DateTime.Now.ToString("HH:mm:ss")+" "+LauncherJournal.Sanitize(ex.Message));}Report(-1,ex is OperationCanceledException?"任务已取消":ex.Message);}throw;}
@@ -121,6 +139,6 @@ namespace PZ3D {
   static string[] ModArray(Dictionary<string,object> p){object raw;if(!p.TryGetValue("mods",out raw)||raw is string||!(raw is System.Collections.IEnumerable))throw new Exception("模组清单必须为数组。");return ((System.Collections.IEnumerable)raw).Cast<object>().Select(o=>{if(!(o is string))throw new Exception("模组标识必须为文本。");return (string)o;}).ToArray();}
   static string SafeResultMessage(object result,string title){if(result!=null){var property=result.GetType().GetProperty("message");if(property!=null){var message=property.GetValue(result,null) as string;if(message!=null)return LauncherJournal.Sanitize(message);}var map=result as Dictionary<string,object>;object value;if(map!=null&&map.TryGetValue("message",out value)&&value is string)return LauncherJournal.Sanitize((string)value);}return title+" · 操作完成；请在对应页面核对当前状态。";}
   static string TaskTitle(string action,Dictionary<string,object> p){if(action=="maintenance"){object kind;if(p!=null&&p.TryGetValue("kind",out kind))return Convert.ToString(kind)=="cache"?"清除多人缓存":"重新下载创意工坊模组";}var titles=new Dictionary<string,string>{{"componentsAction","处理模组组件"},{"memorySave","保存游戏内存"},{"settingsSave","保存 Viewpoint 画面设置"},{"profileLaunch","启动指定存档或服务器"},{"launch","启动游戏"},{"steamDownload","订阅并下载工坊模组"},{"modProfileActivate","启用模组配置"},{"modProfileSave","保存模组配置"},{"saveSave","保存存档模组清单"},{"playtimeSettings","设置游玩提醒"},{"favoriteImport","导入原版服务器收藏"}};string title;return titles.TryGetValue(action,out title)?title:action;}
-  public void Dispose(){lock(gate){disposed=true;cancel.Cancel();if(!busy)cancel.Dispose();}}
+  public void Dispose(){lock(gate){disposed=true;cancel.Cancel();foreach(var request in networkRequests)request.Cancel();if(!busy)cancel.Dispose();}}
  }
 }
