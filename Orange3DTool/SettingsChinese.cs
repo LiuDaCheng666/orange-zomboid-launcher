@@ -1,0 +1,108 @@
+using System;using System.Collections.Generic;
+namespace PZ3D {static class SettingsChinese {
+ public static void Apply(Dictionary<string,SettingInfo> d){Action<string,string,string,string> number=(key,name,desc,range)=>{var p=new SettingInfo(name,"区块构建与性能",desc+" 调高预算会增加单帧工作量；不是显存或 Java 堆。退出游戏后保存，下次启动生效。","number");var limits=range.Split(',');p.Minimum=double.Parse(limits[0],System.Globalization.CultureInfo.InvariantCulture);p.Maximum=double.Parse(limits[1],System.Globalization.CultureInfo.InvariantCulture);d[key]=p;};
+ number("chunks.buildBudgetMs","区块构建基础预算（毫秒）","每帧区块构建基础时间预算。作者默认 3 ms，范围 0.5—20 ms。","0.5,20");number("chunks.buildMaxMs","区块构建预算上限（毫秒）","即使待处理区域增加，每帧构建预算也不超过这个上限。默认 9 ms，范围 1—30 ms。","1,30");number("chunks.buildPerWaitingMs","每个等待层增加的预算（毫秒）","每增加一个等待构建的层，增加的构建时间预算；最终受预算上限约束。默认 0.15 ms，范围 0—1 ms。","0,1");number("chunks.cookThreads","网格构建工作线程数","后台生成区块网格的工作线程数量。作者允许 1—8；更多线程可能与主线程争抢 CPU。","1,8");d["chunks.cookThreads"].Kind="integer";number("chunks.cookingMax","同时构建的层数上限","同时处于后台网格构建阶段的区域层数上限。默认 256，范围 16—1024；不等于线程数。","16,1024");d["chunks.cookingMax"].Kind="integer";
+ string labels=@"chunks.atOnceRing|同步构建环范围
+chunks.buildOutOfView|视野外区块构建
+assets.modelShaders|模型着色器准备
+assets.modelsAhead|提前准备模型
+assets.prepare|资源预准备
+assets.soundFiles|声音文件准备
+camera.aimHeight|瞄准相机高度偏移
+camera.aimSensitivity|瞄准时鼠标灵敏度
+camera.aimSide|瞄准相机横向偏移
+camera.autoSwap|自动切换肩侧
+camera.dissolvePlants|遮挡镜头的植物淡出
+camera.distance|第三人称相机距离
+camera.fovEffects|视野角动态效果强度
+camera.freeLookAngle|自由观察角度范围
+camera.gunKick|枪械后坐视觉冲击
+camera.headLook|头部跟随观察方向
+camera.height|相机高度偏移
+camera.hitPause|受击停顿效果
+camera.melee|近战相机动作强度
+camera.motion|相机运动预设
+camera.recoil|相机后坐强度
+camera.shake|镜头震动强度
+camera.shoulder|第三人称肩侧
+camera.showRig|显示镜头辅助结构
+camera.side|相机横向偏移
+camera.thirdPersonOnFoot|步行时默认第三人称
+camera.thirdPersonSeated|坐下时默认第三人称
+camera.vehicleBehind|车内镜头置于后方
+camera.vehicleDistance|车辆相机距离
+camera.vehicleHeight|车辆相机高度
+camera.vehicleSide|车辆相机横向偏移
+camera.vehicleTilt|车辆相机倾斜模式
+capture.seconds|录制时长（秒）
+corpses.band|尸体更新距离分段
+corpses.every|尸体更新策略
+corpses.most|尸体处理数量上限
+corpses.randomness|尸体姿态随机程度
+corpses.swapSeconds|尸体姿态切换间隔（秒）
+far.cellJobs|远景地图单元任务数
+far.cellUploadMb|远景地图单元上传预算
+far.groundBakeBudgetMs|远景地面烘焙预算（毫秒）
+far.groundBakesPerFrame|每帧远景地面烘焙次数
+far.shellJobs|远景外壳任务数
+far.shellUploadMb|远景外壳上传预算
+floors.bakeBudgetMs|地面烘焙预算（毫秒）
+floors.bakePagesPerFrame|每帧地面烘焙页数
+floors.baked|地面纹理烘焙
+floors.detailShare|地面细节预算比例
+floors.lowPagesPerFrame|每帧低精度地面页数
+game.animalSetsWithGame|随游戏加载动物动画集
+game.releaseIsoChunkTextures|释放等距视角区块纹理
+game.spottedStack|发现目标处理
+game.spreadLootRolls|分散战利品生成工作
+game.switchPowerKept|保留电源切换状态
+glass.fadeStart|玻璃淡出起始距离
+glass.far|远处玻璃显示
+glass.opaqueDistance|玻璃不透明距离
+glass.opaqueStoreys|玻璃不透明楼层阈值
+graphics.frameGeneration|帧生成
+graphics.halfTextures|半尺寸纹理
+graphics.lowLatency|低延迟模式
+graphics.modelPacks|启用立体模型包
+gunplay.aim|Viewpoint 原始枪械瞄准
+gunplay.rangeScale|枪械距离显示缩放
+gunplay.ring|显示瞄准范围环
+gunplay.ringOpacity|瞄准范围环透明度
+gunplay.showCone|显示射击锥范围
+keys.cursor|释放／锁定鼠标指针
+keys.freeLook|自由观察快捷键
+keys.overlay|性能叠加层快捷键
+keys.shoulderSwap|肩侧切换快捷键
+keys.cameraBehind|镜头切到身后快捷键
+lod.farBlocks|远景区块范围
+lod.fullRateCharacters|完整频率角色更新范围
+lod.groundBaked|远景地面烘焙
+lod.groundTexelsFull|完整精度远景地面纹素
+lod.groundTexelsLite|简化远景地面纹素
+lod.interiorFurniture|室内家具远景细节
+lod.keptSnapshotsPosed|保留快照姿态
+lod.packRing|模型包细节环范围
+lod.relief|地形起伏强度
+lod.reliefEnabled|启用地形起伏
+lod.reliefSmoothSquares|地形起伏平滑范围
+lod.shellFullBlocks|完整远景外壳范围
+lod.shellLiteBlocks|简化远景外壳范围
+lod.treeShare|树木细节预算比例
+lod.treesFadeBlocks|树木淡出距离
+lod.treesGoneBlocks|树木隐藏距离
+lod.unawareZombiesThinned|减少未察觉僵尸的更新工作
+lod.vehicleTilt|车辆地形倾斜幅度
+loot.outlineBlue|拾取轮廓蓝色通道
+loot.outlineGreen|拾取轮廓绿色通道
+loot.outlineRed|拾取轮廓红色通道
+loot.outlineOpacity|拾取轮廓透明度
+loot.outlineWidth|拾取轮廓宽度
+memory.reliefMiB|地形起伏资源池
+memory.soundMiB|声音资源池
+view.crosshair|显示 Viewpoint 准星
+view.panini|宽视野畸变校正
+view.paniniStrength|宽视野畸变校正强度";
+ foreach(string line in labels.Split('\n')){string[] pair=line.Trim().Split('|');if(pair.Length!=2||d.ContainsKey(pair[0]))continue;string group=pair[0].StartsWith("camera.")?"相机与动作":pair[0].StartsWith("chunks.")?"区块构建与性能":pair[0].StartsWith("graphics.")?"画质与光影":pair[0].StartsWith("keys.")?"快捷键":pair[0].StartsWith("lod.")?"距离与细节":pair[0].StartsWith("memory.")?"内存池（只读）":"高级参数";d[pair[0]]=new SettingInfo(pair[1],group,"中文名称对应原始参数。此项的写入范围／联动规则尚未完整核验，因此仅显示；请在游戏内调整，避免外部错误值。","readonly");}
+ foreach(string prefix in new[]{"default","normal","vivid","library"})foreach(string item in new[]{"antialiasing|抗锯齿方式","upscaling|超分辨率模式（含 DLSS）","renderScale|内部渲染比例","shadowResolution|阴影分辨率","shadowCascades|阴影级联数量","lampShadowResolution|局部灯光阴影分辨率","headlightShadows|车灯阴影数量","lampShadows|局部灯光阴影数量","cloudSteps|云层采样次数","cloudResolution|云层分辨率比例","volumetricSteps|体积效果采样次数","rainDensity|雨滴密度","occlusion|环境遮蔽","occlusionQuality|环境遮蔽质量","occlusionRadius|环境遮蔽半径","occlusionStrength|环境遮蔽强度","farLamps|远景灯光","blobShadows|简化投影阴影","motionBlurSamples|运动模糊采样次数","dofSamples|景深采样次数","focusSpeed|对焦速度","bounceReach|反弹光距离","bounceStrength|反弹光强度"}){var pair=item.Split('|');string key="pack."+prefix+"."+pair[0];if(!d.ContainsKey(key))d[key]=new SettingInfo(pair[1],"内置光影／"+prefix,pair[0]=="upscaling"?"以较低内部分辨率重建输出图像。质量档优先清晰度，性能档降低内部像素以节省渲染工作；超高性能最激进、细节损失通常更大。当前选项原值保留；各模式的倍率和有效枚举以当前模组为准。":"影响对应光影包的画面处理。当前未核验全部枚举和联动，外部只读；其他光影包的同名项独立。","readonly");}
+ }
+}}

@@ -1,0 +1,7 @@
+using System;using System.Collections.Generic;using System.Linq;using System.Reflection;using System.Text;
+namespace PZ3D {static class ServerRulesTests {
+ static void Check(bool ok,string name){if(!ok)throw new Exception("FAIL "+name);}
+ static byte[] Rules(params string[] values){var b=new List<byte>{255,255,255,255,69,(byte)(values.Length/2),0};foreach(string v in values)b.AddRange(Encoding.UTF8.GetBytes(v+"\0"));return b.ToArray();}
+ public static void Run(){Type t=typeof(Program).Assembly.GetType("PZ3D.ServerPublicRules");Check(t!=null,"public rules description parser exists");var method=t.GetMethod("Description");Func<byte[],string> read=b=>(string)method.Invoke(null,new object[]{b});Check(read(Rules("description:2/2","服<LINE>","description:1/2","<RGB:1,0.5,0>中文"))=="<RGB:1,0.5,0>中文服<LINE>","fragmented rule values reassemble numerically without added characters");Check(read(Rules("description","Direct"))=="Direct","plain description supported");Check(read(Rules("description:2/3","Incomplete"))==null,"missing segments cannot look complete");Check(read(Rules("description:1/2","A","description:1/2","B"))==null,"duplicate chunks refused");Check(read(Rules("other","x"))==null,"absent description distinct from empty");Check(read(Rules("description","ok").Take(12).ToArray())==null,"truncation rejected");Console.WriteLine("PASS server rules description: 6 fixtures");}
+ public static int Main(){try{Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
+}}

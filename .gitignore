@@ -1,5 +1,7 @@
 # Local dependencies, generated binaries and licensed private testing resources
 Dependencies/
+**/DLSS-Cache/
+**/source-inspection/
 dist/
 artifacts/
 TestFixtures/

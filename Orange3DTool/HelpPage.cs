@@ -1,0 +1,8 @@
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+namespace PZ3D {
+ sealed partial class MainForm {
+  void AddHelpPage(TabControl tabs){var tab=new TabPage("使用帮助"){BackColor=bg,ForeColor=fg};tabs.TabPages.Add(tab);var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=2,RowCount=2,Padding=new Padding(14)};layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,220));layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,52));tab.Controls.Add(layout);var chapters=new ListBox{Dock=DockStyle.Fill,BackColor=card,ForeColor=fg,BorderStyle=BorderStyle.FixedSingle,IntegralHeight=false,ItemHeight=34};chapters.Items.Add("安装、卸载、枪械与中文");chapters.Items.AddRange(HelpContent.Titles);var body=new TextBox{Dock=DockStyle.Fill,Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,BackColor=card,ForeColor=fg,BorderStyle=BorderStyle.FixedSingle,Margin=new Padding(12,0,0,0)};layout.Controls.Add(chapters,0,0);layout.Controls.Add(body,1,0);chapters.SelectedIndexChanged+=(s,e)=>{if(chapters.SelectedIndex>=0){body.Text=HelpBody(chapters.SelectedIndex);body.SelectionStart=0;body.ScrollToCaret();}};chapters.SelectedIndex=0;var actions=new FlowLayoutPanel{Dock=DockStyle.Fill};var copy=new GoldButton{Text="复制本章",Size=new Size(140,40),BackColor=card,ForeColor=fg};copy.Click+=(s,e)=>Clipboard.SetText(body.Text);actions.Controls.Add(copy);var first=new GoldButton{Text="返回第一次使用",Size=new Size(180,40),BackColor=card,ForeColor=fg};first.Click+=(s,e)=>chapters.SelectedIndex=0;actions.Controls.Add(first);layout.Controls.Add(actions,1,1);}
+ }
+}

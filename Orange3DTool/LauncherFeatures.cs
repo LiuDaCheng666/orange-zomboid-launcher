@@ -1,0 +1,37 @@
+using System;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Windows.Forms;
+namespace PZ3D {
+ sealed partial class MainForm {
+  void SetupLauncherFeatures(TabControl tabs){
+   var memory=Page(tabs,"启动与内存");
+   AddText(memory,"这里设置的是游戏 Java 最大堆内存（Xmx），不是显存，也不改变 Windows 分页文件。调高内存不一定提高帧率；应为系统、Steam 和其他程序留下余量。退出游戏后保存，下次启动生效。");
+   var heapState=new Label{AutoSize=true,MaximumSize=new Size(950,0),Margin=new Padding(8),Text="点击读取当前配置和可用内存"};memory.Controls.Add(heapState);
+   var input=new NumericUpDown{Minimum=2,Maximum=512,Value=8,Width=140,Margin=new Padding(8)};memory.Controls.Add(input);
+   Action reload=()=>{var info=LauncherMaintenance.MemoryInfo();int heap=LauncherMaintenance.ReadHeapGiB(GetEngine());input.Maximum=Math.Max(2,info.MaximumHeapGiB);input.Value=Math.Min(input.Maximum,Math.Max(input.Minimum,heap));heapState.Text="当前最大堆："+heap+" GiB · 物理内存："+info.TotalGiB+" GiB · 当前可用："+info.AvailableGiB+" GiB\n本次建议："+info.RecommendedHeapGiB+" GiB · 安全上限："+info.MaximumHeapGiB+" GiB。现有配置超过上限时，输入框显示上限，不会自动改动原文件。";};
+   var heapActions=new FlowLayoutPanel{AutoSize=true,WrapContents=true};heapActions.Controls.Add(Button("读取当前配置",reload));heapActions.Controls.Add(Button("保存启动内存",()=>{int selected=(int)input.Value;Run(()=>LauncherMaintenance.SetHeapGiB(GetEngine(),selected),"正在保存游戏启动内存");}));memory.Controls.Add(heapActions);
+   var maintenance=Page(tabs,"维护与诊断");
+   AddText(maintenance,"操作前必须退出游戏。清缓存不会备份缓存，不清除角色、车辆数据库、单人存档和个人模组；安装配置的恢复备份仍保留。删除后下次进服需要重新获取地图，第一次进入可能更慢。");
+   AddButton(maintenance,"清除多人地图缓存",()=>{if(MessageBox.Show(this,"将清除本机全部已缓存服务器的多人地图区块缓存，不备份。\n保留角色和车辆数据库、未知文件及其他存档。下次进服重新下载地图。\n请先退出游戏，确定清除？","清除多人缓存",MessageBoxButtons.OKCancel,MessageBoxIcon.Warning)==DialogResult.OK)Run(()=>LauncherMaintenance.ClearMultiplayerCache(GetEngine()),"正在清除多人地图缓存");});
+   AddText(maintenance,"工坊全量重下载仅针对 Project Zomboid（108600）的工坊本地文件。保留订阅、其他游戏、个人本地 mods 和存档。必须先核对 Steam 订阅清单，无法核对就不会开始删除。下载中不要退出 Steam；失败后必须完成重试才可启动。");
+   AddButton(maintenance,"清空工坊文件并重新下载",()=>{if(MessageBox.Show(this,"将删除本游戏工坊缓存中的模组文件，不备份，然后重新下载当前账号全部订阅。\n不删除其他游戏、存档、个人 mods，不取消订阅。可能需要大量流量和较长时间。\n必须在线登录 Steam，确定继续？","工坊全量重下载",MessageBoxButtons.OKCancel,MessageBoxIcon.Warning)==DialogResult.OK)Run(()=>LauncherMaintenance.RebuildWorkshop(GetEngine(),ReportDownload,downloadCancel.Token),"正在核对 Steam 订阅清单，尚未清除文件");});
+   AddButton(maintenance,"打开游戏日志目录",()=>Links.Open(UserDir()));
+   var infoPage=Page(tabs,"扩展适配说明");
+   AddText(infoPage,"只收录服务器无需操作的客户端扩展。当前两个候选仅声明客户端 Java，缺少 Buddy 所需的本地保留预加载声明，因此暂不提供安装。没有修改它们的 JAR、服务器清单或授权记录。");
+   AddText(infoPage,"Smooth Frames：动画预加载、慢 Lua 和帧时间诊断，以及特定原版错误修复。可能增加载入时间；不是网络延迟修复，也不保证平均帧率提升。作者当前多人部署说明需要服务器列入模组清单，不符合你的纯客户端要求。");
+   AddButton(infoPage,"Smooth Frames 作者页面",()=>Links.Open("https://steamcommunity.com/sharedfiles/filedetails/?id=3816784011"));
+   AddText(infoPage,"KK’s TREE：Viewpoint 近处树木视觉增强。当前作者条件为游戏 42.21、Buddy 2.3.2 及 Viewpoint。树林场景可能增加 GPU 开销。未确认服务器未列出时的保留加载；暂不开放安装。");
+   AddButton(infoPage,"KK’s TREE 作者页面",()=>Links.Open("https://steamcommunity.com/sharedfiles/filedetails/?id=3813172420"));
+   var choices=buttons.Parent.Controls[0] as FlowLayoutPanel;
+   if(choices!=null){var smooth=new GoldCheckBox{Text="Smooth Frames（暂不支持纯客户端）",AutoSize=true,Enabled=false,Checked=false};var trees=new GoldCheckBox{Text="KK’s TREE（暂不支持纯客户端）",AutoSize=true,Enabled=false,Checked=false};choices.Controls.Add(smooth);choices.Controls.Add(trees);}
+  }
+  void LaunchFromLauncher(){
+   var engine=GetEngine();bool running=Process.GetProcessesByName("ProjectZomboid64").Length>0||Process.GetProcessesByName("ProjectZomboid32").Length>0;
+   string reason=LauncherLaunch.Reason(engine,busy,running);if(reason!="")throw new Exception(reason);
+   if(Program.PreviewMode){Write("预览模式：未启动 Steam 或游戏。");return;}
+   engine.Guard();Process.Start(new ProcessStartInfo("steam://rungameid/108600"){UseShellExecute=true});Write("已向 Steam 发送启动请求，实际运行状态以游戏进程为准。");
+  }
+ }
+}
