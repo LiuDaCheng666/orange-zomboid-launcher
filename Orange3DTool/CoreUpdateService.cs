@@ -14,18 +14,21 @@ namespace PZ3D {
  public sealed class CoreUpdateStatus {
   public int protocol=1;
   public long revision,receivedBytes,totalBytes,speedBytes;
+  public List<CoreUpdateResult> history=new List<CoreUpdateResult>();
   public string state="Idle",currentVersion=AppVersion.Current,latestVersion="",checkedUtc="",notes="",currentFile="",message="手动检查启动器更新",taskId="";
  }
  // Transport is an in-process dependency. Neither bridge payloads nor disk files
  // can supply a feed URL or a trust key.
  public sealed class CoreUpdateService:IDisposable {
   readonly string root,key;readonly Func<CancellationToken,byte[][]> lookup;readonly Func<string,CancellationToken,Stream> open;
-  readonly object gate=new object();CoreUpdateStatus status=new CoreUpdateStatus();CoreManifest candidate;Task worker;CancellationTokenSource cancellation;bool disposed;
+  readonly object gate=new object();CoreUpdateStatus status=new CoreUpdateStatus();CoreManifest candidate;Task worker;CancellationTokenSource cancellation;Timer healthPoll;bool disposed;
   public Action<CoreUpdateStatus> Progress;
   public CoreUpdateService(string root):this(root,EmbeddedKey(),CoreReleaseNetwork.Lookup,CoreReleaseNetwork.Open){}
   static string EmbeddedKey(){try{return CoreUpdateTrust.PublicKeyXml;}catch{return null;}}
-  internal CoreUpdateService(string root,string key,Func<CancellationToken,byte[][]> lookup,Func<string,CancellationToken,Stream> open){this.root=CoreDeployment.Root(root);this.key=key;this.lookup=lookup;this.open=open;if(key==null){status.state="Unavailable";status.message="此旧版构建没有内置更新信任，请安装完整签名版本。";}}
-  public CoreUpdateStatus Status(){lock(gate)return Clone();}
+  internal CoreUpdateService(string root,string key,Func<CancellationToken,byte[][]> lookup,Func<string,CancellationToken,Stream> open){this.root=CoreDeployment.Root(root);this.key=key;this.lookup=lookup;this.open=open;if(key==null){status.state="Unavailable";status.message="此旧版构建没有内置更新信任，请安装完整签名版本。";}else{RefreshHistory();if(status.state=="PendingHealth")healthPoll=new Timer(ObserveHealth,null,250,250);}}
+  void ObserveHealth(object unused){CoreUpdateStatus snapshot=null;lock(gate){if(disposed)return;long revision=status.revision;try{RefreshHistory();}catch(Exception e){status.state="Conflicted";status.message=e.Message;status.revision++;}if(status.revision!=revision)snapshot=Clone();if(status.state!="PendingHealth"&&healthPoll!=null){healthPoll.Dispose();healthPoll=null;}}var callback=Progress;if(snapshot!=null&&callback!=null)try{callback(snapshot);}catch{}}
+  void RefreshHistory(){if(key==null||!File.Exists(CoreDeployment.Safe(root,CoreDeployment.RecordName)))return;var history=CoreUpdateTransaction.History(root,key);bool changed=CoreDeployment.Json.Serialize(history)!=CoreDeployment.Json.Serialize(status.history);status.history=history;if(history.Count>0&&new[]{"Idle","PendingHealth","Applying","RollingBack","Succeeded","RolledBack","Conflicted"}.Contains(status.state)){var last=history[0];status.taskId=last.TaskId;status.state=last.State;status.latestVersion=last.Version;status.message=last.State=="Succeeded"?"启动器更新成功，健康验证已完成。":last.State=="RolledBack"?"更新已回退，上一版本已恢复。 "+last.Message:last.State=="Conflicted"?"更新恢复受阻，已保留恢复文件。 "+last.Message:"更新正在完成健康验证或恢复。 "+last.Message;}if(changed)status.revision++;}
+  public CoreUpdateStatus Status(){lock(gate){RefreshHistory();return Clone();}}
   CoreUpdateStatus Clone(){return new JavaScriptSerializer().Deserialize<CoreUpdateStatus>(new JavaScriptSerializer().Serialize(status));}
   void Publish(Action<CoreUpdateStatus> change){CoreUpdateStatus copy;lock(gate){change(status);status.revision++;copy=Clone();}var callback=Progress;if(callback!=null)try{callback(copy);}catch{}}
   void Log(string phase,string message){CoreUpdateDiagnostics.Write(root,status.taskId,phase,message);}
@@ -65,7 +68,7 @@ namespace PZ3D {
   public CoreUpdateStatus Cancel(){lock(gate){if(cancellation!=null)cancellation.Cancel();return Clone();}}
   internal string PreparedTask(){lock(gate){if(status.state!="Ready"||worker!=null&&!worker.IsCompleted)throw new InvalidOperationException("更新尚未准备完成。");return status.taskId;}}
   internal void HandoffStarted(){Publish(s=>{s.state="Restarting";s.message="正在安全重启启动器";});Log("apply","Handoff");}
-  public void Dispose(){lock(gate){disposed=true;if(cancellation!=null)cancellation.Cancel();}}
+  public void Dispose(){lock(gate){disposed=true;if(cancellation!=null)cancellation.Cancel();if(healthPoll!=null){healthPoll.Dispose();healthPoll=null;}}}
  }
  internal static class CoreUpdateDiagnostics {
   static readonly object gate=new object();

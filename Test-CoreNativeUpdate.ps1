@@ -1,4 +1,4 @@
-param([string]$FixtureRoot='')
+param([string]$FixtureRoot='',[switch]$RecoveryOnly)
 $ErrorActionPreference='Stop'
 if(-not $FixtureRoot){$FixtureRoot=Join-Path $PSScriptRoot ('artifacts\TestFixtures\native-update-'+[Guid]::NewGuid().ToString('N').Substring(0,8))}
 New-Item -ItemType Directory -Path $FixtureRoot | Out-Null
@@ -25,13 +25,13 @@ $release=Join-Path $FixtureRoot 'release'
 & $tool pack $source $release $private $public
 if($LASTEXITCODE -ne 0){throw 'Fixture base pack failed'}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-foreach($layout in @('sparse','full')){foreach($case in @('healthy','failed')){
+foreach($layout in $(if($RecoveryOnly){@('full')}else{@('sparse','full')})){foreach($case in $(if($RecoveryOnly){@('interrupted')}elseif($layout -eq 'full'){@('healthy','failed','interrupted')}else{@('healthy','failed')})){
  $root=Join-Path $FixtureRoot "$layout-$case";[IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $release 'orange-launcher-v1.1.0-win-x64.zip'),$root)
  $feed=Join-Path $root 'fixture-feed';New-Item -ItemType Directory -Path $feed | Out-Null
  $manifest=Get-Content -Raw (Join-Path $release 'update-manifest.json') | ConvertFrom-Json
  $manifest.version='1.1.1';$manifest.notes='Native WebView fixture; not a published release'
  $text=[IO.File]::ReadAllText((Join-Path $root 'Web\app.js'))
- if($case -eq 'healthy'){$text+="`n// Native sparse update fixture`n"}else{$text="throw new Error('Deliberately failed native page fixture');"}
+ if($case -ne 'failed'){$text+="`n// Native sparse update fixture`n"}else{$text="throw new Error('Deliberately failed native page fixture');"}
  $bytes=[Text.UTF8Encoding]::new($false).GetBytes($text);[IO.File]::WriteAllBytes((Join-Path $feed 'app.js'),$bytes)
  $sha=[Security.Cryptography.SHA256]::Create();try{$hash=[BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-','')}finally{$sha.Dispose()}
  foreach($file in $manifest.files){$file.url=$file.url.Replace('/v1.1.0/','/v1.1.1/');if($file.path -eq 'Web/app.js'){$file.sha256=$hash;$file.length=$bytes.Length;$file.url='https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.1.1/app.js'}}
@@ -52,7 +52,14 @@ foreach($layout in @('sparse','full')){foreach($case in @('healthy','failed')){
   if($LASTEXITCODE -ne 0){throw 'Version-bumped fixture validation/pack failed'}
   Get-ChildItem -LiteralPath $nextRelease -File | Copy-Item -Destination $feed
  }
- $process=Start-Process -FilePath (Join-Path $root '橙子启动器.exe') -ArgumentList '--native-flow' -PassThru -WindowStyle Hidden
+ if($case -eq 'interrupted'){
+  $crasher=Join-Path $FixtureRoot 'interrupt-fixture.exe';Copy-Item -LiteralPath (Join-Path $root '卸载橙子启动器.exe') -Destination $crasher
+  # The interruption driver is external; it must not hold any replaced image.
+  Copy-Item -LiteralPath $crasher -Destination (Join-Path $root 'interrupt-fixture.exe')
+  $crash=Start-Process -FilePath (Join-Path $root 'interrupt-fixture.exe') -ArgumentList '--fixture-interrupt' -PassThru -WindowStyle Hidden -Wait
+  if($crash.ExitCode -ne 77){throw "Interruption fixture failed: $root"}
+  $process=Start-Process -FilePath (Join-Path $root '橙子启动器.exe') -PassThru -WindowStyle Hidden
+ }else{$process=Start-Process -FilePath (Join-Path $root '橙子启动器.exe') -ArgumentList '--native-flow' -PassThru -WindowStyle Hidden}
  if(-not $process.WaitForExit(60000)){throw "Parent did not hand off: $root"}
  if($process.ExitCode -ne 0){throw "Native parent failed: $root"}
  $task=Get-Content -Raw (Join-Path $root 'native-task.txt');$journal=Join-Path $root "OrangeLauncherRuntime\CoreUpdates\$task\journal.json"
@@ -63,6 +70,8 @@ foreach($layout in @('sparse','full')){foreach($case in @('healthy','failed')){
  $receipt=if($case -eq 'healthy'){'native-health-succeeded'}else{'native-rollback-restarted'}
  $deadline=[DateTime]::UtcNow.AddSeconds(10);while(-not (Test-Path -LiteralPath (Join-Path $root $receipt)) -and [DateTime]::UtcNow -lt $deadline){Start-Sleep -Milliseconds 100}
  if(-not (Test-Path -LiteralPath (Join-Path $root $receipt))){throw "Real native page receipt missing: $root"}
+ if($case -eq 'healthy'){Start-Sleep -Milliseconds 750;$restart=Start-Process -FilePath (Join-Path $root '橙子启动器.exe') -WindowStyle Hidden -PassThru;if(-not $restart.WaitForExit(15000) -or $restart.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $root 'native-success-restarted'))){throw "Healthy ordinary restart UI lost outcome: $root"}}
+ if(-not (Test-Path -LiteralPath (Join-Path $root 'native-outcome-ui.txt'))){throw 'Native outcome and history were not rendered'}
  if($layout -eq 'sparse'){
   if((Get-Content (Join-Path $root 'downloaded-files.txt')).Count -ne 1 -or (Get-Content -Raw (Join-Path $root 'downloaded-files.txt')).Trim() -ne 'app.js'){throw 'Sparse fixture downloaded unexpected assets'}
  }else{
@@ -77,7 +86,7 @@ foreach($layout in @('sparse','full')){foreach($case in @('healthy','failed')){
   }
   if((Get-Content (Join-Path $root 'downloaded-files.txt')).Count -ne 5){throw 'Full fixture must fetch three executables, VERSION, and app.js'}
  }
- if($case -eq 'failed' -and (Get-Content (Join-Path $root 'native-rollback-restarted')).Count -ne 1){throw 'Old launcher restarted more than once'}
+ if($case -ne 'healthy' -and (Get-Content (Join-Path $root 'native-rollback-restarted')).Count -ne 1){throw 'Old launcher restarted more than once'}
  Start-Sleep -Milliseconds 750
  $uninstall=Start-Process -FilePath (Join-Path $root '卸载橙子启动器.exe') -ArgumentList '--fixture-uninstall' -PassThru -WindowStyle Hidden -Wait
  if($uninstall.ExitCode -ne 0){throw "Native fixture uninstall failed: $root"}

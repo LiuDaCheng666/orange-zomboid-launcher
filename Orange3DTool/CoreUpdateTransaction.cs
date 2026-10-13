@@ -19,7 +19,7 @@ namespace PZ3D {
   public string HealthPath;
  }
  public sealed class CoreUpdateResult {
-  public string TaskId,State,Message;
+  public string TaskId,State,Message,Version,UpdatedUtc;
  }
  public sealed class CoreUpdateException:IOException {
   public string State {get;private set;}
@@ -272,11 +272,14 @@ namespace PZ3D {
    j.state="RolledBack";Save(root,j);
   }
   public static List<CoreUpdateResult> Recover(string root) {return Recover(root,CoreUpdateTrust.PublicKeyXml);}
+  internal static List<CoreUpdateResult> History(string root,string key){root=CoreDeployment.Root(root);CoreDeployment.ReadAuthenticated(root,key);var results=new List<CoreUpdateResult>();foreach(string task in TaskIds(root)){var j=Load(root,task);if(j.baselineRecord==null)continue;var target=VerifyStored(root,j,key);ValidateTargetRecord(root,j,target);CoreDeployment.AuthenticateRecord(root,Baseline(root,j),key);results.Add(new CoreUpdateResult{TaskId=task,State=j.state,Version=target.version,Message=j.error??"",UpdatedUtc=File.GetLastWriteTimeUtc(PathAt(root,task,"journal.json")).ToString("o")});}return results.OrderByDescending(r=>r.UpdatedUtc,StringComparer.Ordinal).Take(20).ToList();}
+  internal static string PendingRecovery(string root,string key){foreach(string task in TaskIds(root)){var j=Load(root,task);if(Terminal(j.state))continue;ValidateTargetRecord(root,j,VerifyStored(root,j,key));RequireCandidateAbsent(root,j);return task;}return null;}
+  internal static CoreFile RecoveryHelper(string root,string task,string key,out string source){var j=Load(root,task);ValidateTargetRecord(root,j,VerifyStored(root,j,key));if(Terminal(j.state))throw new IOException("Recovery is no longer pending.");RequireCandidateAbsent(root,j);var baseline=Baseline(root,j);if(baseline==null)throw new IOException("Recovery has no previous installed helper.");CoreDeployment.AuthenticateRecord(root,baseline,key);var helper=baseline.files.Single(f=>f.path=="橙子更新助手.exe");source=PathAt(root,task,"old/"+helper.path);if(!CoreDeployment.Matches(source,helper))throw new IOException("Recovery helper backup is not authenticated.");return helper;}
   public static List<CoreUpdateResult> Recover(string root,string publicKeyXml) {
    root=CoreDeployment.Root(root);using(CoreDeployment.Acquire(root)) {
     var results=new List<CoreUpdateResult>();foreach(string task in TaskIds(root)) {
      var j=Load(root,task);if(Terminal(j.state))continue;
-     try{var target=VerifyStored(root,j,publicKeyXml);ValidateTargetRecord(root,j,target);Rollback(root,j,target);}
+     try{var target=VerifyStored(root,j,publicKeyXml);ValidateTargetRecord(root,j,target);if(string.IsNullOrEmpty(j.error))j.error="Update was interrupted before durable success; previous version restored.";Rollback(root,j,target);}
      catch(Exception error){j.state="Conflicted";j.error=error.Message;try{Save(root,j);}catch{}results.Add(Result(j));throw new CoreUpdateException("Conflicted","Recovery conflict; retained owned backups. "+error.Message,error);}
      results.Add(Result(j));
     }return results;

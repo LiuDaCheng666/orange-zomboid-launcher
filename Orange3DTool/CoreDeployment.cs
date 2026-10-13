@@ -29,7 +29,9 @@ namespace PZ3D {
   public static bool Managed(string root) {try{Read(root);return true;}catch{return false;}}
   public static CoreInstallRecord ReadAuthenticated(string root){return ReadAuthenticated(root,CoreUpdateTrust.PublicKeyXml);}
   public static CoreInstallRecord ReadAuthenticated(string root,string key){
-   root=Root(root);var record=Read(root);var candidates=new List<string>();
+   root=Root(root);return AuthenticateRecord(root,Read(root),key);
+  }
+  internal static CoreInstallRecord AuthenticateRecord(string root,CoreInstallRecord record,string key){var candidates=new List<string>();
    if(File.Exists(Safe(root,BootstrapManifest)))candidates.Add(Runtime+"/CoreBootstrap");
    string tasks=Safe(root,Tasks);if(Directory.Exists(tasks))foreach(string dir in Directory.GetDirectories(tasks)){string id=Path.GetFileName(dir);if(Id(id))candidates.Add(Tasks+"/"+id);}
    foreach(string candidate in candidates){try{var signed=CoreReleaseProtocol.Verify(ReadBytes(Safe(root,candidate+"/manifest.json"),CoreReleaseProtocol.MaxManifestBytes),ReadBytes(Safe(root,candidate+"/manifest.sig"),1024),key,"0.0.0");if(signed.version==record.version&&signed.files.Count==record.files.Count&&signed.files.All(f=>record.files.Any(r=>r.path==f.path&&r.sha256==f.sha256&&r.length==f.length&&r.url==f.url)))return record;}catch(IOException){}catch(CryptographicException){}catch(ArgumentException){}}
@@ -126,12 +128,16 @@ namespace PZ3D {
    return path;
   }
   internal static byte[] ReadBytes(string path,int max) {
-   using(var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)) {
+   return SharingRetry(()=>{using(var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read|FileShare.Delete)) {
     if(input.Length<1||input.Length>max)throw new InvalidDataException("Invalid stored document size.");
     byte[] bytes=new byte[(int)input.Length];int at=0,n;while(at<bytes.Length&&(n=input.Read(bytes,at,bytes.Length-at))>0)at+=n;
     if(at!=bytes.Length)throw new EndOfStreamException();return bytes;
-   }
+   }},true);
   }
+  // Immutable snapshots allow atomic replacement, but never concurrent in-place
+  // writes. Windows sharing/lock violations and a read during the replacement
+  // name transition are bounded; parsing, bounds and authentication are not retried.
+  static T SharingRetry<T>(Func<T> action,bool snapshot=false){for(int attempt=0;;attempt++){try{return action();}catch(IOException e){int code=e.HResult&65535;if(attempt>=20||(code!=32&&code!=33&&!(snapshot&&code==2)))throw;Thread.Sleep(25);}}}
   internal static string ReadOwner(string root) {string id=Utf8.GetString(ReadBytes(Safe(root,Owner),64));if(!Id(id))throw new InvalidDataException("Invalid runtime ownership marker.");return id;}
   internal static void WriteNew(string root,string relative,byte[] bytes) {
    string path=Safe(root,relative);Directory.CreateDirectory(Path.GetDirectoryName(path));path=Safe(root,relative);
@@ -139,10 +145,7 @@ namespace PZ3D {
   }
   internal static void Atomic(string root,string relative,byte[] bytes,Action prepared=null) {
    string temp=relative+"."+Guid.NewGuid().ToString("N")+".tmp";WriteNew(root,temp,bytes);
-   if(prepared!=null)prepared();
-   string target=Safe(root,relative),source=Safe(root,temp);
-   if(Directory.Exists(target))throw new IOException("A directory occupies a file target.");
-   if(File.Exists(target))File.Replace(source,target,null);else File.Move(source,target);
+   SharingRetry(()=>{if(prepared!=null)prepared();string target=Safe(root,relative),source=Safe(root,temp);if(Directory.Exists(target))throw new IOException("A directory occupies a file target.");if(File.Exists(target))File.Replace(source,target,null);else File.Move(source,target);return true;});
   }
   internal static bool Matches(string path,CoreFile file) {return File.Exists(path)&&new FileInfo(path).Length==file.length&&string.Equals(CoreReleaseProtocol.HashFile(path),file.sha256,StringComparison.OrdinalIgnoreCase);}
   internal static void RequireFile(string root,string relative,CoreFile file) {if(!Matches(CoreReleaseProtocol.Target(root,relative),file))throw new IOException("Owned file conflict: "+relative);}

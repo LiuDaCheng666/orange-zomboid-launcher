@@ -8,31 +8,34 @@ namespace PZ3D {
   sealed class Handoff {public string task,installationId,nonce,parentPath,helperHash;public int parentPid;public long parentStartTicks;}
   static string Relative(string task,string name){if(!CoreDeployment.Id(task))throw new InvalidDataException("Invalid task identity.");return CoreDeployment.Tasks+"/"+task+"/"+name;}
   static bool SameProcess(Process process,int pid,long ticks,string path){try{return !process.HasExited&&process.Id==pid&&process.StartTime.ToUniversalTime().Ticks==ticks&&CoreDeployment.SamePath(process.MainModule.FileName,path);}catch{return false;}}
-  internal static Process Start(string root,string task,Process original,string key){
+  internal static bool HandoffRecovery(string root,string key){root=CoreDeployment.Root(root);string task;using(CoreDeployment.Acquire(root))task=CoreUpdateTransaction.PendingRecovery(root,key);if(task==null)return false;using(var self=Process.GetCurrentProcess())using(var helper=StartWorker(root,task,self,key,true))return true;}
+  internal static Process Start(string root,string task,Process original,string key){return StartWorker(root,task,original,key,false);}
+  static Process StartWorker(string root,string task,Process original,string key,bool recovery){
    root=CoreDeployment.Root(root);string worker;
    using(CoreDeployment.Acquire(root)) {
-    var info=CoreUpdateTransaction.GetTaskInfo(root,task,key);if(info.State!="Staged")throw new IOException("Update is no longer prepared.");
-    var record=CoreDeployment.ReadAuthenticated(root,key);var helper=record.files.Single(f=>f.path=="橙子更新助手.exe");CoreDeployment.RequireFile(root,helper.path,helper);
+    var info=CoreUpdateTransaction.GetTaskInfo(root,task,key);if(!recovery&&info.State!="Staged")throw new IOException("Update is no longer prepared.");
+    var record=CoreDeployment.ReadAuthenticated(root,key);string helperSource;CoreFile helper;if(recovery)helper=CoreUpdateTransaction.RecoveryHelper(root,task,key,out helperSource);else{helper=record.files.Single(f=>f.path=="橙子更新助手.exe");CoreDeployment.RequireFile(root,helper.path,helper);helperSource=CoreReleaseProtocol.Target(root,helper.path);}
     string parent=CoreReleaseProtocol.Target(root,"橙子启动器.exe");long ticks=original.StartTime.ToUniversalTime().Ticks;if(!SameProcess(original,original.Id,ticks,parent))throw new IOException("Original launcher identity mismatch.");
-    worker=CoreDeployment.Safe(root,Relative(task,"helper.exe"));byte[] bytes=CoreDeployment.ReadBytes(CoreReleaseProtocol.Target(root,helper.path),(int)CoreReleaseProtocol.MaxFileBytes);CoreDeployment.Atomic(root,Relative(task,"helper.exe"),bytes);if(!CoreDeployment.Matches(worker,helper))throw new IOException("Copied helper hash mismatch.");
+    worker=CoreDeployment.Safe(root,Relative(task,recovery?"recovery-helper.exe":"helper.exe"));byte[] bytes=CoreDeployment.ReadBytes(helperSource,(int)CoreReleaseProtocol.MaxFileBytes);CoreDeployment.Atomic(root,Relative(task,recovery?"recovery-helper.exe":"helper.exe"),bytes);if(!CoreDeployment.Matches(worker,helper))throw new IOException("Copied helper hash mismatch.");
     var handoff=new Handoff{task=task,installationId=record.installationId,nonce=info.Nonce,parentPath=parent,parentPid=original.Id,parentStartTicks=ticks,helperHash=helper.sha256};CoreDeployment.Atomic(root,Relative(task,"handoff.json"),CoreDeployment.Utf8.GetBytes(CoreDeployment.Json.Serialize(handoff)));
    }
-   var process=Process.Start(new ProcessStartInfo(worker,"--core-apply \""+root+"\" "+task){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=root});
+   var process=Process.Start(new ProcessStartInfo(worker,(recovery?"--core-recover":"--core-apply")+" \""+root+"\" "+task){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=root});
    try{string ready=CoreDeployment.Safe(root,Relative(task,"helper-ready"));var deadline=DateTime.UtcNow.AddSeconds(10);while(DateTime.UtcNow<deadline){if(process.HasExited)throw new IOException("Update helper refused startup.");if(File.Exists(ready)&&CoreDeployment.Utf8.GetString(CoreDeployment.ReadBytes(ready,128))==process.Id+":"+process.StartTime.ToUniversalTime().Ticks)return process;Thread.Sleep(25);}throw new IOException("Update helper did not acknowledge handoff.");}
    catch{if(!process.HasExited){process.Kill();process.WaitForExit(5000);}process.Dispose();throw;}
   }
   [STAThread] public static int Main(string[] args){try{return Run(args,CoreUpdateTrust.PublicKeyXml);}catch(Exception e){Console.Error.WriteLine(e.Message);return 1;}}
   internal static int Run(string[] args,string key){
-   if(args.Length!=3||args[0]!="--core-apply")throw new InvalidDataException("Invalid helper arguments.");string root=CoreDeployment.Root(args[1]),task=args[2];
+   if(args.Length!=3||(args[0]!="--core-apply"&&args[0]!="--core-recover"))throw new InvalidDataException("Invalid helper arguments.");bool recovery=args[0]=="--core-recover";string root=CoreDeployment.Root(args[1]),task=args[2];
    var info=CoreUpdateTransaction.GetTaskInfo(root,task,key);byte[] raw=CoreDeployment.ReadBytes(CoreDeployment.Safe(root,Relative(task,"handoff.json")),8192);CoreReleaseProtocol.ReadStoredObject(raw,"task","installationId","nonce","parentPath","helperHash","parentPid","parentStartTicks");var handoff=CoreDeployment.Json.Deserialize<Handoff>(CoreDeployment.Utf8.GetString(raw));
-   var baseline=CoreDeployment.ReadAuthenticated(root,key);var helper=baseline.files.Single(f=>f.path=="橙子更新助手.exe");
+   var baseline=CoreDeployment.ReadAuthenticated(root,key);string helperSource;var helper=recovery?CoreUpdateTransaction.RecoveryHelper(root,task,key,out helperSource):baseline.files.Single(f=>f.path=="橙子更新助手.exe");
    using(var self=Process.GetCurrentProcess()) {
-    if(info.State!="Staged"||handoff.task!=task||handoff.installationId!=baseline.installationId||handoff.nonce!=info.Nonce||handoff.parentPid<=0||handoff.parentStartTicks<=0||!CoreDeployment.SamePath(handoff.parentPath,CoreReleaseProtocol.Target(root,"橙子启动器.exe"))||handoff.helperHash!=helper.sha256||!CoreDeployment.SamePath(self.MainModule.FileName,CoreDeployment.Safe(root,Relative(task,"helper.exe")))||!CoreDeployment.Matches(self.MainModule.FileName,helper))throw new IOException("Helper handoff identity mismatch.");
+    if((!recovery&&info.State!="Staged")||handoff.task!=task||handoff.installationId!=baseline.installationId||handoff.nonce!=info.Nonce||handoff.parentPid<=0||handoff.parentStartTicks<=0||!CoreDeployment.SamePath(handoff.parentPath,CoreReleaseProtocol.Target(root,"橙子启动器.exe"))||handoff.helperHash!=helper.sha256||!CoreDeployment.SamePath(self.MainModule.FileName,CoreDeployment.Safe(root,Relative(task,recovery?"recovery-helper.exe":"helper.exe")))||!CoreDeployment.Matches(self.MainModule.FileName,helper))throw new IOException("Helper handoff identity mismatch.");
     // Do not accept an already absent/reused parent. The parent waits for our
     // acknowledgement before closing, so this handle must identify it now.
     using(var parent=Process.GetProcessById(handoff.parentPid)){if(!SameProcess(parent,handoff.parentPid,handoff.parentStartTicks,handoff.parentPath))throw new IOException("Launcher process identity changed.");CoreDeployment.Atomic(root,Relative(task,"helper-ready"),CoreDeployment.Utf8.GetBytes(self.Id+":"+self.StartTime.ToUniversalTime().Ticks));if(!parent.WaitForExit(60000))throw new IOException("Launcher did not exit; installed files unchanged.");}
    }
    CoreUpdateDiagnostics.Write(root,task,"apply","Original launcher exited");
+   if(recovery){CoreUpdateTransaction.Recover(root,key);CoreUpdateDiagnostics.Write(root,task,"recovery","Interrupted update rolled back after original launcher exit");Process.Start(new ProcessStartInfo(CoreReleaseProtocol.Target(root,"橙子启动器.exe")){UseShellExecute=false,WorkingDirectory=root}).Dispose();return 0;}
    using(var candidate=new Candidate(root,task,key))try {CoreUpdateTransaction.ApplyWithRelease(root,task,candidate.Healthy,candidate.Release,key);CoreUpdateDiagnostics.Write(root,task,"success","Healthy UI acknowledged");return 0;}
    catch(CoreUpdateException e){CoreUpdateDiagnostics.Write(root,task,e.State,e.Message);if(e.State=="RolledBack"){Process.Start(new ProcessStartInfo(CoreReleaseProtocol.Target(root,"橙子启动器.exe")){UseShellExecute=false,WorkingDirectory=root}).Dispose();CoreUpdateDiagnostics.Write(root,task,"restart","Previous launcher restarted once");return 2;}throw;}
   }
