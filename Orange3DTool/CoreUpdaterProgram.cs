@@ -37,12 +37,21 @@ namespace PZ3D {
    catch(CoreUpdateException e){CoreUpdateDiagnostics.Write(root,task,e.State,e.Message);if(e.State=="RolledBack"){Process.Start(new ProcessStartInfo(CoreReleaseProtocol.Target(root,"橙子启动器.exe")){UseShellExecute=false,WorkingDirectory=root}).Dispose();CoreUpdateDiagnostics.Write(root,task,"restart","Previous launcher restarted once");return 2;}throw;}
   }
   sealed class Candidate:IDisposable {
-   readonly string root,task,key;Process process;int pid;long ticks;string path;
+   readonly string root,task,key;Process process;int pid;long ticks;string path;bool spawnAttempted,spawnRejected;
    internal Candidate(string root,string task,string key){this.root=root;this.task=task;this.key=key;}
-   internal bool Healthy(string exe){path=exe;CoreUpdateTransaction.BeginCandidate(root,task,key);process=Process.Start(new ProcessStartInfo(exe,CoreUpdateTransaction.HealthArguments(root,task,key)){UseShellExecute=false,WorkingDirectory=root});pid=process.Id;ticks=process.StartTime.ToUniversalTime().Ticks;CoreUpdateTransaction.RecordCandidate(root,task,process,key);
+   internal bool Healthy(string exe){path=exe;CoreUpdateTransaction.BeginCandidate(root,task,key);var start=new ProcessStartInfo(exe,CoreUpdateTransaction.HealthArguments(root,task,key)){UseShellExecute=false,WorkingDirectory=root};spawnAttempted=true;
+    // With these fixed Framework options (no shell, redirects, credentials or
+    // exit events), Win32Exception inside Start is a CreateProcess rejection.
+    // Exceptions elsewhere, null returns and interrupted calls remain unknown.
+    try{process=Process.Start(start);}catch(System.ComponentModel.Win32Exception){spawnRejected=true;throw;}
+    pid=process.Id;ticks=process.StartTime.ToUniversalTime().Ticks;CoreUpdateTransaction.RecordCandidate(root,task,process,key);
     CoreUpdateDiagnostics.Write(root,task,"restart","Candidate "+pid);var deadline=DateTime.UtcNow.AddSeconds(45);while(DateTime.UtcNow<deadline){if(process.HasExited)return false;var info=CoreUpdateTransaction.GetTaskInfo(root,task,key);if(info.HealthConfirmed&&info.HealthPid==pid&&info.HealthStartTicks==ticks&&CoreDeployment.SamePath(info.HealthPath,exe)&&SameProcess(process,pid,ticks,exe))return true;Thread.Sleep(50);}return false;
    }
-   internal void Release(){if(process==null||process.HasExited)return;if(!SameProcess(process,pid,ticks,path))throw new IOException("Cannot release candidate: identity changed.");process.CloseMainWindow();if(!process.WaitForExit(2000)){process.Kill();if(!process.WaitForExit(5000))throw new IOException("Failed candidate remains alive; recovery requires manual inspection.");}CoreUpdateDiagnostics.Write(root,task,"candidate-exit","Released only the spawned failed candidate");}
+   internal void Release(){if(process==null){if(spawnAttempted&&!spawnRejected)throw new IOException("Candidate spawn outcome is unknown.");CoreUpdateTransaction.ResolveCandidateAbsent(root,task,key);return;}
+    // Wait on the retained process object returned by our own Start, including
+    // a child that exited before its PID/start/path could be read. No PID lookup.
+    if(!process.WaitForExit(0)){if(!SameProcess(process,pid,ticks,path))throw new IOException("Cannot release candidate: identity changed.");process.CloseMainWindow();if(!process.WaitForExit(2000)){process.Kill();if(!process.WaitForExit(5000))throw new IOException("Failed candidate remains alive; recovery requires manual inspection.");}}
+    CoreUpdateTransaction.ResolveCandidateAbsent(root,task,key);CoreUpdateDiagnostics.Write(root,task,"candidate-exit","Verified only the spawned candidate has exited");}
    public void Dispose(){if(process!=null)process.Dispose();}
   }
  }
