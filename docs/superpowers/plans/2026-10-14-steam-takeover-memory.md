@@ -161,20 +161,18 @@ SteamLaunchOptionsSnapshot options = SteamLaunchOptions.Current();
 
 - [ ] **Step 6: GREEN and inherited guard/approval/controller/installer tests plus full native self-test.** Commit `fix: scope Buddy launch conflict detection to active Steam game`; report all exact interfaces for Task4 and explicitly note any remaining UI integration boundary.
 
-### Task 4: Confirmed recoverable Buddy takeover and visible workflow
+### Task 4: Confirmed recoverable native Buddy takeover
 
 **Files:**
 - Create: `Orange3DTool/BuddyTakeover.cs`, `Orange3DTool/BuddyTakeoverTests.cs`.
-- Modify: `Orange3DTool/ModernController.cs`, `Orange3DTool/ModernHostPolicy.cs`, `Orange3DTool/LauncherFeatures.cs`, `Orange3DTool/Program.cs` (help/guard/selftest), `Orange3DTool/ModernHost.cs` only if confirmation belongs at native boundary.
-- Modify: `Orange3DTool/Web/app.js`, `Orange3DTool/Web/app.css`.
-- Create/Test: `Orange3DTool/Web/buddy-takeover-ui-tests.cjs`.
-- Modify/Test: `Orange3DTool/ModernHostTests.cs`, `Orange3DTool/ModernControllerTests.cs`, `Orange3DTool/LaunchProfilesTests.cs` as needed.
+- Modify: `Orange3DTool/Program.cs` (pending guard and selftest only), `Orange3DTool/LauncherLaunch.cs` if pending migration must block ordinary launch.
+- Modify/Test: `Orange3DTool/LaunchProfilesTests.cs` only where the new shared pending guard affects the inherited native workflow.
 
 **Interfaces:**
 - Consumes exact Task3 scoped parser/classifier interfaces from its report.
 - Produce `BuddyTakeover.Preview(Engine)` and `BuddyTakeover.Apply(Engine,string stamp,bool confirmed,bool steamExitConfirmed,Action<int,string> progress,CancellationToken cancel)`. Preview returns only opaque stamp, safe conflicts/locations, `requiresSteamExit`, knownidentity/support/recoverystate and safe explanation. Native service owns actual paths/account/process details.
-- Produce `BuddyTakeover.Pending(Engine)` / read-only recovery state for startup and `BuddyTakeover.Recover(...)` explicit guarded retry/recovery using current files. No silent overwrite or Steamexit at startup.
-- Controller actions `buddyPreview`, `buddyTakeover`, `buddyRecover`; only `buddyPreview` is a NativeRead. Apply/recover are local mutations, disallowed concurrently with otherlocalwrites/networkSteamworkshopmaintenance or pendinglaunch; payloads accept only stamp and explicit bool confirmations, never paths/account/executable/commands. NativeHost rejects extra fields and wrongtypes.
+- Produce `BuddyTakeover.Pending(Engine)` / read-only recovery state for startup and `BuddyTakeover.Recover(Engine,string stamp,bool confirmed,bool steamExitConfirmed,Action<int,string> progress,CancellationToken cancel)` for explicit guarded recovery using current files. No silent overwrite or Steamexit at startup.
+- Task5 consumes the native API for controller actions `buddyPreview`, `buddyTakeover`, `buddyRecover`; only preview is a read. This task must report exact safe preview/result/recovery DTOs and native dependency injection types for that integration; no web bridge action or UI is required in Task4.
 - A small Steam process environment boundary injects activeidentity capture, correctexe/processbirth/path, gracefulexit/reopen and monotonic wait into fixture execution. Default production implementation uses validated Steamclientexe with fixed `-shutdown`, at most30,000ms, never Kill; reopening uses samevalidatedexe without login/gamearguments.
 
 - [ ] **Step 1: RED transaction fixtures.** Test cancel/falseconfirmation nofilewrite/noSteamexit; onlygameJSON/BAT neverexitsSteam; currentappVDFedit causes exitbeforefreshread then reopen; unrelatedcontentflushedduringexit retained; targetlaunchoption/account/processidentitychange rejectsstalepreview; timeoutdoesnotwrite; gamestillrunning/pendinglaunch/workshopmaintenance refuses; wrongUIfieldcannotchooseanotherpath. Realfixturefiles prove partialwritefault rollsbackexactownbytes, outsidechangedbytes survive, interruptionjournal isdetectableafterserviceconstruction. Backups privatetoowner retainexactbytes, regularUI/logsneverexposepasswords/accountid/fulllaunchoptions. Representative contract:
@@ -186,14 +184,52 @@ var preview = BuddyTakeover.Preview(engine);
 // confirmed=true + required exit approval => scoped cleanup; unrelated args remain exact.
 ```
 
-Browser fixtures simulate pending conflict→confirmation→waitingSteam→writing→completed, cancelled/failed/stale/partial recovery. Verify noapplyonpageopen, twoexplicitconfirmationswhenSteamexitrequired, installationretriesonlyaftervalidatedtakeover and re-read, noautoJavaauthorization. Assert actualsentpayload/resultstates, notsourcegreps.
-- [ ] **Step 2: Run RED tests before native/UI implementation.** Add host-policy regressions first against missing actions; compile new native fixtures and run browserfixture. Keep realSteam boundary disabled in tests even for syntacticallyvalidgamefolders.
+Keep native fixtures able to validate the same boundary that the future bridge will call: no arbitrary target/identity selection, correct safe preview/result fields, and cancellation before any file/process effects.
+- [ ] **Step 2: Run RED tests before native implementation.** Compile and run new native fixtures against the absent service and then each actual state/failure boundary. Keep realSteam boundary disabled in tests even for syntacticallyvalidgamefolders.
 - [ ] **Step 3: Implement preview/identity binding and preflight.** Takeover bypasses conflicting Engine.Guard only by a narrow own preflight which enforces configexists, selectedgamerunning, pendinglaunch and workshopmaintenance, NoReparse paths and a named per-selectedgame mutex. Bind previewstamp to gamebytes/knownBuddyarguments/currentaccount/appLaunchOptions/Steamclientidentity; UI supplies noarbitraryidentity. UnknownBuddycustomoptions/ambiguousBAT marked unsupported and neverremoved. Preserve normalJSONnativeBuddyconfiguration. Limit supportedtargets to selectedgameProjectZomboid32/64.json/.bat and boundactiveaccountVDF. No deletingmodpayload or memorysettings.
 - [ ] **Step 4: Implement graceful exit and atomic transaction.** Before anyexit revalidate identity; noSteamexitifonlygamefiles. After correctclientexits, re-readVDF and ensure targetvalue unchanged, retainunrelatednewbytes. Check game/identity/externalchanges again before writes. Store private exactbackups and durable bounded stagejournal under owneddata/backups, use File.Replace/Move asappropriate, verifynewbytes. On anyfault restoreonlyfilesstillmatchingourwrittenbytes; foreignchanges become recoveryconflicts. Treatpartialchange/reopenfailure honestly; reopening sameclient is attempted onlyifthistransaction actuallyrequestedexit, evenonpost-exiterror, noautogamelaunch. Monotonicwait30s with cancellationchecks. No blocking cancellation after unsafehalfwrite: finish rollback/safephase then cancelledstatus. Record stages/results through existingjournal with sanitizedsummaries. Interruptedtransactionstartuponlyreports guardedrecovery/manualsteps; don't autoexit or autoauthorize.
-- [ ] **Step 5: Add concise UI/legacy entry and install conflict affordance.** Maintenance shows “扫描旧启动参数” and actionable “接管旧启动参数”; componentpage installconflict alsooffersit, notonlygenericerror. PreviewlistsrecognizedBuddyarguments/location butnotunrelatedrawLaunchOptions. Confirm migration scope, then separately confirm one-timeSteamexitifrequired. Display waiting/cleanup/reopen/completed/partial/recovery and cancelviaexisting taskcenter/progress. Freshread aftereachend; “旧参数已接管” doesnotmeancomponentsfullyinstalled; actualinstaller/statusvalidation governsconfiguration. Offer continueoriginalinstall aftersuccessfultakeoverwithoutautostartgame. Both themes,820x600/highresolution maintainreadability/accessibility; memorytask1labels remaincorrect. Update helpmanual removalguidance forsafe takeover vsunknownmanualcase.
-- [ ] **Step 6: GREEN native transaction/host/controller, focusedbrowser and inheritedfullnative/browser suites once.** Commit `feat: safely take over legacy Buddy launch parameters`; report precise failure/recovery behavior and screenshot paths.
+- [ ] **Step 5: Wire native pending safety and report integration contracts.** Engine/ordinary launch refuses unresolved migration while the migration service uses its narrow own guarded preflight, not the conflicting ordinary guard. A completed cleanup is distinct from a successful Steam reopen request and from completed component installation. Expose each truthfully in safe DTOs; do not claim a returned Process means Steam is already logged in. Default production process boundary must never be invoked by development fixture mode without explicit synthetic injection. Startup only reports pending state; it never exits Steam or silently writes recovery files.
+- [ ] **Step 6: GREEN native transaction/pending/guard and full native suite once.** Commit `feat: safely take over legacy Buddy launch parameters`; report exact DTO/dependency signatures, safe recovery outcomes, RED/GREEN evidence and remaining UI boundary.
 
-### Task 5: Version 1.1.1, inherited self-update acceptance and deliverables
+### Task 5: Takeover controller, confirmations and visible UI
+
+**Files:**
+- Modify: `Orange3DTool/ModernController.cs`, `Orange3DTool/ModernHostPolicy.cs`, `Orange3DTool/LauncherFeatures.cs`, `Orange3DTool/Program.cs` help, `Orange3DTool/ModernHost.cs` only for native routing/confirmation if needed.
+- Modify: `Orange3DTool/Web/app.js`, `Orange3DTool/Web/app.css`.
+- Create/Test: `Orange3DTool/Web/buddy-takeover-ui-tests.cjs`.
+- Modify/Test: `Orange3DTool/ModernHostTests.cs`, `Orange3DTool/ModernControllerTests.cs`, `Orange3DTool/LauncherFeaturesTests.cs`, `Orange3DTool/Web/memory-policy-ui-tests.cjs`.
+
+**Interfaces:**
+- Consume Task4 native API, safe DTOs and injectable process environment exactly as reported. The production controller never accepts identity/path/command objects from web payload.
+- Produce actions `buddyPreview`, `buddyTakeover`, `buddyRecover`; preview is a NativeRead only. Mutations accept only opaque stamp and explicit confirmation booleans, with strict field/type validation in ModernHostPolicy; extra path/account/executable fields refuse before service calls. Register mutation actions/timeouts in the page, and task titles in native journal.
+- Migration rejects concurrent local write/Steam network maintenance, pending launch and game-running conditions. Self-update restart guard also refuses an unresolved migration. Preserve current status/configuration semantics and per-jar authorization decisions.
+
+- [ ] **Step 1: RED host/controller and real UI fixtures.** Add missing-action/extra-field/no-confirmation refusals, a per-controller injected synthetic process boundary and native safe-result assertions. Browser bridge fixtures simulate preview→two explicit confirmations when needed→waitingSteam→writing→reopen→completed, cancellation/timeout/stale/partial/recovery. Verify opening pages sends no apply, a selected game change cannot reuse preview, and already configured components do not imply a successful migration or loaded game.
+
+```javascript
+await page.locator('[data-buddy-scan]').click();
+// Native fixture responds with opaque stamp, safe conflicts, requiresSteamExit:true.
+// Cancel migration confirmation: sent has no buddyTakeover action.
+// Confirm both dialogs: exactly one buddyTakeover payload with no path/account/command.
+```
+
+- [ ] **Step 2: Run RED before bridge/UI implementation.** Compile focused `ModernHostTests`/`ModernControllerTests` and run `node Orange3DTool/Web/buddy-takeover-ui-tests.cjs`, retain expected failures. Only fixture-bound mutations, never real Steam/game writes.
+- [ ] **Step 3: Integrate guarded native dispatch and outcomes.** Preview uses selected native engine; mutations revalidate stamp/confirmations and use native-only environment, existing task journal/progress/cancel. No new write action is admitted to the read/network lane. Outstanding Steam requests must be completed/cancelled safely before takeover, not exited underneath. Account/process/path targets are never taken from page fields. After successful native cleanup, reopen request is not fabricated as ready/login; native status and retry affordance show actual result. Opening software detects/reports pending records without auto exit/recovery.
+
+```csharp
+case "buddyPreview": return BuddyTakeover.Preview(engine);
+case "buddyTakeover": return BuddyTakeover.Apply(engine, Text(p,"stamp"),
+    Flag(p,"confirmed"), Flag(p,"steamExitConfirmed"), Report, cancel.Token);
+case "buddyRecover": return BuddyTakeover.Recover(engine, Text(p,"stamp"),
+    Flag(p,"confirmed"), Flag(p,"steamExitConfirmed"), Report, cancel.Token);
+```
+
+The mutation calls use the service's own guarded preflight: do not put the ordinary conflicting `Check()` in front of them. Native routing still enforces the controller's queue, strict payload validation, cancellation and mutation journal. Injected fixture overloads replace only the process/environment boundary, not the real native transaction.
+- [ ] **Step 4: Add concise modern/legacy UI.** Maintenance shows “扫描旧启动参数” and “接管旧启动参数”; component install conflict offers the same workflow. Show safe recognized Buddy/location summary, one scope confirmation, a separate Steam-exit confirmation only when required, visible stages and cancelled/failed/partial/recovery distinctions. Native maximum exit wait is30s; page mutation request timeout must exceed this plus file/recovery/reopen work (at least120s) and cancellation remains available. Freshly read state after outcomes; only actual installer/file/configuration validation marks components configured. Offer continuing original install, never launch game or approve Java automatically. Both themes and820x600/highresolution retain readable controls. Legacy uses equivalent explicit MessageBox confirmations, not startup takeover.
+- [ ] **Step 5: Resolve the adjacent deferred memory-advisory UI gap.** While editing the page, update just the low-available advisory when a draft changes without replacing focused inputs. Add a failing transition for current6/total64/available22→draft28; warning appears immediately and save remains enabled. Reducing the draft clears obsolete advice when appropriate; budget/recommendation stay total-only. This is the Task1 deferred finding, not a new memory policy.
+- [ ] **Step 6: GREEN focused native/browser, all inherited native/browser suites once, and actual captures.** Verify modern/legacy routes, two themes, small/high-resolution layouts; save and inspect migration/memory captures. Update help for safe takeover/manual unknown cases. Commit `feat: expose confirmed Buddy takeover workflow`; report commands/outputs/screenshots, DTO usage and remaining live-client boundary.
+
+### Task 6: Version 1.1.1, inherited self-update acceptance and deliverables
 
 **Files:**
 - Modify: `VERSION`, `CHANGELOG.md`, `使用说明.md`, `docs/core-release-verification.md` (append new version evidence, preserve1.1.0).
