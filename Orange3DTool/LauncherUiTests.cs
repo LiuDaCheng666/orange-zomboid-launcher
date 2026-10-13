@@ -9,7 +9,7 @@ namespace PZ3D {
   static void Check(bool ok,string label){if(!ok)throw new Exception("FAIL: "+label);Console.WriteLine("PASS: "+label);}
   [STAThread] public static int Main(){try{Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
   public static void Run(){
-   string prefs=Path.Combine(Path.GetTempPath(),"orange-launcher-ui-"+Guid.NewGuid().ToString("N"));
+   string prefs=Path.Combine(LauncherTestPaths.Root,"orange-launcher-ui-"+Guid.NewGuid().ToString("N"));
    Program.PreviewMode=true;
    using(var f=new MainForm(prefs)){f.Show();Application.DoEvents();
     var tabs=f.Controls[0].Controls.OfType<TabControl>().Single();

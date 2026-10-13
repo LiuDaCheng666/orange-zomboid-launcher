@@ -7,7 +7,7 @@ namespace PZ3D {
   static void Check(bool value,string message){if(!value)throw new Exception("FAIL: "+message);Console.WriteLine("PASS: "+message);}
   public static void Run(){
    var type=typeof(Engine).Assembly.GetType("PZ3D.LocalAddon");Check(type!=null,"client-only addon eligibility policy exists");
-   string root=Path.Combine(Path.GetTempPath(),"orange-addons-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
+   string root=Path.Combine(LauncherTestPaths.Root,"orange-addons-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
    string info=Path.Combine(root,"mod.info"),jar=Path.Combine(root,"addon.jar");
    File.WriteAllText(info,"id=ViewpointSmoothFrames\njavaJarFile=media/java/client/SmoothFrames.jar\njavaPkgName=smoothframes\njavaPreload=true\nversionMin=42.21\nZBVersionMin=2.3.0\n");
    using(var archive=ZipFile.Open(jar,ZipArchiveMode.Create)){using(var writer=new StreamWriter(archive.CreateEntry("META-INF/MANIFEST.MF").Open()))writer.Write("Manifest-Version: 1.0\r\n\r\n");}

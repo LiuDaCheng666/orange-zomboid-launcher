@@ -12,7 +12,7 @@ namespace PZ3D {
   public static int Main(){try{Run();return 0;}catch(Exception x){Console.WriteLine(x);return 1;}}
   public static void Run(){
    Check(Service!=null,"maintenance service exists");
-   string root=Path.Combine(Path.GetTempPath(),"orange-maintenance-"+Guid.NewGuid().ToString("N"));
+   string root=Path.Combine(LauncherTestPaths.Root,"orange-maintenance-"+Guid.NewGuid().ToString("N"));
    var e=new Engine(Path.Combine(root,"steamapps","common","ProjectZomboid"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);
    string original="{\"vmArgs\":[\"-Xmx1024m\",\"-Xmx2g\",\"-Xms8g\",\"-agentlib:zbNative\",\"-Dcustom=keep\"],\"windows\":{\"10\":{\"vmArgs\":[\"-Xmx3072m\",\"-XX:+UseZGC\"]}},\"extra\":123}";
    File.WriteAllText(e.Config,original);

@@ -3,7 +3,7 @@ $exe=Join-Path $PSScriptRoot 'Orange3DTool\橙子3D一键启用工具-现代界�
 $shots=Join-Path $PSScriptRoot 'native-shots'
 New-Item -ItemType Directory -Path $shots -Force | Out-Null
 foreach($theme in @('dark','light')) {
- foreach($page in @('home','saves','servers','components','shaders','settings','memory','maintenance','help')) {
+ foreach($page in @('home','saves','servers','mods','workshop','components','shaders','settings','memory','maintenance','help')) {
   $output=Join-Path $shots ($theme+'-'+$page+'.png')
   $info=[Diagnostics.ProcessStartInfo]@{FileName=$exe;Arguments=('--modern-preview "'+$output+'" --page '+$page+' --theme '+$theme+' --size 1100x760');UseShellExecute=$false;CreateNoWindow=$true}
   $own=[Diagnostics.Process]::Start($info)

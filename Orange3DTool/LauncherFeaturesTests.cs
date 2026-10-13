@@ -5,7 +5,7 @@ namespace PZ3D {
   static void Check(bool value,string message){if(!value)throw new Exception("FAIL: "+message);Console.WriteLine("PASS: "+message);}
   public static void Run(){
    var type=typeof(Engine).Assembly.GetType("PZ3D.LauncherLaunch");Check(type!=null,"Steam launcher preflight policy exists");
-   string root=Path.Combine(Path.GetTempPath(),"orange-launch-preflight-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);string game=Path.Combine(root,"game");Directory.CreateDirectory(game);var e=new Engine(game,Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Data);
+   string root=Path.Combine(LauncherTestPaths.Root,"orange-launch-preflight-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);string game=Path.Combine(root,"game");Directory.CreateDirectory(game);var e=new Engine(game,Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Data);
    File.WriteAllText(Path.Combine(game,"ProjectZomboid64.exe"),"fixture");File.WriteAllText(e.Config,"{\"vmArgs\":[\"-Xmx8g\"]}");
    var reason=type.GetMethod("Reason");
    Check((string)reason.Invoke(null,new object[]{e,false,false})=="","valid vanilla game can launch without forcing 3D");

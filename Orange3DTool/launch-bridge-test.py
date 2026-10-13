@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-sys.path.insert(0,'E:/AppCaches/OrangeLauncherProfiles/Dependencies/Python')
+sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'Dependencies/Python'))
 from lupa.lua51 import LuaRuntime
 script=Path(__file__).parent/'Assets/OrangeLaunchBridge.lua'
 assert script.is_file(), 'one-shot launch bridge is not implemented'

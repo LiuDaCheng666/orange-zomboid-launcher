@@ -18,7 +18,7 @@ namespace PZ3D {
    string unknown=(string)format.Invoke(null,new object[]{3809306528UL,0UL,0UL});Check(unknown.Contains("Viewpoint")&&unknown.Contains("等待")&&!unknown.Contains("%"),"unknown Steam total is waiting, not fake percentage");
    string known=(string)format.Invoke(null,new object[]{3810302175UL,1048576UL,4194304UL});Check(known.Contains("物件")&&known.Contains("1.0 / 4.0 MB"),"real downloaded bytes are displayed with player-readable component name");
    Program.PreviewMode=true;
-   using(var form=new MainForm(System.IO.Path.Combine(System.IO.Path.GetTempPath(),"orange-status-test-"+Guid.NewGuid().ToString("N")))){
+   using(var form=new MainForm(System.IO.Path.Combine(LauncherTestPaths.Root,"orange-status-test-"+Guid.NewGuid().ToString("N")))){
     var flags=BindingFlags.Instance|BindingFlags.NonPublic;
     typeof(MainForm).GetField("busy",flags).SetValue(form,true);
     typeof(MainForm).GetMethod("StartVisibleTask",flags).Invoke(form,new object[]{"正在连接 Steam"});

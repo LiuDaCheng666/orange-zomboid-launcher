@@ -1,0 +1,7 @@
+{
+  "name": "orange-zomboid-launcher-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {"test": "node Orange3DTool/Web/full-ui-tests.cjs"},
+  "devDependencies": {"playwright": "1.56.1"}
+}

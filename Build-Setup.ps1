@@ -1,7 +1,8 @@
+param([switch]$PrivatePresets)
 $ErrorActionPreference='Stop'
 $project=Join-Path $PSScriptRoot 'Orange3DTool'
-& (Join-Path $project 'Build-Modern.ps1')
-$compiler='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+& (Join-Path $project 'Build-Modern.ps1') -PrivatePresets:$PrivatePresets
+$compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $sdk=Join-Path $PSScriptRoot 'Dependencies\WebView2\lib\net462'
 $sources=(Get-ChildItem -LiteralPath $project -Filter '*.cs').FullName
 $refs=@('/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Management.dll','/reference:System.IO.Compression.dll','/reference:System.IO.Compression.FileSystem.dll','/reference:System.Security.dll',"/reference:$sdk\Microsoft.Web.WebView2.Core.dll","/reference:$sdk\Microsoft.Web.WebView2.WinForms.dll")

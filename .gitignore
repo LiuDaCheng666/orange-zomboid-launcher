@@ -11,6 +11,9 @@ TestFixtures/
 **/ui-browser-shots/
 **/profile-browser-shots/
 **/native-shots/
+**/*-shots/
+**/*browser-shots/
+**/*.error.txt
 **/*.exe
 **/*.dll
 **/*.jar
@@ -32,3 +35,7 @@ Orange3DTool/使用说明.md
 *.err
 private/
 .worktrees/
+/favorites-*/
+/integration-*/
+/journal-volume-*/
+/native-services-*/

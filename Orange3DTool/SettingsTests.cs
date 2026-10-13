@@ -7,7 +7,7 @@ namespace PZ3D {
   static void Check(bool value,string name){if(!value)throw new Exception("FAIL: "+name);Console.WriteLine("PASS: "+name);}
   public static void Run(){
    Type type=typeof(Engine).Assembly.GetType("PZ3D.ViewpointSettings");Check(type!=null,"safe Viewpoint settings store exists");
-   string root=Path.Combine(Path.GetTempPath(),"orange-settings-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
+   string root=Path.Combine(LauncherTestPaths.Root,"orange-settings-test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
    string file=Path.Combine(root,"viewpoint-live.properties");string original="# author comment\r\nmouse.sensitivity=1.0\r\nkeys.firstPerson=O\r\nminecraft.some\\:pack.OPTION=unchanged\\u4E2D\r\n";File.WriteAllText(file,original);
    Func<object> load=()=>Activator.CreateInstance(type,new object[]{root,Path.Combine(root,"backups")});object store=load();
    var entries=(Dictionary<string,string>)type.GetProperty("Values").GetValue(store,null);Check(entries["viewpoint-live.properties|minecraft.some:pack.OPTION"]=="unchanged中","Java property escaped keys and Unicode values decoded correctly");
