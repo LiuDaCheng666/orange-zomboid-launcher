@@ -44,7 +44,7 @@ async function setup(browser, theme='dark',options={}) {
         case 'playtimeGet':data={todaySeconds:window.playtimeToday??3665,totalSeconds:8000,running:false,sessionSeconds:0,reminderMinutes:60,reminderDue:window.playtimeDue,tracking:'stopped',message:'Measured fixture game process time'};break;
         case 'playtimeSettings':data={message:'Reminder settings saved'};break;
         case 'javaList':data={supported:false,stamp:'j',jars:[],warnings:[]};break;
-        case 'memoryGet':data={currentGiB:6,totalGiB:32,availableGiB:22,maximumGiB:24,recommendedGiB:12,stamp:'m'};break;
+        case 'memoryGet':data={currentGiB:6,totalGiB:32,availableGiB:22,maximumGiB:24,recommendedGiB:8,stamp:'m'};break;
         case 'settingsGet':data={stamp:'s',rows:[],warnings:[]};break;
         case 'shadersGet':data={selected:'original',stamp:'s',packs:[{id:'original',name:'Original',valid:true}]};break;
         case 'help':data={message:'fixture'};break;

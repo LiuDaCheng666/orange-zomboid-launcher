@@ -7,7 +7,7 @@ namespace PZ3D {
  static class LauncherMaintenanceTests {
   static Type Service {get{return typeof(Engine).Assembly.GetType("PZ3D.LauncherMaintenance");}}
   static void Check(bool v,string m){if(!v)throw new Exception("FAIL: "+m);Console.WriteLine("PASS: "+m);}
-  static object Call(string name,params object[] args){try{return Service.GetMethod(name).Invoke(null,args);}catch(TargetInvocationException x){throw x.InnerException;}}
+  static object Call(string name,params object[] args){if(name=="SetHeapGiB")return LauncherMaintenance.SetHeapGiB((Engine)args[0],(int)args[1],()=>LauncherMaintenance.CalculateMemoryInfo(64,1));try{return Service.GetMethod(name).Invoke(null,args);}catch(TargetInvocationException x){throw x.InnerException;}}
   static bool Denied(Action action){try{action();return false;}catch{return true;}}
   public static int Main(){try{Run();return 0;}catch(Exception x){Console.WriteLine(x);return 1;}}
   public static void Run(){

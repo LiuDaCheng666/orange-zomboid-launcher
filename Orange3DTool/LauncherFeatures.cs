@@ -5,13 +5,20 @@ using System.IO;
 using System.Windows.Forms;
 namespace PZ3D {
  sealed partial class MainForm {
+  internal static void DisplayMemoryInfo(NumericUpDown input,Label label,LauncherMemoryInfo info,int heap){
+   input.Minimum=1;input.Maximum=Math.Max(1,Math.Max(heap,info.MaximumHeapGiB));input.Value=heap;
+   label.Text="当前最大堆："+heap+" GiB · 系统可见总内存："+info.TotalGiB+" GiB · 当前系统可用："+info.AvailableGiB+" GiB\n基础推荐："+info.RecommendedHeapGiB+" GiB · 设置上限（按总量）："+info.MaximumHeapGiB+" GiB。推荐是起始建议，下次启动生效。";
+   if(heap>info.MaximumHeapGiB)label.Text+="\n现有配置超过设置上限，按实际值显示；原文件保持原值，请选择上限内的值后保存。";
+   if(info.AvailableGiB<Math.Max(heap,info.RecommendedHeapGiB)+2L)label.Text+="\n当前其他程序占用较高；下次启动前可关闭不需要的程序。当前可用内存不会降低设置上限。";
+  }
   void SetupLauncherFeatures(TabControl tabs){
    var memory=Page(tabs,"启动与内存");
    AddText(memory,"这里设置的是游戏 Java 最大堆内存（Xmx），不是显存，也不改变 Windows 分页文件。调高内存不一定提高帧率；应为系统、Steam 和其他程序留下余量。退出游戏后保存，下次启动生效。");
    var heapState=new Label{AutoSize=true,MaximumSize=new Size(950,0),Margin=new Padding(8),Text="点击读取当前配置和可用内存"};memory.Controls.Add(heapState);
-   var input=new NumericUpDown{Minimum=2,Maximum=512,Value=8,Width=140,Margin=new Padding(8)};memory.Controls.Add(input);
-   Action reload=()=>{var info=LauncherMaintenance.MemoryInfo();int heap=LauncherMaintenance.ReadHeapGiB(GetEngine());input.Maximum=Math.Max(2,info.MaximumHeapGiB);input.Value=Math.Min(input.Maximum,Math.Max(input.Minimum,heap));heapState.Text="当前最大堆："+heap+" GiB · 物理内存："+info.TotalGiB+" GiB · 当前可用："+info.AvailableGiB+" GiB\n本次建议："+info.RecommendedHeapGiB+" GiB · 安全上限："+info.MaximumHeapGiB+" GiB。现有配置超过上限时，输入框显示上限，不会自动改动原文件。";};
+   var input=new NumericUpDown{Name="launcher-memory-number",Minimum=1,Maximum=512,Value=8,Width=140,Margin=new Padding(8)};memory.Controls.Add(input);
+   Action reload=()=>{var info=LauncherMaintenance.MemoryInfo();int heap=LauncherMaintenance.ReadHeapGiB(GetEngine());DisplayMemoryInfo(input,heapState,info,heap);};
    var heapActions=new FlowLayoutPanel{AutoSize=true,WrapContents=true};heapActions.Controls.Add(Button("读取当前配置",reload));heapActions.Controls.Add(Button("保存启动内存",()=>{int selected=(int)input.Value;Run(()=>LauncherMaintenance.SetHeapGiB(GetEngine(),selected),"正在保存游戏启动内存");}));memory.Controls.Add(heapActions);
+   if(!Program.PreviewMode){try{reload();}catch(Exception ex){heapState.Text=ex.Message;}}
    var maintenance=Page(tabs,"维护与诊断");
    AddText(maintenance,"操作前必须退出游戏。清缓存不会备份缓存，不清除角色、车辆数据库、单人存档和个人模组；安装配置的恢复备份仍保留。删除后下次进服需要重新获取地图，第一次进入可能更慢。");
    AddButton(maintenance,"清除多人地图缓存",()=>{if(MessageBox.Show(this,"将清除本机全部已缓存服务器的多人地图区块缓存，不备份。\n保留角色和车辆数据库、未知文件及其他存档。下次进服重新下载地图。\n请先退出游戏，确定清除？","清除多人缓存",MessageBoxButtons.OKCancel,MessageBoxIcon.Warning)==DialogResult.OK)Run(()=>LauncherMaintenance.ClearMultiplayerCache(GetEngine()),"正在清除多人地图缓存");});

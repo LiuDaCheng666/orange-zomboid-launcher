@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Windows.Forms;
 namespace PZ3D {
  static class LauncherFeaturesTests {
   static void Check(bool value,string message){if(!value)throw new Exception("FAIL: "+message);Console.WriteLine("PASS: "+message);}
@@ -16,6 +18,8 @@ namespace PZ3D {
    File.WriteAllText(e.Config,"{\"vmArgs\":[\"-javaagent:OrangeShootPresentation.jar\"]}");Check(((string)reason.Invoke(null,new object[]{e,false,false})).Contains("旧"),"known instrument-breaking legacy agent blocks launch with repair hint");
    File.WriteAllText(e.Config,"broken");Check(((string)reason.Invoke(null,new object[]{e,false,false})).Contains("配置"),"malformed launch config is diagnosed before Steam launch");
    foreach(string bad in new[]{"{\"vmArgs\":[123]}","{\"vmArgs\":[\"-Xmxgarbage\"]}","{\"vmArgs\":[],\"windows\":{\"10\":7}}","{\"vmArgs\":[\"-javaagent:unknown.jar\"]}","{\"vmArgs\":[\"-javaagent:OtherZombieBuddy.jar\"]}","{\"vmArgs\":[\"-javaagent:ZombieBuddy.jar\"]}","{\"vmArgs\":[\"-Xmx999999999999999999g\"]}"}){File.WriteAllText(e.Config,bad);Check((string)reason.Invoke(null,new object[]{e,false,false})!="","unsafe or malformed launch arguments block Steam launch: "+bad);}
+   string original="{\"vmArgs\":[\"-Xmx4096g\",\"-Dcustom=keep\"]}";File.WriteAllText(e.Config,original);string prefs=Path.Combine(root,"legacy-prefs");Directory.CreateDirectory(prefs);File.WriteAllText(Path.Combine(prefs,"game-path.txt"),game);bool preview=Program.PreviewMode;Program.PreviewMode=false;
+   try{using(var form=new MainForm(prefs)){var input=form.Controls.Find("launcher-memory-number",true).SingleOrDefault() as NumericUpDown;Check(input!=null&&input.Value==4096,"legacy page automatically reads actual existing heap without truncation");Check(File.ReadAllText(e.Config)==original,"legacy automatic memory read does not apply or rewrite configuration");}}finally{Program.PreviewMode=preview;}
   }
   public static int Main(){try{Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
  }
