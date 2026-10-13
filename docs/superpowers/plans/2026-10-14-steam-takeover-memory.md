@@ -42,7 +42,7 @@ Store task reports and exact commit-range diff packages in this plan's `.superpo
 - New `BuddyLaunchArguments.cs`: exact Buddy argument classification and conservative JSON/BAT/command-line transforms.
 - New `BuddyTakeover.cs`: preview, identity binding, graceful process boundary and recoverable atomic transaction.
 - `Program.cs`, `JavaApprovals.cs`, `ModernController.cs`: shared scoped guards, snapshots, controller integration.
-- `ModernHostPolicy.cs`, `ModernHost.cs`, `Web/app.js`, `Web/style.css`, `LauncherFeatures.cs`: explicit confirmation and visible takeover states.
+- `ModernHostPolicy.cs`, `ModernHost.cs`, `Web/app.js`, `Web/app.css`, `LauncherFeatures.cs`: explicit confirmation and visible takeover states.
 - `VERSION`, `CHANGELOG.md`, core build/test scripts and release evidence: versioned deliverables and inherited self-update regression.
 
 ### Task 1: Total-memory heap policy and honest UI
@@ -129,7 +129,7 @@ Don't lose simultaneous DownloadItemResult callbacks. Capture only relevant requ
 - Create: `Orange3DTool/SteamLaunchOptions.cs`, `Orange3DTool/BuddyLaunchArguments.cs`.
 - Modify: `Orange3DTool/Program.cs` (Engine.Guard/Agent and self-test registration), `Orange3DTool/JavaApprovals.cs`, `Orange3DTool/ModernController.cs` (LaunchStamp only).
 - Create/Test: `Orange3DTool/SteamLaunchOptionsTests.cs`, `Orange3DTool/BuddyLaunchArgumentsTests.cs`.
-- Modify/Test: `Orange3DTool/JavaApprovalsTests.cs`, `Orange3DTool/ModernControllerTests.cs`, `Orange3DTool/Test.cs` where existing guard assumptions require adjustment.
+- Modify/Test: `Orange3DTool/JavaApprovalsTests.cs`, `Orange3DTool/ModernControllerTests.cs`, existing tests within `Orange3DTool/Program.cs` where guard assumptions require adjustment.
 
 **Interfaces:**
 - Produce `SteamLaunchOptionsSnapshot` with internally bounded Steam root, active account id, fixed config path, app108600 field span, decoded LaunchOptions, raw file snapshot/encoding and known-identity state. Never serialize raw options/accountid/fullVDF into the UI or ordinary logs.
@@ -166,7 +166,7 @@ SteamLaunchOptionsSnapshot options = SteamLaunchOptions.Current();
 **Files:**
 - Create: `Orange3DTool/BuddyTakeover.cs`, `Orange3DTool/BuddyTakeoverTests.cs`.
 - Modify: `Orange3DTool/ModernController.cs`, `Orange3DTool/ModernHostPolicy.cs`, `Orange3DTool/LauncherFeatures.cs`, `Orange3DTool/Program.cs` (help/guard/selftest), `Orange3DTool/ModernHost.cs` only if confirmation belongs at native boundary.
-- Modify: `Orange3DTool/Web/app.js`, `Orange3DTool/Web/style.css`.
+- Modify: `Orange3DTool/Web/app.js`, `Orange3DTool/Web/app.css`.
 - Create/Test: `Orange3DTool/Web/buddy-takeover-ui-tests.cjs`.
 - Modify/Test: `Orange3DTool/ModernHostTests.cs`, `Orange3DTool/ModernControllerTests.cs`, `Orange3DTool/LaunchProfilesTests.cs` as needed.
 
@@ -197,7 +197,7 @@ Browser fixtures simulate pending conflict→confirmation→waitingSteam→writi
 
 **Files:**
 - Modify: `VERSION`, `CHANGELOG.md`, `使用说明.md`, `docs/core-release-verification.md` (append new version evidence, preserve1.1.0).
-- Modify/Test: `Test-CoreNativeUpdate.ps1`, `Test-CoreLegacyStartup.ps1`, `Test-CorePackageBuild.ps1` only to remove old hardcodedfixtureversions or include new assets/tests safely.
+- Modify/Test: `Test-CoreNativeUpdate.ps1`, `Orange3DTool/CoreUpdateNativeFixtureTests.cs`, `Test-CoreLegacyStartup.ps1`, `Test-CorePackageBuild.ps1` only to remove old hardcodedfixtureversions or include new assets/tests safely. The interruption driver verifies against its current embedded `AppVersion.Current`, not a literal old version.
 - Modify: release allowlist/build scripts only if genuinely required by compiled-native additions. Parser/migration C# compiles intoexistingmain/helper/uninstaller EXEs; no thirdparty DLL introduced.
 - Create: `docs/releases/1.1.1-verification.md` and `artifacts/1.1.1-*` evidence/output.
 
