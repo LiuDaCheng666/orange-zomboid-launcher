@@ -29,9 +29,10 @@ namespace PZ3D {
  // candidate is rechecked against its recorded digest before use during recovery.
  public static class CoreUpdateTransaction {
   sealed class HealthReceipt {public string nonce,path;public int pid;public long startTicks;}
+  sealed class CandidateReceipt {public string nonce,path,state;public int pid;public long startTicks;}
   internal sealed class Journal {
    public string root,installationId,taskId,nonce,state,baselineRecord,targetRecord,error;
-   public int started;
+   public int started,candidateExpected;
    public List<string> existed;
   }
   static bool Terminal(string state) {return state=="Succeeded"||state=="RolledBack";}
@@ -49,11 +50,12 @@ namespace PZ3D {
    string owner=CoreDeployment.ReadOwner(root);
    if(CoreDeployment.Utf8.GetString(CoreDeployment.ReadBytes(PathAt(root,task,".owner"),100))!=owner+":"+task)throw new InvalidDataException("Task ownership marker mismatch.");
    byte[] raw=CoreDeployment.ReadBytes(PathAt(root,task,"journal.json"),CoreReleaseProtocol.MaxManifestBytes);
-   CoreReleaseProtocol.ReadStoredObject(raw,"root","installationId","taskId","nonce","state","baselineRecord","targetRecord","error","existed","started");
+   CoreReleaseProtocol.ReadStoredObject(raw,"root","installationId","taskId","nonce","state","baselineRecord","targetRecord","error","existed","started","candidateExpected");
    var j=CoreDeployment.Json.Deserialize<Journal>(CoreDeployment.Utf8.GetString(raw));
    if(j==null||j.root!=root||j.taskId!=task||j.installationId!=owner||!CoreDeployment.Id(j.nonce)||j.existed==null||j.existed.Count>CoreReleaseProtocol.MaxFiles||j.existed.Distinct(StringComparer.OrdinalIgnoreCase).Count()!=j.existed.Count||!new[]{"Staged","Applying","PendingHealth","Succeeded","RollingBack","RolledBack","Conflicted"}.Contains(j.state))throw new InvalidDataException("Invalid transaction journal.");
    var baseline=Baseline(root,j);
    if(j.started!=0&&j.started!=1)throw new InvalidDataException("Invalid apply phase.");
+   if(j.candidateExpected!=0&&j.candidateExpected!=1)throw new InvalidDataException("Invalid candidate phase.");
    foreach(string path in j.existed)if(baseline==null||!baseline.files.Any(f=>f.path==path))throw new InvalidDataException("Invalid backup ownership.");
    return j;
   }
@@ -128,7 +130,13 @@ namespace PZ3D {
    bool confirmed=health!=null&&health.nonce==j.nonce&&health.pid>0&&health.startTicks>0&&Path.IsPathRooted(health.path);
    return new CoreUpdateTaskInfo {TaskId=taskId,Root=root,Directory=CoreDeployment.Safe(root,CoreDeployment.Tasks+"/"+taskId),InstallationId=j.installationId,Version=target.version,State=j.state,Nonce=j.nonce,Error=j.error,HealthConfirmed=confirmed,HealthPid=confirmed?health.pid:0,HealthStartTicks=confirmed?health.startTicks:0,HealthPath=confirmed?health.path:null};
   }
-  static void ValidateTargetRecord(string root,Journal j,CoreManifest target) {if(j.targetRecord!=Convert.ToBase64String(RecordBytes(TargetRecord(root,j,target))))throw new InvalidDataException("Journal target record differs from signed release.");}
+  static void ValidateTargetRecord(string root,Journal j,CoreManifest target) {
+   // This is derived metadata, not the signed envelope. Framework reflection
+   // cache warmup can reorder serialized fields between processes; compare every
+   // strictly parsed field instead. Installed/baseline byte-conflict checks stay exact.
+   var record=CoreReleaseProtocol.ReadStoredObject(Convert.FromBase64String(j.targetRecord),"schema","root","installationId","version","files");var files=CoreReleaseProtocol.Files(record["files"]);
+   if(!(record["schema"] is long)||(long)record["schema"]!=2||!string.Equals(record["root"] as string,root,StringComparison.OrdinalIgnoreCase)||(record["installationId"] as string)!=j.installationId||(record["version"] as string)!=target.version||files.Count!=target.files.Count||!files.Zip(target.files,(a,b)=>a.path==b.path&&a.sha256==b.sha256&&a.url==b.url&&a.length==b.length).All(equal=>equal))throw new InvalidDataException("Journal target record differs from signed release.");
+  }
   public static string HealthArguments(string root,string taskId) {return HealthArguments(root,taskId,CoreUpdateTrust.PublicKeyXml);}
   public static string HealthArguments(string root,string taskId,string publicKeyXml) {var info=GetTaskInfo(root,taskId,publicKeyXml);if(info.State!="Staged"&&info.State!="Applying"&&info.State!="PendingHealth")throw new InvalidDataException("Task is not awaiting health startup.");return "--core-update-health \""+info.Root+"\" "+taskId+" "+info.Nonce;}
   public static void ConfirmHealth(string root,string taskId,string nonce) {ConfirmHealth(root,taskId,nonce,CoreUpdateTrust.PublicKeyXml);}
@@ -144,6 +152,13 @@ namespace PZ3D {
    root=CoreDeployment.Root(root);using(CoreDeployment.Acquire(root))return ApplyLocked(root,taskId,health,checkpoint,publicKeyXml);
   }
   internal static CoreUpdateResult ApplyWithRelease(string root,string taskId,Func<string,bool> health,Action releaseCandidate,string key){root=CoreDeployment.Root(root);using(CoreDeployment.Acquire(root))return ApplyLocked(root,taskId,health,null,key,releaseCandidate);}
+  // Called only by the mutex-owning helper. Persist intent before Process.Start:
+  // an interrupted spawn with no recorded identity must never authorize rollback.
+  internal static void BeginCandidate(string root,string task,string key){var j=Load(root,task);VerifyStored(root,j,key);if(j.state!="PendingHealth"||j.candidateExpected!=1)throw new IOException("Candidate is not pending.");CoreDeployment.WriteNew(root,Rel(task,"candidate.json"),CoreDeployment.Utf8.GetBytes(CoreDeployment.Json.Serialize(new CandidateReceipt{nonce=j.nonce,path=CoreReleaseProtocol.Target(root,"橙子启动器.exe"),state="Starting"})));}
+  internal static void RecordCandidate(string root,string task,Process child,string key){var j=Load(root,task);VerifyStored(root,j,key);var receipt=ReadCandidate(root,j);if(receipt==null||receipt.state!="Starting")throw new IOException("Candidate spawn intent missing.");if(!CoreDeployment.SamePath(child.MainModule.FileName,receipt.path))throw new IOException("Candidate executable differs from intent.");receipt.pid=child.Id;receipt.startTicks=child.StartTime.ToUniversalTime().Ticks;receipt.state="Started";CoreDeployment.Atomic(root,Rel(task,"candidate.json"),CoreDeployment.Utf8.GetBytes(CoreDeployment.Json.Serialize(receipt)));}
+  static CandidateReceipt ReadCandidate(string root,Journal j){string file=PathAt(root,j.taskId,"candidate.json");if(!File.Exists(file)){if(j.candidateExpected!=0)throw new IOException("Candidate spawn outcome is unresolved; recovery is blocked.");return null;}byte[] raw=CoreDeployment.ReadBytes(file,8192);CoreReleaseProtocol.ReadStoredObject(raw,"nonce","path","pid","startTicks","state");var receipt=CoreDeployment.Json.Deserialize<CandidateReceipt>(CoreDeployment.Utf8.GetString(raw));if(receipt==null||receipt.nonce!=j.nonce||!CoreDeployment.SamePath(receipt.path,CoreReleaseProtocol.Target(root,"橙子启动器.exe"))||!(receipt.state=="Starting"&&receipt.pid==0&&receipt.startTicks==0||receipt.state=="Started"&&receipt.pid>0&&receipt.startTicks>0))throw new IOException("Invalid durable candidate ownership.");return receipt;}
+  internal static void AssertCandidateStartup(string root,string task,string key){var j=Load(root,task);VerifyStored(root,j,key);var receipt=ReadCandidate(root,j);using(var self=Process.GetCurrentProcess()){if(receipt==null||receipt.state!="Started"||receipt.pid!=self.Id||receipt.startTicks!=self.StartTime.ToUniversalTime().Ticks||!CoreDeployment.SamePath(receipt.path,self.MainModule.FileName))throw new IOException("Candidate identity is not durably recorded.");}}
+  static void RequireCandidateAbsent(string root,Journal j){var receipt=ReadCandidate(root,j);if(receipt==null)return;if(receipt.state!="Started")throw new IOException("Candidate spawn outcome is unresolved; recovery is blocked.");Process candidate;try{candidate=Process.GetProcessById(receipt.pid);}catch(ArgumentException){return;}using(candidate){if(candidate.HasExited)return;if(candidate.StartTime.ToUniversalTime().Ticks!=receipt.startTicks)return;throw new IOException("Recorded candidate is still alive or cannot be safely released; recovery is blocked.");}}
   internal static CoreUpdateResult ApplyLocked(string root,string taskId,Func<string,bool> health,Action<string> checkpoint,string key,Action releaseCandidate=null) {
    if(health==null)throw new ArgumentNullException("health");var j=Load(root,taskId);
    if(j.state!="Staged")throw new CoreUpdateException(j.state,"This task cannot be applied again.",null);
@@ -171,7 +186,7 @@ namespace PZ3D {
      RequireOriginal(root,j,baseline,file.path);string path=CoreReleaseProtocol.Target(root,file.path);if(File.Exists(path))File.Delete(path);Checkpoint(checkpoint,"replaced:"+file.path);
     }
     ValidateOriginalRecord(root,j);CoreDeployment.Atomic(root,CoreDeployment.RecordName,Convert.FromBase64String(j.targetRecord),()=>{Checkpoint(checkpoint,"record-prepared");ValidateOriginalRecord(root,j);});Checkpoint(checkpoint,"record-committed");
-    j.state="PendingHealth";Save(root,j);ValidateInstalled(root,j,target);
+    j.state="PendingHealth";j.candidateExpected=releaseCandidate==null?0:1;Save(root,j);ValidateInstalled(root,j,target);
     if(!health(CoreReleaseProtocol.Target(root,"橙子启动器.exe")))throw new IOException("Updated launcher did not confirm healthy startup.");
     ValidateInstalled(root,j,target);j.state="Succeeded";Save(root,j);return Result(j);
    }catch(Exception failure) {
@@ -223,6 +238,9 @@ namespace PZ3D {
    if(File.Exists(record)){string current=Convert.ToBase64String(CoreDeployment.ReadBytes(record,CoreReleaseProtocol.MaxManifestBytes));if(current!=j.baselineRecord&&current!=j.targetRecord)throw new IOException("Rollback installation record conflict.");}
   }
   static void Rollback(string root,Journal j,CoreManifest target,Action<string> checkpoint=null) {
+   // Both immediate failure and later startup recovery share this gate. It never
+   // kills a process; inaccessible identity and incomplete spawn intent fail closed.
+   RequireCandidateAbsent(root,j);
    var baseline=Baseline(root,j);ValidateBackup(root,j,baseline);
    var oldFiles=baseline==null?new List<CoreFile>():baseline.files;
    string[] paths=oldFiles.Select(f=>f.path).Union(target.files.Select(f=>f.path)).ToArray();

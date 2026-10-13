@@ -48,6 +48,8 @@ ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntim
 
 健康检查启动分支必须在普通恢复分支前处理，不能调用 Recover；由原生宿主和助手校验任务、候选进程 PID/启动时间/路径与 nonce，真实加载 UI/bridge 后确认健康。已有记录的 AdoptPortable 是无写入、无互斥锁的认证读取，因此候选进程可在更新助手持有事务锁期间初始化。`ModernAssets.Prepare()` 内部也执行幂等 AdoptPortable，再通过 `PrepareOwned` 验证全部 Web sidecar。工具桥接读取 `BundledAssets.ReadOwnAsset`；其正式分支读取已认证安装记录并核对 Assets 字节，旧测试/截图构建无嵌入公钥时才回退内嵌资源。
 
+助手在创建候选进程前持久化启动意图，随后持久化 PID/启动时间/路径；候选在身份记录完成前不能初始化健康 UI。所有回滚路径（包括下一次正常启动的 Recover）都先确认已记录候选不存在；仍存活、无法读取身份、启动意图未完成时保留 Conflicted 和现有文件，不结束任意进程。若助手恰在启动与身份落盘之间中断，启动结果未知，自动恢复持续阻塞，需保留诊断并人工核查，不能仅删除 journal 绕过。
+
 卸载后仅剩运行中的卸载器时，复制已核对哈希的自身至已绑定 installationId 的 runtime 子路径。worker 校验自身路径/哈希、父 PID/启动时间/路径及根目录 ownership，等待父退出，再核对只剩自有卸载器并删除其与记录。绝不执行任意参数指定程序或递归删除根目录。worker 和任务备份仍作为诊断保留。
 
 初次安装中断可能留下 runtime 资料；选择新空目录重试，不自动清空旧目录。Windows 传统 .NET 长路径限制仍适用，请选择较短的独立目录。真实 WebView2 健康确认、失败页面超时回滚、旧页面重启一次及自有卸载已通过隔离测试。测试使用合成游戏/用户/数据根目录，不连接 Steam 或更改实际授权；不能证明游戏内效果。
@@ -59,5 +61,7 @@ ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntim
 ## 本地验证边界
 
 `Test-CoreNativeUpdate.ps1` 构建临时签名 fixture，运行真实 ModernForm/WebView2、独立原生更新通道及正式助手入口；验证仅 app.js 下载、健康成功、故意坏页面回滚、旧界面重启一次和自有卸载。其 A 的 VERSION、EXE AppVersion、清单和记录均为 1.1.0；B 仅用于文件稀疏性与协议测试，清单/记录为 1.1.1，字节未变的 VERSION/EXE 仍为 1.1.0。此 fixture 不可发布，也不证明真实版本升级仅下载 JS。正式新版本必须同步 VERSION 与所有 EXE 元数据，通常需要下载完整小 EXE；本实现没有二进制差分。
+
+同一脚本还独立构建 full fixture：A 所有版本为1.1.0，B 清单、VERSION、三个 EXE 元数据/嵌入版本和安装记录全部为1.1.1。成功路径验证真实运行 AppVersion=1.1.1，失败路径验证三个 EXE 的原1.1.0完整字节恢复、旧界面只启动一次；两条路径均验证自有卸载保留无关文件。fixture 密钥隔离，未上传任何发布渠道。
 
 正式包保持18文件允许清单，三个 EXE/嵌入 VERSION/磁盘 VERSION/发布清单/安装记录均为1.1.0。正式密钥从既有仓库外受保护路径显式传入，未改写或生成新正式密钥。本地实测产物、SHA-256、截图与准确命令见 `docs/core-release-verification.md`。

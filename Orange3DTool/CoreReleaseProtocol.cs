@@ -127,7 +127,7 @@ namespace PZ3D {
   static string String(object value) { var result=value as string; if(result==null)throw new InvalidDataException("Expected JSON string."); return result; }
   static long Long(object value) { if(!(value is long))throw new InvalidDataException("Expected JSON integer."); return (long)value; }
   static int Int(object value) { long number=Long(value); if(number<int.MinValue || number>int.MaxValue)throw new InvalidDataException("Integer out of range."); return (int)number; }
-  static List<CoreFile> Files(object value) {
+  internal static List<CoreFile> Files(object value) {
    var list=value as List<object>; if(list==null || list.Count>MaxFiles)throw new InvalidDataException("Expected bounded file list."); var result=new List<CoreFile>();
    foreach(var item in list) { var map=Object(item,"path","sha256","url","length"); result.Add(new CoreFile {path=String(map["path"]),sha256=String(map["sha256"]),url=String(map["url"]),length=Long(map["length"])}); } return result;
   }

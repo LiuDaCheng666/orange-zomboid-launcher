@@ -26,8 +26,8 @@ namespace PZ3D {
     timer.Tick+=async(sender,e)=>{if(ticking)return;ticking=true;try{
      if(DateTime.UtcNow>deadline)throw new Exception("Native UI fixture deadline elapsed.");if(web.CoreWebView2==null)return;
      if(await web.CoreWebView2.ExecuteScriptAsync("Boolean(window.orange?.state?.status)")!="true")return;
-     if(health){File.WriteAllText(Path.Combine(root,"native-health-page-ready"),Process.GetCurrentProcess().Id.ToString());var info=CoreUpdateTransaction.GetTaskInfo(root,args[2]);if(info.State=="Succeeded"){File.WriteAllText(Path.Combine(root,"native-health-succeeded"),info.HealthPid+":"+info.HealthStartTicks);form.Close();}return;}
-     if(args.Length==0){File.AppendAllText(Path.Combine(root,"native-rollback-restarted"),"once\n");form.Close();return;}
+     if(health){File.WriteAllText(Path.Combine(root,"native-health-page-ready"),Process.GetCurrentProcess().Id.ToString());var info=CoreUpdateTransaction.GetTaskInfo(root,args[2]);if(info.State=="Succeeded"){File.WriteAllText(Path.Combine(root,"native-running-version"),AppVersion.Current);File.WriteAllText(Path.Combine(root,"native-health-succeeded"),info.HealthPid+":"+info.HealthStartTicks);form.Close();}return;}
+     if(args.Length==0){File.WriteAllText(Path.Combine(root,"native-running-version"),AppVersion.Current);File.AppendAllText(Path.Combine(root,"native-rollback-restarted"),"once\n");form.Close();return;}
      if(step==0){step=1;await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-core-open]').click();window.orange.request('coreUpdateCheck',{protocol:1})");}
      else if(step==1&&updates.Status().state=="Available"){step=2;await web.CoreWebView2.ExecuteScriptAsync("window.orange.request('coreUpdateDownload',{protocol:1})");}
      else if(step==2&&updates.Status().state=="Ready"){step=3;File.WriteAllText(Path.Combine(root,"native-task.txt"),updates.Status().taskId);await Task.Delay(100);await web.CoreWebView2.ExecuteScriptAsync("window.orange.request('coreUpdateApply',{protocol:1,confirmed:true,drafts:false})");}

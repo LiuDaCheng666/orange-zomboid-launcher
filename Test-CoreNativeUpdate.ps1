@@ -25,8 +25,8 @@ $release=Join-Path $FixtureRoot 'release'
 & $tool pack $source $release $private $public
 if($LASTEXITCODE -ne 0){throw 'Fixture base pack failed'}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-foreach($case in @('healthy','failed')){
- $root=Join-Path $FixtureRoot $case;[IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $release 'orange-launcher-v1.1.0-win-x64.zip'),$root)
+foreach($layout in @('sparse','full')){foreach($case in @('healthy','failed')){
+ $root=Join-Path $FixtureRoot "$layout-$case";[IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $release 'orange-launcher-v1.1.0-win-x64.zip'),$root)
  $feed=Join-Path $root 'fixture-feed';New-Item -ItemType Directory -Path $feed | Out-Null
  $manifest=Get-Content -Raw (Join-Path $release 'update-manifest.json') | ConvertFrom-Json
  $manifest.version='1.1.1';$manifest.notes='Native WebView fixture; not a published release'
@@ -37,6 +37,21 @@ foreach($case in @('healthy','failed')){
  foreach($file in $manifest.files){$file.url=$file.url.Replace('/v1.1.0/','/v1.1.1/');if($file.path -eq 'Web/app.js'){$file.sha256=$hash;$file.length=$bytes.Length;$file.url='https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.1.1/app.js'}}
  $raw=[Text.UTF8Encoding]::new($false).GetBytes(($manifest | ConvertTo-Json -Depth 8 -Compress));[IO.File]::WriteAllBytes((Join-Path $feed 'update-manifest.json'),$raw)
  $rsa=[Security.Cryptography.RSACryptoServiceProvider]::new();try{$rsa.PersistKeyInCsp=$false;$rsa.FromXmlString([IO.File]::ReadAllText($private));[IO.File]::WriteAllBytes((Join-Path $feed 'update-manifest.sig'),$rsa.SignData($raw,[Security.Cryptography.CryptoConfig]::MapNameToOID('SHA256')))}finally{$rsa.Dispose()}
+ if($layout -eq 'full'){
+  $nextSource=Join-Path $FixtureRoot "$layout-$case-source";New-Item -ItemType Directory -Path $nextSource | Out-Null
+  Get-ChildItem -LiteralPath $source | Copy-Item -Destination $nextSource -Recurse
+  [IO.File]::WriteAllText((Join-Path $nextSource 'VERSION'),'1.1.1',[Text.UTF8Encoding]::new($false))
+  $nextAttributes=Join-Path $FixtureRoot 'Fixture.Version.g.cs'
+  [IO.File]::WriteAllText($nextAttributes,'using System.Reflection; [assembly: AssemblyVersion("1.1.1.0")] [assembly: AssemblyFileVersion("1.1.1.0")] [assembly: AssemblyInformationalVersion("1.1.1")]',[Text.UTF8Encoding]::new($false))
+  foreach($entry in @(@('PZ3D.CoreUpdateNativeFixtureTests','橙子启动器.exe'),@('PZ3D.CoreUpdaterProgram','橙子更新助手.exe'),@('PZ3D.CoreUpdateNativeFixtureTests','卸载橙子启动器.exe'))){
+   & $compiler /nologo /target:winexe /platform:x64 "/main:$($entry[0])" "/out:$nextSource\$($entry[1])" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$nextSource\VERSION,Launcher.Version.txt" $refs $nextAttributes (Get-ChildItem -LiteralPath $project -Filter '*.cs').FullName
+   if($LASTEXITCODE -ne 0){throw 'Version-bumped native fixture compile failed'}
+  }
+  [IO.File]::WriteAllBytes((Join-Path $nextSource 'Web\app.js'),$bytes)
+  $nextRelease=Join-Path $FixtureRoot "$layout-$case-release";& $tool pack $nextSource $nextRelease $private $public
+  if($LASTEXITCODE -ne 0){throw 'Version-bumped fixture validation/pack failed'}
+  Get-ChildItem -LiteralPath $nextRelease -File | Copy-Item -Destination $feed
+ }
  $process=Start-Process -FilePath (Join-Path $root '橙子启动器.exe') -ArgumentList '--native-flow' -PassThru -WindowStyle Hidden
  if(-not $process.WaitForExit(60000)){throw "Parent did not hand off: $root"}
  if($process.ExitCode -ne 0){throw "Native parent failed: $root"}
@@ -48,13 +63,27 @@ foreach($case in @('healthy','failed')){
  $receipt=if($case -eq 'healthy'){'native-health-succeeded'}else{'native-rollback-restarted'}
  $deadline=[DateTime]::UtcNow.AddSeconds(10);while(-not (Test-Path -LiteralPath (Join-Path $root $receipt)) -and [DateTime]::UtcNow -lt $deadline){Start-Sleep -Milliseconds 100}
  if(-not (Test-Path -LiteralPath (Join-Path $root $receipt))){throw "Real native page receipt missing: $root"}
- if((Get-Content (Join-Path $root 'downloaded-files.txt')).Count -ne 1 -or (Get-Content -Raw (Join-Path $root 'downloaded-files.txt')).Trim() -ne 'app.js'){throw 'Sparse fixture downloaded unexpected assets'}
+ if($layout -eq 'sparse'){
+  if((Get-Content (Join-Path $root 'downloaded-files.txt')).Count -ne 1 -or (Get-Content -Raw (Join-Path $root 'downloaded-files.txt')).Trim() -ne 'app.js'){throw 'Sparse fixture downloaded unexpected assets'}
+ }else{
+  $expectedVersion=if($case -eq 'healthy'){'1.1.1'}else{'1.1.0'}
+  if((Get-Content -Raw (Join-Path $root 'native-running-version')).Trim() -ne $expectedVersion){throw 'Actual running native AppVersion mismatch'}
+  if((Get-Content -Raw (Join-Path $root 'VERSION')).Trim() -ne $expectedVersion -or (Get-Content -Raw (Join-Path $root 'orange-installation.json') | ConvertFrom-Json).version -ne $expectedVersion){throw 'VERSION/install record mismatch'}
+  foreach($name in @('橙子启动器.exe','橙子更新助手.exe','卸载橙子启动器.exe')){
+   $info=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $root $name));if($info.FileVersion -ne "$expectedVersion.0" -or $info.ProductVersion -ne $expectedVersion){throw "EXE version mismatch: $name"}
+   $expectedSource=if($case -eq 'healthy'){$nextSource}else{$source}
+   $expectedHash=(Get-FileHash -LiteralPath (Join-Path $expectedSource $name)).Hash
+   if((Get-FileHash -LiteralPath (Join-Path $root $name)).Hash -ne $expectedHash){throw "Actual executable replacement/restore mismatch: $name"}
+  }
+  if((Get-Content (Join-Path $root 'downloaded-files.txt')).Count -ne 5){throw 'Full fixture must fetch three executables, VERSION, and app.js'}
+ }
+ if($case -eq 'failed' -and (Get-Content (Join-Path $root 'native-rollback-restarted')).Count -ne 1){throw 'Old launcher restarted more than once'}
  Start-Sleep -Milliseconds 750
  $uninstall=Start-Process -FilePath (Join-Path $root '卸载橙子启动器.exe') -ArgumentList '--fixture-uninstall' -PassThru -WindowStyle Hidden -Wait
  if($uninstall.ExitCode -ne 0){throw "Native fixture uninstall failed: $root"}
  $deadline=[DateTime]::UtcNow.AddSeconds(10);while((Test-Path -LiteralPath (Join-Path $root 'orange-installation.json')) -and [DateTime]::UtcNow -lt $deadline){Start-Sleep -Milliseconds 100}
  if((Test-Path -LiteralPath (Join-Path $root '橙子启动器.exe')) -or (Test-Path -LiteralPath (Join-Path $root 'orange-installation.json'))){throw 'Owned uninstall left release files'}
  if(-not (Test-Path -LiteralPath (Join-Path $root 'downloaded-files.txt'))){throw 'Uninstall removed unowned evidence'}
- Write-Output "PASS: real native WebView $case -> $state; only app.js fetched; scoped uninstall retained evidence: $root"
-}
+ Write-Output "PASS: real native WebView $layout/$case -> $state; download/versions/EXE bytes verified; scoped uninstall retained evidence: $root"
+}}
 Write-Output "NATIVE UPDATE FIXTURES: $FixtureRoot"
