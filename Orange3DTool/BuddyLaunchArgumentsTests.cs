@@ -3,8 +3,9 @@ using System.IO;
 namespace PZ3D {
  static class BuddyLaunchArgumentsTests {
   static void Check(bool b,string name){SteamLaunchOptionsTests.Check(b,name);}
-  public static int Main(){try{Run();return 0;}catch(Exception ex){Console.WriteLine(ex);return 1;}}
+  public static int Main(string[] args){try{if(Array.IndexOf(args,"--java-boundary")>=0)JavaBoundary();else if(Array.IndexOf(args,"--bat-context")>=0)BatContext();else Run();return 0;}catch(Exception ex){Console.WriteLine(ex);return 1;}}
   public static void Run(){
+   JavaBoundary();BatContext();
    GuardRegression();
    foreach(string arg in new[]{"-javaagent:ZombieBuddy.jar","-javaagent:\"C:\\My Mods\\ZombieBuddy.jar\"","-agentlib:zbNative","-agentpath:C:\\mods\\zbNative.dll"})Check(BuddyLaunchArguments.Classify(arg)==BuddyArgumentKind.Known,"exact Buddy recognized");
    foreach(string arg in new[]{"-Dnote=ZombieBuddy","-javaagent:MyZombieBuddy.jar","-javaagent:ZombieBuddy.jar.bak","-agentlib:other","-agentlib:zbNativeExtra","-agentpath:C:\\mods\\myzbNative.dll"})Check(BuddyLaunchArguments.Classify(arg)==BuddyArgumentKind.None,"lookalike and unrelated arguments preserved");
@@ -17,6 +18,16 @@ namespace PZ3D {
    Check(!BuddyLaunchArguments.CleanBat("echo ZombieBuddy\r\njava -Dnote=zbNative -jar game.jar").Changed,"ordinary BAT text never counts as Buddy");
    Check(BuddyLaunchArguments.CleanBat("set X=-javaagent:MyZombieBuddy.jar").Safe,"lookalike agent in an unrelated BAT assignment is untouched");
    Console.WriteLine("BUDDY ARGUMENTS PASSED");
+  }
+  static void JavaBoundary(){
+   string[] inputs={"java -jar game.jar -javaagent:ZombieBuddy.jar","java -cp app.jar GameMain -agentlib:zbNative","java -agentlib:zbNative -jar game.jar -javaagent:ZombieBuddy.jar","java -javaagent:ZombieBuddy.jar -classpath \"app jars\\*\" GameMain -agentlib:zbNative"};
+   string[] expected={"java -jar game.jar -javaagent:ZombieBuddy.jar","java -cp app.jar GameMain -agentlib:zbNative","java -jar game.jar -javaagent:ZombieBuddy.jar","java -classpath \"app jars\\*\" GameMain -agentlib:zbNative"};
+   for(int i=0;i<inputs.Length;i++){var result=BuddyLaunchArguments.CleanBat(inputs[i]);Check(result.Safe&&result.Text==expected[i]&&result.RemovedCount==(i<2?0:1),"Java entry point preserves literal game arguments case "+i);}
+   var operand=BuddyLaunchArguments.CleanBat("java -javaagent:ZombieBuddy.jar -cp -agentlib:zbNative GameMain -agentlib:zbNative");Check(operand.Safe&&operand.RemovedCount==1&&operand.Text=="java -cp -agentlib:zbNative GameMain -agentlib:zbNative","classpath operand and trailing argument are not JVM agents");
+   foreach(string line in new[]{"java --unknown operand -agentlib:zbNative GameMain","java @args.txt -agentlib:zbNative GameMain","java --source 17 Game.java -agentlib:zbNative"}){var result=BuddyLaunchArguments.CleanBat(line);Check(!result.Safe&&!result.Changed&&result.Text==line,"unproved Java option boundary refuses unchanged invocation");}
+  }
+  static void BatContext(){
+   foreach(string text in new[]{"if exist game.jar (\r\n java -agentlib:zbNative -jar game.jar\r\n)","java -agentlib:zbNative -jar first.jar\r\nif exist game.jar (\r\n java -agentlib:zbNative -jar game.jar\r\n)","echo continued ^\r\njava -agentlib:zbNative -jar game.jar","if exist game.jar ^\r\njava -agentlib:zbNative -jar game.jar","(\r\n set _JAVA_OPTIONS=-agentlib:zbNative\r\n)"}){var result=BuddyLaunchArguments.CleanBat(text);Check(!result.Safe&&!result.Changed&&result.RemovedCount==0&&result.Text==text,"block or continuation keeps complete BAT unchanged");}
   }
   static void GuardRegression(){
    string root=Path.Combine(LauncherTestPaths.Root,"buddy-guard-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\",\"-Dnote=zbNative\",\"-javaagent:OtherZombieBuddy.jar\"]}");string bat=Path.Combine(e.Game,"ProjectZomboid64.bat");File.WriteAllText(bat,"java -Dnote=zbNative -jar game.jar");e.Guard();Check(true,"unrelated BAT text and normal JSON loader do not block guard");e.Switch(false,false);string after=File.ReadAllText(e.Config);Check(after.Contains("-Dnote=zbNative")&&after.Contains("OtherZombieBuddy.jar")&&!after.Contains("-agentlib:zbNative"),"Switch removes only exact Buddy and preserves lookalike arguments");

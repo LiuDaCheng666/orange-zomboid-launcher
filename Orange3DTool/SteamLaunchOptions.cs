@@ -28,26 +28,25 @@ namespace PZ3D {
  internal static class SteamLaunchOptions {
   const int Limit=16777216;
   internal static SteamLaunchOptionsSnapshot Unavailable(){return new SteamLaunchOptionsSnapshot(null,0,null,SteamLaunchOptionsState.Unavailable);}
-  internal static SteamLaunchOptionsSnapshot Current(){
+  internal static SteamLaunchOptionsSnapshot Current(){return Current(ClientIdentity,ProcessPath);}
+  // One observation: Steam root, ActiveUser and nullable PID. Native read-only dependencies.
+  internal static SteamLaunchOptionsSnapshot Current(Func<Tuple<string,uint,uint?>> discover,Func<uint,string> processPath){
    string root=null;
    try{
-    using(var key=Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){
-     if(key==null)return Unavailable();root=key.GetValue("SteamPath") as string;
-     if(string.IsNullOrWhiteSpace(root))return new SteamLaunchOptionsSnapshot(null,0,null,SteamLaunchOptionsState.UnknownIdentity);
-     root=Path.GetFullPath(root);LauncherMaintenance.NoReparse(root);string exe=Path.Combine(root,"steam.exe");LauncherMaintenance.NoReparse(exe);
-     if(!File.Exists(exe))return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
-     using(var active=key.OpenSubKey("ActiveProcess")){
-      if(active==null)return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
-      uint account=Number(active.GetValue("ActiveUser")),pid=Number(active.GetValue("pid"));
-      if(account==0)return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
-      if(pid!=0){using(var p=Process.GetProcessById(checked((int)pid))){if(!string.Equals(Path.GetFullPath(p.MainModule.FileName),exe,StringComparison.OrdinalIgnoreCase))return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);}}
-      var snapshot=Read(root,account);
-      if(Number(active.GetValue("ActiveUser"))!=account||Number(active.GetValue("pid"))!=pid||!string.Equals(Path.GetFullPath((string)key.GetValue("SteamPath")),root,StringComparison.OrdinalIgnoreCase))return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
-      return snapshot;
-     }
-    }
+    var identity=discover();if(identity==null)return Unavailable();root=identity.Item1;
+    if(string.IsNullOrWhiteSpace(root)||!Path.IsPathRooted(root))return new SteamLaunchOptionsSnapshot(null,0,null,SteamLaunchOptionsState.UnknownIdentity);
+    root=Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);LauncherMaintenance.NoReparse(root);string exe=Path.Combine(root,"steam.exe");LauncherMaintenance.NoReparse(exe);
+    if(!File.Exists(exe)||identity.Item2==0||!identity.Item3.HasValue||identity.Item3.Value==0)return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
+    uint? pid=identity.Item3;
+    if(!string.Equals(Path.GetFullPath(processPath(pid.Value)),exe,StringComparison.OrdinalIgnoreCase))return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
+    var snapshot=Read(root,identity.Item2);var current=discover();
+    if(current==null||current.Item2!=identity.Item2||current.Item3!=pid||!string.Equals(Path.GetFullPath(current.Item1).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar),root,StringComparison.OrdinalIgnoreCase))return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
+    if(!string.Equals(Path.GetFullPath(processPath(pid.Value)),exe,StringComparison.OrdinalIgnoreCase))return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);
+    return snapshot;
    }catch{return new SteamLaunchOptionsSnapshot(root,0,null,SteamLaunchOptionsState.UnknownIdentity);}
   }
+  static Tuple<string,uint,uint?> ClientIdentity(){using(var key=Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){if(key==null)return null;string root=key.GetValue("SteamPath") as string;using(var active=key.OpenSubKey("ActiveProcess")){if(active==null)return Tuple.Create(root,(uint)0,(uint?)null);object pid=active.GetValue("pid");return Tuple.Create(root,Number(active.GetValue("ActiveUser")),pid==null?(uint?)null:Number(pid));}}}
+  static string ProcessPath(uint pid){using(var process=Process.GetProcessById(checked((int)pid)))return process.MainModule.FileName;}
   static uint Number(object value){if(value is int)return unchecked((uint)(int)value);if(value is uint)return (uint)value;return 0;}
   internal static SteamLaunchOptionsSnapshot Read(string root,uint account){
    string path=null;

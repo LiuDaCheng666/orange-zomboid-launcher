@@ -44,11 +44,10 @@ namespace PZ3D {
    }return result;
   }
   internal static BuddyCleanupResult CleanCommandLine(string commandLine){
-   try{var tokens=Tokens(commandLine);if(commandLine.IndexOfAny(new[]{'&','|','<','>','^','\r','\n'})>=0)throw new FormatException();var remove=tokens.Where(t=>Classify(t.Value)!=BuddyArgumentKind.None).ToArray();if(remove.Any(t=>Classify(t.Value)==BuddyArgumentKind.Unknown))throw new FormatException();string next=commandLine;
-    foreach(var token in remove.Reverse()){int start=token.Start,end=token.End;while(end<next.Length&&char.IsWhiteSpace(next[end]))end++;if(end==next.Length)while(start>0&&char.IsWhiteSpace(next[start-1]))start--;next=next.Remove(start,end-start);}
-    return new BuddyCleanupResult(commandLine,next,remove.Length,true);
+   try{var tokens=Tokens(commandLine);if(commandLine.IndexOfAny(new[]{'&','|','<','>','^','\r','\n'})>=0)throw new FormatException();return CleanTokens(commandLine,tokens);
    }catch{return new BuddyCleanupResult(commandLine,commandLine,0,false);}
   }
+  static BuddyCleanupResult CleanTokens(string commandLine,IEnumerable<ArgumentToken> tokens){var remove=tokens.Where(t=>Classify(t.Value)!=BuddyArgumentKind.None).ToArray();if(remove.Any(t=>Classify(t.Value)==BuddyArgumentKind.Unknown))throw new FormatException();string next=commandLine;foreach(var token in remove.Reverse()){int start=token.Start,end=token.End;while(end<next.Length&&char.IsWhiteSpace(next[end]))end++;if(end==next.Length)while(start>0&&char.IsWhiteSpace(next[start-1]))start--;next=next.Remove(start,end-start);}return new BuddyCleanupResult(commandLine,next,remove.Length,true);}
   internal static bool HasAuthorizationOverride(string commandLine){
    try{return Tokens(commandLine??"").Any(t=>t.Value.StartsWith("-Duser.home",StringComparison.OrdinalIgnoreCase)||t.Value.IndexOf("config_dir",StringComparison.OrdinalIgnoreCase)>=0||t.Value.StartsWith("-D",StringComparison.OrdinalIgnoreCase)&&t.Value.IndexOf("prefix=",StringComparison.OrdinalIgnoreCase)>=0||t.Value.StartsWith("-javaagent:",StringComparison.OrdinalIgnoreCase)||t.Value.StartsWith("-agentlib:",StringComparison.OrdinalIgnoreCase)||t.Value.StartsWith("-agentpath:",StringComparison.OrdinalIgnoreCase));}catch{return true;}
   }
@@ -60,14 +59,31 @@ namespace PZ3D {
   }
   static void CleanBranches(Dictionary<string,object> node,ref bool normal,ref int count){if(node.ContainsKey("vmArgs"))CleanArray(node,false,ref normal,ref count);foreach(var child in node.Values.OfType<Dictionary<string,object>>())CleanBranches(child,ref normal,ref count);}
   static void CleanArray(Dictionary<string,object> node,bool root,ref bool normal,ref int count){object raw=node["vmArgs"];if(!(raw is IEnumerable)||raw is string||raw is IDictionary)throw new FormatException();var list=new List<string>();foreach(object item in (IEnumerable)raw){string value=item as string;if(value==null)throw new FormatException();var kind=Classify(value);if(kind==BuddyArgumentKind.Unknown)throw new FormatException();if(kind==BuddyArgumentKind.None)list.Add(value);else if(root&&!normal&&string.Equals(value,"-agentlib:zbNative",StringComparison.OrdinalIgnoreCase)){normal=true;list.Add(value);}else count++;}node["vmArgs"]=list.ToArray();}
+  static bool BatComment(string line){string trim=line.TrimStart();if(trim.StartsWith("@"))trim=trim.Substring(1);return Regex.IsMatch(trim,@"^(?i:rem)(?:\s|$)")||trim.StartsWith("::");}
+  static BuddyCleanupResult CleanJavaInvocation(string text,List<ArgumentToken> tokens){
+   int boundary=-1;var agents=new List<ArgumentToken>();
+   for(int i=1;i<tokens.Count;i++){
+    string arg=tokens[i].Value;
+    if(arg=="-jar"){if(i+1>=tokens.Count||tokens[i+1].Value.Length==0)throw new FormatException();boundary=i;break;}
+    if(arg=="-cp"||arg=="-classpath"||arg=="--class-path"){if(++i>=tokens.Count||tokens[i].Value.Length==0||tokens[i].Value.StartsWith("@"))throw new FormatException();continue;}
+    if(arg.StartsWith("--class-path=",StringComparison.Ordinal)&&arg.Length>13)continue;
+    if(arg.StartsWith("-D",StringComparison.Ordinal)&&arg.Length>2||arg.StartsWith("-XX:",StringComparison.Ordinal)||Regex.IsMatch(arg,@"^-Xm[sx][0-9]+[kKmMgG]?$"))continue;
+    if(arg.StartsWith("-javaagent:",StringComparison.Ordinal)||arg.StartsWith("-agentlib:",StringComparison.Ordinal)||arg.StartsWith("-agentpath:",StringComparison.Ordinal)){agents.Add(tokens[i]);continue;}
+    if(new[]{"-server","-client","-ea","-da","-esa","-dsa","-enableassertions","-disableassertions","-enablesystemassertions","-disablesystemassertions"}.Contains(arg))continue;
+    if(!arg.EndsWith(".java",StringComparison.Ordinal)&&Regex.IsMatch(arg,@"^[\p{L}_$][\p{L}\p{N}_$]*(?:\.[\p{L}_$][\p{L}\p{N}_$]*)*$")){boundary=i;break;}
+    throw new FormatException();
+   }
+   if(boundary<0)throw new FormatException();return CleanTokens(text,agents);
+  }
   internal static BuddyCleanupResult CleanBat(string bat){
    if(bat==null||bat.Length>Limit)return new BuddyCleanupResult(bat,bat,0,false);int total=0;var output=new StringBuilder();
-   try{foreach(Match line in Regex.Matches(bat,@"[^\r\n]*(?:\r\n|\r|\n|$)")){if(line.Length==0)continue;string raw=line.Value,text=raw.TrimEnd('\r','\n'),ending=raw.Substring(text.Length),trim=text.TrimStart();if(trim.StartsWith("@"))trim=trim.Substring(1);if(Regex.IsMatch(trim,@"^(?i:rem)(?:\s|$)")||trim.StartsWith("::")){output.Append(raw);continue;}
+   try{var lines=Regex.Matches(bat,@"[^\r\n]*(?:\r\n|\r|\n|$)").Cast<Match>().Where(m=>m.Length>0).Select(m=>m.Value).ToArray();var active=lines.Where(line=>!BatComment(line)).ToArray();if(active.Any(Candidate)&&active.Any(line=>line.IndexOfAny(new[]{'(',')','^'})>=0||Regex.IsMatch(line,@"^\s*@?(?i:if|for|else)(?:\s|$)")))throw new FormatException();
+    foreach(string raw in lines){string text=raw.TrimEnd('\r','\n'),ending=raw.Substring(text.Length);if(BatComment(text)){output.Append(raw);continue;}
      var tokens=Tokens(text);bool candidate=tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None)||Candidate(text);if(!candidate){output.Append(raw);continue;}
      if(text.IndexOfAny(new[]{'%','!','^','&','|','<','>','(',')'})>=0)throw new FormatException();
      var assignment=Regex.Match(text,@"^(?<prefix>\s*@?(?i:set)\s+)(?<quote>""?)(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$");BuddyCleanupResult cleaned;
      if(assignment.Success){string name=assignment.Groups["name"].Value;if(!new[]{"_JAVA_OPTIONS","JAVA_TOOL_OPTIONS","JDK_JAVA_OPTIONS","JAVA_OPTS"}.Contains(name,StringComparer.OrdinalIgnoreCase))throw new FormatException();string value=assignment.Groups["value"].Value,quote=assignment.Groups["quote"].Value;if(quote.Length>0){if(!value.EndsWith("\""))throw new FormatException();value=value.Substring(0,value.Length-1);}cleaned=CleanCommandLine(value);if(!cleaned.Safe)throw new FormatException();output.Append(text.Substring(0,assignment.Groups["value"].Index)).Append(cleaned.Text).Append(quote).Append(ending);}
-     else{if(tokens.Count==0)throw new FormatException();string executable=tokens[0].Value.TrimStart('@').Replace('\\','/').Split('/').Last();if(!new[]{"java","java.exe","javaw","javaw.exe"}.Contains(executable,StringComparer.OrdinalIgnoreCase))throw new FormatException();cleaned=CleanCommandLine(text);if(!cleaned.Safe)throw new FormatException();output.Append(cleaned.Text).Append(ending);}total+=cleaned.RemovedCount;
+     else{if(tokens.Count==0)throw new FormatException();string executable=tokens[0].Value.TrimStart('@').Replace('\\','/').Split('/').Last();if(!new[]{"java","java.exe","javaw","javaw.exe"}.Contains(executable,StringComparer.OrdinalIgnoreCase))throw new FormatException();cleaned=CleanJavaInvocation(text,tokens);if(!cleaned.Safe)throw new FormatException();output.Append(cleaned.Text).Append(ending);}total+=cleaned.RemovedCount;
     }return new BuddyCleanupResult(bat,output.ToString(),total,true);
    }catch{return new BuddyCleanupResult(bat,bat,0,false);}
   }
