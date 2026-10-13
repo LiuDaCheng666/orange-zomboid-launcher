@@ -75,7 +75,18 @@ namespace PZ3D {
    }
    if(boundary<0)throw new FormatException();return CleanTokens(text,agents);
   }
+  // Locate possible command boundaries only. Do not execute, expand or rewrite shell syntax.
+  static List<string> BatCommands(string text){
+   var parts=new List<string>();bool quoted=false;int start=0;
+   for(int i=0;i<text.Length;i++){char c=text[i];if(c=='^'&&!quoted){if(i+1<text.Length)i++;continue;}if(c=='"'){quoted=!quoted;continue;}if(!quoted&&(c=='&'||c=='|')){parts.Add(text.Substring(start,i-start));start=i+1;}}
+   if(quoted)throw new FormatException();parts.Add(text.Substring(start));return parts;
+  }
   static BuddyCleanupResult CleanBatLine(string text){
+   var commands=BatCommands(text);if(commands.Count==1)return CleanBatCommand(text);
+   foreach(string command in commands)if(!BatComment(command)&&CleanBatCommand(command,true).RemovedCount>0)throw new FormatException();
+   return new BuddyCleanupResult(text,text,0,true);
+  }
+  static BuddyCleanupResult CleanBatCommand(string text,bool requireKnown=false){
    var assignment=Regex.Match(text,@"^(?<prefix>\s*@?(?i:set)\s+)(?<quote>""?)(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$");
    if(assignment.Success){
     string value=assignment.Groups["value"].Value,quote=assignment.Groups["quote"].Value;if(quote.Length>0){if(!value.EndsWith("\""))throw new FormatException();value=value.Substring(0,value.Length-1);}
@@ -84,8 +95,8 @@ namespace PZ3D {
     var clean=CleanTokens(value,args);return new BuddyCleanupResult(text,text.Substring(0,assignment.Groups["value"].Index)+clean.Text+quote,clean.RemovedCount,true);
    }
    var tokens=Tokens(text);if(tokens.Count>0){string executable=tokens[0].Value.TrimStart('@').Replace('\\','/').Split('/').Last();if(new[]{"java","java.exe","javaw","javaw.exe"}.Contains(executable,StringComparer.OrdinalIgnoreCase)){
-    try{return CleanJavaInvocation(text,tokens);}catch(FormatException){if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))throw;return new BuddyCleanupResult(text,text,0,true);}
-   }}
+    try{return CleanJavaInvocation(text,tokens);}catch(FormatException){if(requireKnown||tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))throw;return new BuddyCleanupResult(text,text,0,true);}
+   }if(requireKnown&&!string.Equals(executable,"echo",StringComparison.OrdinalIgnoreCase))throw new FormatException();}
    if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))throw new FormatException();return new BuddyCleanupResult(text,text,0,true);
   }
   internal static BuddyCleanupResult CleanBat(string bat){
