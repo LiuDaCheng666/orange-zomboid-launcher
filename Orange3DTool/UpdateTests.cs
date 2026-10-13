@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Diagnostics;
 using System.Text;
+using System.Web.Script.Serialization;
 namespace PZ3D {
  static class UpdateTests {
   static void Check(bool v,string s){if(!v)throw new Exception("FAIL: "+s);Console.WriteLine("PASS: "+s);}
@@ -13,7 +14,7 @@ namespace PZ3D {
    var steam=typeof(SteamWorkshop).GetMethod("CanReuse");Check(steam!=null&&(bool)steam.Invoke(null,new object[]{5U})&&!(bool)steam.Invoke(null,new object[]{13U})&&!(bool)steam.Invoke(null,new object[]{21U}),"Steam download path skips current content but never skips pending updates");
    var worker=typeof(Engine).Assembly.GetType("PZ3D.WorkshopWorker");Check(worker!=null,"Steam API isolated from GUI in exiting worker");
    var info=new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName,"--workshop-worker \"C:\\orange-no-game-fixture\" 999"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8};
-   using(var child=new Process{StartInfo=info}){child.Start();if(!child.WaitForExit(10000)){child.Kill();throw new Exception("FAIL: hidden worker must exit on invalid request before Steam initialization");}string error=child.StandardError.ReadToEnd();Check(child.ExitCode==1,"hidden redirected worker starts without a console and returns controlled validation failure");bool chinese=false;foreach(char c in error)if(c>='\u4e00'&&c<='\u9fff')chinese=true;Check(chinese&&!error.Contains("\uFFFD")&&!error.Contains("System.IO.IOException"),"worker failure text survives UTF-8 pipes without mojibake or encoding crash");}
+   using(var child=new Process{StartInfo=info}){child.Start();if(!child.WaitForExit(10000)){child.Kill();throw new Exception("FAIL: hidden worker must exit on invalid request before Steam initialization");}string output=child.StandardOutput.ReadToEnd();var response=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(output);string error=Convert.ToString(response["message"]);Check(child.ExitCode==1&&Convert.ToString(response["kind"])=="error","hidden redirected worker returns controlled JSON validation failure before Steam initialization");bool chinese=false;foreach(char c in error)if(c>='\u4e00'&&c<='\u9fff')chinese=true;Check(chinese&&!error.Contains("\uFFFD")&&!error.Contains("System.IO.IOException"),"worker failure text survives UTF-8 pipes without mojibake or encoding crash");}
   }
   public static int Main(){try{Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
  }

@@ -59,6 +59,7 @@ namespace PZ3D {
   }
   IntPtr dll,ugc,utils,user,apps,friends;bool initialized;VoidCall shutdown;CancellationToken cancel;string oldApp,oldGame,game;int pipe;PipeCall frame,free;NextCallback next;Completed completed;Result result;
   readonly Dictionary<ulong,uint> downloads=new Dictionary<ulong,uint>();
+  readonly HashSet<ulong> selectedDownloads=new HashSet<ulong>();
   T Function<T>(string export)where T:class{IntPtr function=GetProcAddress(dll,export);if(function==IntPtr.Zero)throw new Exception("游戏 Steam API 缺少 "+export+"；请更新 Steam 和游戏。");return (T)(object)Marshal.GetDelegateForFunctionPointer(function,typeof(T));}
   IntPtr Interface(string name){IntPtr value=Function<GetInterface>(name)();if(value==IntPtr.Zero)throw new Exception("Steam 接口不可用："+name);return value;}
   public SteamLauncherNative(string gamePath,CancellationToken token){
@@ -76,7 +77,7 @@ namespace PZ3D {
    }catch{Dispose();throw;}
   }
   void RequireOnline(){cancel.ThrowIfCancellationRequested();if(Function<UIntCall>("SteamAPI_ISteamUtils_GetAppID")(utils)!=SteamLauncherServices.App||!Function<BoolCall>("SteamAPI_ISteamUser_BLoggedOn")(user)||!Function<OwnsApp>("SteamAPI_ISteamApps_BIsSubscribedApp")(apps,SteamLauncherServices.App))throw new Exception("需要 Steam 在线登录并拥有 App108600；没有请求订阅或下载。");}
-  void Pump(){cancel.ThrowIfCancellationRequested();frame(pipe);Callback callback;while(next(pipe,out callback)){try{if(callback.Id==3406&&callback.Size>=24&&Marshal.ReadInt32(callback.Data,0)==108600)downloads[unchecked((ulong)Marshal.ReadInt64(callback.Data,8))]=unchecked((uint)Marshal.ReadInt32(callback.Data,16));}finally{free(pipe);}}}
+  void Pump(){cancel.ThrowIfCancellationRequested();frame(pipe);Callback callback;while(next(pipe,out callback)){try{cancel.ThrowIfCancellationRequested();if(callback.Id==3406&&callback.Size>=24)SteamWorkshop.CaptureDownload(downloads,selectedDownloads,unchecked((uint)Marshal.ReadInt32(callback.Data,0)),unchecked((ulong)Marshal.ReadInt64(callback.Data,8)),unchecked((uint)Marshal.ReadInt32(callback.Data,16)));}finally{free(pipe);}}}
   byte[] WaitCall(ulong call,int size,int callback,int seconds){
    if(call==0)throw new Exception("Steam 未接受请求。");DateTime end=DateTime.UtcNow.AddSeconds(seconds);bool failure;
    while(!completed(utils,call,out failure)){Pump();if(DateTime.UtcNow>end)throw new Exception("Steam 请求超时；请重试。");Thread.Sleep(50);}if(failure)throw new Exception("Steam 网络请求失败；请重试。");
@@ -109,12 +110,13 @@ namespace PZ3D {
   bool Installed(ulong id,out string folder){
    IntPtr buffer=Marshal.AllocHGlobal(4096);try{Marshal.WriteByte(buffer,0);ulong size;uint stamp;bool found=Function<InstallInfo>("SteamAPI_ISteamUGC_GetItemInstallInfo")(ugc,id,out size,buffer,4096,out stamp);var bytes=new byte[4096];Marshal.Copy(buffer,bytes,0,bytes.Length);folder=found?SteamLauncherServices.Utf8(bytes,0,bytes.Length):"";string expected=Path.GetFullPath(Path.Combine(game,"..","..","workshop","content","108600",id.ToString(CultureInfo.InvariantCulture)));return found&&Directory.Exists(folder)&&string.Equals(Path.GetFullPath(folder).TrimEnd('\\'),expected.TrimEnd('\\'),StringComparison.OrdinalIgnoreCase);}finally{Marshal.FreeHGlobal(buffer);}
   }
-  void Mutate(ulong id,Action<int,string> progress){
-   RequireOnline();if(GameProcessGuard.IsRunning(game))throw new Exception("请退出游戏后订阅或下载工坊模组。");var state=Function<ItemState>("SteamAPI_ISteamUGC_GetItemState");
-   SteamWorkshop.EnsureSubscribed(id,item=>state(ugc,item),item=>{if(progress!=null)progress(-1,"正在确认所选条目的 Steam 订阅");byte[] subscribed=WaitCall(Function<Subscribe>("SteamAPI_ISteamUGC_SubscribeItem")(ugc,item),16,1313,30);if(BitConverter.ToInt32(subscribed,0)!=1||BitConverter.ToUInt64(subscribed,8)!=item)throw new Exception("Steam 订阅被拒绝，EResult="+BitConverter.ToInt32(subscribed,0)+"。");});
-   string folder;if(SteamWorkshop.CanReuse(state(ugc,id))&&Installed(id,out folder)){if(progress!=null)progress(100,"所选工坊条目已订阅且安装为最新版本。");return;}
-   downloads.Remove(id);if(!Function<Download>("SteamAPI_ISteamUGC_DownloadItem")(ugc,id,false))throw new Exception("Steam 拒绝下载所选条目。");DateTime end=DateTime.UtcNow.AddSeconds(420),last=DateTime.MinValue;var downloadInfo=Function<DownloadInfo>("SteamAPI_ISteamUGC_GetItemDownloadInfo");
-   while(DateTime.UtcNow<end){Pump();uint code;if(downloads.TryGetValue(id,out code)){if(!SteamWorkshop.SuccessResult(SteamLauncherServices.App,id,code,id))throw new Exception("Steam 下载失败，EResult="+code+"。已确认的订阅可能保留；未激活模组。");if(Installed(id,out folder)){if(progress!=null)progress(100,"Steam 已确认下载和 App108600 安装目录。");return;}}
+  string Mutate(ulong id,Action<int,string> progress){
+   RequireOnline();if(GameProcessGuard.IsRunning(game))throw new Exception("请退出游戏后订阅或下载工坊模组。");var state=Function<ItemState>("SteamAPI_ISteamUGC_GetItemState");selectedDownloads.Add(id);
+   SteamWorkshop.EnsureSubscribed(id,item=>state(ugc,item),item=>{if(progress!=null)progress(-1,"正在确认所选条目的 Steam 订阅");byte[] subscribed=WaitCall(Function<Subscribe>("SteamAPI_ISteamUGC_SubscribeItem")(ugc,item),16,1313,30);SteamWorkshop.ValidateSubscription(BitConverter.ToUInt32(subscribed,0),BitConverter.ToUInt64(subscribed,8),item);},Pump,cancel,progress);
+   bool received=SteamWorkshop.DownloadCompleted(downloads,id);
+   string folder;if(!received&&SteamWorkshop.CanReuse(state(ugc,id))&&Installed(id,out folder)){string message="使用已存在的本地文件 · 已确认所选条目的订阅与安装目录。";if(progress!=null)progress(100,message);return message;}
+   SteamWorkshop.RequestDownload(downloads,id,item=>Function<Download>("SteamAPI_ISteamUGC_DownloadItem")(ugc,item,false));DateTime end=DateTime.UtcNow.AddSeconds(420),last=DateTime.MinValue;var downloadInfo=Function<DownloadInfo>("SteamAPI_ISteamUGC_GetItemDownloadInfo");
+   while(DateTime.UtcNow<end){Pump();if(SteamWorkshop.DownloadCompleted(downloads,id)){if(Installed(id,out folder)){string message="Steam 已确认下载和 App108600 安装目录。";if(progress!=null)progress(100,message);return message;}}
     ulong done,total;bool known=downloadInfo(ugc,id,out done,out total);if(progress!=null&&(DateTime.UtcNow-last).TotalMilliseconds>=900){progress(!known||total==0?-1:(int)Math.Min(99,100.0*done/total),SteamWorkshop.FormatDownloadProgress(id,known?done:0,known?total:0));last=DateTime.UtcNow;}Thread.Sleep(100);
    }throw new Exception("Steam 下载等待超时；已确认的订阅可能保留，请在 Steam 检查进度。未激活模组。");
   }
@@ -152,7 +154,7 @@ namespace PZ3D {
    if(action=="subscriptions")return Subscriptions(progress);
    if(action=="search")return Search(Convert.ToString(payload["query"]),Convert.ToInt32(payload["page"]));
    if(action=="details"){ulong id=ulong.Parse(Convert.ToString(payload["id"]),CultureInfo.InvariantCulture);var page=Details(new[]{id},true);if(page.Items.Count!=1||!page.Raw.ContainsKey(id))throw new Exception("Steam 未返回所选工坊条目。");return new{item=page.Items[0],message="工坊详情来自 Steam。"};}
-   if(action=="download"){ulong id=ulong.Parse(Convert.ToString(payload["id"]),CultureInfo.InvariantCulture);SteamLauncherServices.DownloadVerified(id,(bool)payload["confirmed"],item=>{var page=Details(new[]{item},false);byte[] bytes;if(page.Raw.Count!=1||!page.Raw.TryGetValue(item,out bytes))throw new Exception("Steam 详情 ID 无法验证。");return bytes;},item=>Mutate(item,progress));return new{id=id.ToString(CultureInfo.InvariantCulture),message="Steam 已订阅并确认所选条目安装；可在模组配置中手动启用。"};}
+   if(action=="download"){ulong id=ulong.Parse(Convert.ToString(payload["id"]),CultureInfo.InvariantCulture);string outcome="";SteamLauncherServices.DownloadVerified(id,(bool)payload["confirmed"],item=>{var page=Details(new[]{item},false);byte[] bytes;if(page.Raw.Count!=1||!page.Raw.TryGetValue(item,out bytes))throw new Exception("Steam 详情 ID 无法验证。");return bytes;},item=>outcome=Mutate(item,progress));return new{id=id.ToString(CultureInfo.InvariantCulture),message=outcome+" 可在模组配置中手动启用。"};}
    if(action=="hall")return Hall(Convert.ToString(payload["query"]),progress,hallBatch);throw new Exception("不支持的 Steam 操作。");
   }
   static string PointerUtf8(IntPtr pointer,int maximum){if(pointer==IntPtr.Zero)return "";int length=0;while(length<maximum&&Marshal.ReadByte(pointer,length)!=0)length++;var bytes=new byte[length];Marshal.Copy(pointer,bytes,0,length);return Encoding.UTF8.GetString(bytes);}
