@@ -8,7 +8,7 @@
 
 - Windows x64、C#/.NET Framework、WinForms + 本地 WebView2 页面。
 - `Orange3DTool/` 为启动器源码；`docs/` 为设计、实施与验证记录。
-- `Build-Setup.ps1` 与 `Build-Tests.ps1` 为构建入口；缺失依赖从 Microsoft NuGet/作者 GitHub 下载并校验固定版本。需要 Windows x64、.NET Framework 4.8、JDK17+；运行界面需要 WebView2 Runtime。
+- `Build-CoreRelease.ps1` 为正式核心包入口，`Build-Tests.ps1` 为测试入口；缺失依赖从 Microsoft NuGet/作者 GitHub 下载并校验固定版本。需要 Windows x64、.NET Framework 4.8、JDK17+；运行界面需要 WebView2 Runtime。
 - 不请求 Steam 密码；使用玩家已登录的 Steam 客户端。Java 文件授权逐哈希确认，不自动信任作者。
 - 指定存档/服务器直达功能为实验：不绕过游戏授权、存档转换、服务器规则或角色验证。
 
@@ -28,12 +28,15 @@
 npm install
 npx playwright install chromium
 npm test
-./Build-Setup.ps1
+./Build-CoreRelease.ps1 -VersionOnly
+./Test-CorePackageBuild.ps1
+# 更新助手实现完成后，使用明确的仓库外私钥路径打包：
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml
 ```
 
-默认公开构建不打包第三方光影 ZIP 或作者封面，可自行导入光影。已有合法本地私人测试资源时，`./Build-Setup.ps1 -PrivatePresets` 单独产生私人资源包；不要将它上传到公开 Release。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。
+正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。
 
-输出是可直接运行的便携 EXE，以及带独立卸载程序的安装包。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。自己配置的 Steam 库/游戏目录不会写死在源码中。
+正式输出位于 `dist/<VERSION>/`：`core/` 文件夹、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。完整 ZIP 解压到独立可写目录后运行“橙子启动器.exe”；不要只复制 EXE。当前真实核心包构建等待更新助手及界面集成，包测试使用明确隔离的测试入口。构建、密钥与发布说明见 [核心发布指南](docs/core-release.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
 
 ## 许可范围
 

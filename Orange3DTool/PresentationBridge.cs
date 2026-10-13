@@ -11,7 +11,7 @@ namespace PZ3D {
   public string LastBackup;
   static JavaScriptSerializer json=new JavaScriptSerializer();
   static string Hash(byte[] bytes){using(var sha=System.Security.Cryptography.SHA256.Create())return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","");}
-  static byte[] Asset(){using(var input=typeof(Program).Assembly.GetManifestResourceStream("OrangeShootPresentation.jar")){if(input==null)throw new Exception("桥接资源缺失，请使用新单文件版。");using(var output=new MemoryStream()){input.CopyTo(output);return output.ToArray();}}}
+  static byte[] Asset(){return BundledAssets.ReadOwnAsset("OrangeShootPresentation.jar");}
   static bool Agent(string s){return s.StartsWith("-javaagent:",StringComparison.OrdinalIgnoreCase)&&s.IndexOf(Name,StringComparison.OrdinalIgnoreCase)>=0;}
   static string[] Args(Dictionary<string,object> cfg){return ((System.Collections.IEnumerable)cfg["vmArgs"]).Cast<object>().Select(o=>Convert.ToString(o)).ToArray();}
   string Journal(Engine e){return Path.Combine(e.Data,"shoot-presentation-"+Hash(Encoding.UTF8.GetBytes(e.Game.ToUpperInvariant()))+".json");}

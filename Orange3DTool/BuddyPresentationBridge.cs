@@ -12,7 +12,7 @@ namespace PZ3D {
   public string LastBackup;
   static readonly JavaScriptSerializer json=new JavaScriptSerializer();
   static string Hash(byte[] b){using(var s=System.Security.Cryptography.SHA256.Create())return BitConverter.ToString(s.ComputeHash(b)).Replace("-","");}
-  static byte[] Asset(){using(var stream=typeof(Program).Assembly.GetManifestResourceStream(Name)){using(var memory=new MemoryStream()){stream.CopyTo(memory);return memory.ToArray();}}}
+  static byte[] Asset(){return BundledAssets.ReadOwnAsset(Name);}
   string Journal(Engine e){return Path.Combine(e.Data,"shoot-presentation-"+Hash(Encoding.UTF8.GetBytes(e.Game.ToUpperInvariant()))+".json");}
   static string Folder(Engine e){return Path.Combine(Path.GetDirectoryName(e.Mods),Id);}
   public static string PropertiesPath(Engine e){return Path.Combine(Folder(e),"42","media","java","client",ConfigName);}

@@ -22,10 +22,46 @@ namespace PZ3D {
   internal const string Runtime="OrangeLauncherRuntime";
   internal const string Owner=Runtime+"/.orange-core-owner";
   internal const string Tasks=Runtime+"/CoreUpdates";
+  internal const string BootstrapManifest=Runtime+"/CoreBootstrap/manifest.json",BootstrapSignature=Runtime+"/CoreBootstrap/manifest.sig";
   internal static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
   internal static JavaScriptSerializer Json {get{return new JavaScriptSerializer {MaxJsonLength=CoreReleaseProtocol.MaxManifestBytes};}}
 
   public static bool Managed(string root) {try{Read(root);return true;}catch{return false;}}
+  public static CoreInstallRecord ReadAuthenticated(string root){return ReadAuthenticated(root,CoreUpdateTrust.PublicKeyXml);}
+  public static CoreInstallRecord ReadAuthenticated(string root,string key){
+   root=Root(root);var record=Read(root);var candidates=new List<string>();
+   if(File.Exists(Safe(root,BootstrapManifest)))candidates.Add(Runtime+"/CoreBootstrap");
+   string tasks=Safe(root,Tasks);if(Directory.Exists(tasks))foreach(string dir in Directory.GetDirectories(tasks)){string id=Path.GetFileName(dir);if(Id(id))candidates.Add(Tasks+"/"+id);}
+   foreach(string candidate in candidates){try{var signed=CoreReleaseProtocol.Verify(ReadBytes(Safe(root,candidate+"/manifest.json"),CoreReleaseProtocol.MaxManifestBytes),ReadBytes(Safe(root,candidate+"/manifest.sig"),1024),key,"0.0.0");if(signed.version==record.version&&signed.files.Count==record.files.Count&&signed.files.All(f=>record.files.Any(r=>r.path==f.path&&r.sha256==f.sha256&&r.length==f.length&&r.url==f.url)))return record;}catch(IOException){}catch(CryptographicException){}catch(ArgumentException){}}
+   throw new CryptographicException("Installation record has no matching authenticated release metadata.");
+  }
+  public static CoreInstallRecord AdoptPortable(string root) {return AdoptPortable(root,CoreUpdateTrust.PublicKeyXml);}
+  public static CoreInstallRecord AdoptPortable(string root,string publicKeyXml) {
+   root=Root(root);
+   // Existing installations are read-only here, including a health candidate
+   // while its updater owns the transaction mutex. Only first adoption mutates.
+   if(File.Exists(Safe(root,RecordName)))return ReadAuthenticated(root,publicKeyXml);
+   using(Acquire(root)) {
+    if(File.Exists(Safe(root,RecordName)))return ReadAuthenticated(root,publicKeyXml);
+    var manifest=CoreReleaseProtocol.Verify(ReadBytes(Safe(root,BootstrapManifest),CoreReleaseProtocol.MaxManifestBytes),ReadBytes(Safe(root,BootstrapSignature),1024),publicKeyXml,"0.0.0");
+    foreach(var file in manifest.files)RequireFile(root,file.path,file);
+    string id=File.Exists(Safe(root,Owner))?ReadOwner(root):Guid.NewGuid().ToString("N");
+    if(!File.Exists(Safe(root,Owner)))WriteNew(root,Owner,Utf8.GetBytes(id));
+    var record=new CoreInstallRecord{schema=2,root=root,installationId=id,version=manifest.version,files=manifest.files};
+    foreach(var file in manifest.files)RequireFile(root,file.path,file);
+    WriteNew(root,RecordName,Utf8.GetBytes(Json.Serialize(record)));return Read(root);
+   }
+  }
+  public static void CompleteUninstall(string root,string installationId,string selfHash) {
+   root=Root(root);using(Acquire(root)) {
+    CoreUpdateTransaction.EnsureNoPending(root);var record=Read(root);
+    if(record.installationId!=installationId)throw new IOException("Uninstall installation identity changed.");
+    var self=record.files.SingleOrDefault(f=>f.path=="卸载橙子启动器.exe");
+    if(self==null||self.sha256!=selfHash)throw new IOException("Uninstall executable identity changed.");
+    if(record.files.Any(f=>f.path!=self.path&&File.Exists(CoreReleaseProtocol.Target(root,f.path))))throw new IOException("Owned files remain; refusing delayed completion.");
+    RequireFile(root,self.path,self);File.Delete(CoreReleaseProtocol.Target(root,self.path));File.Delete(Safe(root,RecordName));
+   }
+  }
   public static CoreInstallRecord Read(string root) {root=Root(root);return ReadRecord(root,ReadBytes(Safe(root,RecordName),CoreReleaseProtocol.MaxManifestBytes));}
   internal static CoreInstallRecord ReadRecord(string root,byte[] bytes) {
    CoreReleaseProtocol.ReadStoredObject(bytes,"schema","root","installationId","version","files");

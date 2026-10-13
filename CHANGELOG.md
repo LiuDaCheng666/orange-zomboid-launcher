@@ -1,9 +1,12 @@
-# Changelog
+# 更新记录
 
-## 1.1.0 — Unreleased
+## 1.1.0 — 尚未正式发布
 
-- First formally versioned launcher build using the installed file layout.
-- Establish a single VERSION authority and authenticated release metadata for core updates.
-- Earlier single-executable builds are legacy unversioned builds; they are not designated 1.0.0.
+- 首次使用明确版本号的启动器核心文件布局；界面、依赖与工具桥接资源独立存放。
+- 全部版本信息来自 VERSION；核心更新使用 RSA SHA-256 签名清单及逐文件哈希校验。
+- 安装包选择新的空目录；完整 ZIP 解压后可运行，并在首次启动时验证签名、绑定当前目录。
+- 核心包不包含第三方光影或原作者封面，不自动选择 Eclipse，保留用户导入的光影与已有选择。
+- 核心升级失败保留诊断及恢复资料；卸载仅删除校验通过的自有文件，保留个人文件。
+- 早期单 EXE 属于未记录正式版本号的旧构建，不追称为 1.0.0。
 
-Published versions must never be reused for different release files.
+已经发布的版本号不得用于另一组不同文件。当前更新助手与界面集成尚需完成最终验证，尚未上传 GitHub Release。
