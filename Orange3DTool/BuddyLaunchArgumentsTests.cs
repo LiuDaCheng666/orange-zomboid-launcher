@@ -3,9 +3,9 @@ using System.IO;
 namespace PZ3D {
  static class BuddyLaunchArgumentsTests {
   static void Check(bool b,string name){SteamLaunchOptionsTests.Check(b,name);}
-  public static int Main(string[] args){try{if(Array.IndexOf(args,"--java-boundary")>=0)JavaBoundary();else if(Array.IndexOf(args,"--bat-context")>=0)BatContext();else Run();return 0;}catch(Exception ex){Console.WriteLine(ex);return 1;}}
+  public static int Main(string[] args){try{if(Array.IndexOf(args,"--java-boundary")>=0)JavaBoundary();else if(Array.IndexOf(args,"--bat-context")>=0)BatContext();else if(Array.IndexOf(args,"--bat-quoted-block")>=0)QuotedContext(false);else if(Array.IndexOf(args,"--bat-quoted-caret")>=0)QuotedContext(true);else if(Array.IndexOf(args,"--bat-lookalikes")>=0)BatLookalikes();else Run();return 0;}catch(Exception ex){Console.WriteLine(ex);return 1;}}
   public static void Run(){
-   JavaBoundary();BatContext();
+   JavaBoundary();BatContext();QuotedContext(false);QuotedContext(true);BatLookalikes();
    GuardRegression();
    foreach(string arg in new[]{"-javaagent:ZombieBuddy.jar","-javaagent:\"C:\\My Mods\\ZombieBuddy.jar\"","-agentlib:zbNative","-agentpath:C:\\mods\\zbNative.dll"})Check(BuddyLaunchArguments.Classify(arg)==BuddyArgumentKind.Known,"exact Buddy recognized");
    foreach(string arg in new[]{"-Dnote=ZombieBuddy","-javaagent:MyZombieBuddy.jar","-javaagent:ZombieBuddy.jar.bak","-agentlib:other","-agentlib:zbNativeExtra","-agentpath:C:\\mods\\myzbNative.dll"})Check(BuddyLaunchArguments.Classify(arg)==BuddyArgumentKind.None,"lookalike and unrelated arguments preserved");
@@ -28,6 +28,15 @@ namespace PZ3D {
   }
   static void BatContext(){
    foreach(string text in new[]{"if exist game.jar (\r\n java -agentlib:zbNative -jar game.jar\r\n)","java -agentlib:zbNative -jar first.jar\r\nif exist game.jar (\r\n java -agentlib:zbNative -jar game.jar\r\n)","echo continued ^\r\njava -agentlib:zbNative -jar game.jar","if exist game.jar ^\r\njava -agentlib:zbNative -jar game.jar","(\r\n set _JAVA_OPTIONS=-agentlib:zbNative\r\n)"}){var result=BuddyLaunchArguments.CleanBat(text);Check(!result.Safe&&!result.Changed&&result.RemovedCount==0&&result.Text==text,"block or continuation keeps complete BAT unchanged");}
+  }
+  static void QuotedContext(bool continuation){
+   string text=continuation?"echo continued ^\r\njava -agentlib:z\"bNative\" -jar game.jar":"if exist game.jar (\r\n java -agentlib:z\"bNative\" -jar game.jar\r\n)";var result=BuddyLaunchArguments.CleanBat(text);Check(!result.Safe&&!result.Changed&&result.RemovedCount==0&&result.Text==text,"normalized quoted Buddy refuses complete "+(continuation?"continued":"block")+" BAT");
+   string root=Path.Combine(LauncherTestPaths.Root,"quoted-bat-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");File.WriteAllText(Path.Combine(e.Game,"ProjectZomboid64.bat"),text);SteamLaunchOptionsTests.Reject(()=>e.Guard(),"Engine guard refuses normalized Buddy in ambiguous context");
+  }
+  static void BatLookalikes(){
+   string root=Path.Combine(LauncherTestPaths.Root,"lookalike-bat-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");
+   foreach(string text in new[]{"echo (hello)\r\njava -Dnote=-agentlib:zbNative -jar game.jar","echo (hello)\r\njava -Dnote=-agentlib:z\"bNative\" -jar game.jar","echo (hello)\r\njava -jar game.jar -agentlib:z\"bNative\"","echo (hello)\r\njava -cp -agentlib:z\"bNative\" GameMain","echo (hello)\r\nset _JAVA_OPTIONS=-Dnote=-agentlib:zbNative"}){var result=BuddyLaunchArguments.CleanBat(text);Check(result.Safe&&!result.Changed&&result.RemovedCount==0&&result.Text==text,"property game and classpath lookalikes remain safe unchanged BAT");File.WriteAllText(Path.Combine(e.Game,"ProjectZomboid64.bat"),text);e.Guard();Check(true,"non-agent BAT lookalike never blocks Engine guard");}
+   var normalized=BuddyLaunchArguments.CleanBat("java -agentlib:z\"bNative\" -jar game.jar");Check(normalized.Safe&&normalized.RemovedCount==1&&normalized.Text=="java -jar game.jar","same normalized actual JVM agent is cleaned in unambiguous invocation");
   }
   static void GuardRegression(){
    string root=Path.Combine(LauncherTestPaths.Root,"buddy-guard-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\",\"-Dnote=zbNative\",\"-javaagent:OtherZombieBuddy.jar\"]}");string bat=Path.Combine(e.Game,"ProjectZomboid64.bat");File.WriteAllText(bat,"java -Dnote=zbNative -jar game.jar");e.Guard();Check(true,"unrelated BAT text and normal JSON loader do not block guard");e.Switch(false,false);string after=File.ReadAllText(e.Config);Check(after.Contains("-Dnote=zbNative")&&after.Contains("OtherZombieBuddy.jar")&&!after.Contains("-agentlib:zbNative"),"Switch removes only exact Buddy and preserves lookalike arguments");

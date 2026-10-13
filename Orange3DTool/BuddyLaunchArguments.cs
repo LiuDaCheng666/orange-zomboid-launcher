@@ -75,15 +75,24 @@ namespace PZ3D {
    }
    if(boundary<0)throw new FormatException();return CleanTokens(text,agents);
   }
+  static BuddyCleanupResult CleanBatLine(string text){
+   var assignment=Regex.Match(text,@"^(?<prefix>\s*@?(?i:set)\s+)(?<quote>""?)(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$");
+   if(assignment.Success){
+    string value=assignment.Groups["value"].Value,quote=assignment.Groups["quote"].Value;if(quote.Length>0){if(!value.EndsWith("\""))throw new FormatException();value=value.Substring(0,value.Length-1);}
+    var args=Tokens(value);if(!args.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))return new BuddyCleanupResult(text,text,0,true);
+    if(!new[]{"_JAVA_OPTIONS","JAVA_TOOL_OPTIONS","JDK_JAVA_OPTIONS","JAVA_OPTS"}.Contains(assignment.Groups["name"].Value,StringComparer.OrdinalIgnoreCase))throw new FormatException();
+    var clean=CleanTokens(value,args);return new BuddyCleanupResult(text,text.Substring(0,assignment.Groups["value"].Index)+clean.Text+quote,clean.RemovedCount,true);
+   }
+   var tokens=Tokens(text);if(tokens.Count>0){string executable=tokens[0].Value.TrimStart('@').Replace('\\','/').Split('/').Last();if(new[]{"java","java.exe","javaw","javaw.exe"}.Contains(executable,StringComparer.OrdinalIgnoreCase)){
+    try{return CleanJavaInvocation(text,tokens);}catch(FormatException){if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))throw;return new BuddyCleanupResult(text,text,0,true);}
+   }}
+   if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))throw new FormatException();return new BuddyCleanupResult(text,text,0,true);
+  }
   internal static BuddyCleanupResult CleanBat(string bat){
    if(bat==null||bat.Length>Limit)return new BuddyCleanupResult(bat,bat,0,false);int total=0;var output=new StringBuilder();
-   try{var lines=Regex.Matches(bat,@"[^\r\n]*(?:\r\n|\r|\n|$)").Cast<Match>().Where(m=>m.Length>0).Select(m=>m.Value).ToArray();var active=lines.Where(line=>!BatComment(line)).ToArray();if(active.Any(Candidate)&&active.Any(line=>line.IndexOfAny(new[]{'(',')','^'})>=0||Regex.IsMatch(line,@"^\s*@?(?i:if|for|else)(?:\s|$)")))throw new FormatException();
+   try{var lines=Regex.Matches(bat,@"[^\r\n]*(?:\r\n|\r|\n|$)").Cast<Match>().Where(m=>m.Length>0).Select(m=>m.Value).ToArray();bool complex=lines.Where(line=>!BatComment(line)).Any(line=>line.IndexOfAny(new[]{'(',')','^'})>=0||Regex.IsMatch(line,@"^\s*@?(?i:if|for|else)(?:\s|$)"));
     foreach(string raw in lines){string text=raw.TrimEnd('\r','\n'),ending=raw.Substring(text.Length);if(BatComment(text)){output.Append(raw);continue;}
-     var tokens=Tokens(text);bool candidate=tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None)||Candidate(text);if(!candidate){output.Append(raw);continue;}
-     if(text.IndexOfAny(new[]{'%','!','^','&','|','<','>','(',')'})>=0)throw new FormatException();
-     var assignment=Regex.Match(text,@"^(?<prefix>\s*@?(?i:set)\s+)(?<quote>""?)(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$");BuddyCleanupResult cleaned;
-     if(assignment.Success){string name=assignment.Groups["name"].Value;if(!new[]{"_JAVA_OPTIONS","JAVA_TOOL_OPTIONS","JDK_JAVA_OPTIONS","JAVA_OPTS"}.Contains(name,StringComparer.OrdinalIgnoreCase))throw new FormatException();string value=assignment.Groups["value"].Value,quote=assignment.Groups["quote"].Value;if(quote.Length>0){if(!value.EndsWith("\""))throw new FormatException();value=value.Substring(0,value.Length-1);}cleaned=CleanCommandLine(value);if(!cleaned.Safe)throw new FormatException();output.Append(text.Substring(0,assignment.Groups["value"].Index)).Append(cleaned.Text).Append(quote).Append(ending);}
-     else{if(tokens.Count==0)throw new FormatException();string executable=tokens[0].Value.TrimStart('@').Replace('\\','/').Split('/').Last();if(!new[]{"java","java.exe","javaw","javaw.exe"}.Contains(executable,StringComparer.OrdinalIgnoreCase))throw new FormatException();cleaned=CleanJavaInvocation(text,tokens);if(!cleaned.Safe)throw new FormatException();output.Append(cleaned.Text).Append(ending);}total+=cleaned.RemovedCount;
+     var cleaned=CleanBatLine(text);if(cleaned.RemovedCount>0&&(complex||text.IndexOfAny(new[]{'%','!','^','&','|','<','>','(',')'})>=0))throw new FormatException();output.Append(cleaned.Text).Append(ending);total+=cleaned.RemovedCount;
     }return new BuddyCleanupResult(bat,output.ToString(),total,true);
    }catch{return new BuddyCleanupResult(bat,bat,0,false);}
   }
