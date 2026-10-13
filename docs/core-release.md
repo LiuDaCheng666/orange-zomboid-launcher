@@ -1,13 +1,13 @@
 # 核心发布与签名
 
-正式版本来自根目录 VERSION（当前 1.1.0）。旧单 EXE 为未正式编号构建，不追称 1.0.0。已经发布的版本不可重用；构建脚本拒绝覆盖已有输出目录。此阶段尚缺 Task 4 更新助手和界面集成，不能将隔离测试入口冒充正式发布。
+正式版本来自根目录 VERSION（当前 1.1.0）。旧单 EXE 为未正式编号构建，不追称 1.0.0。已经发布的版本不可重用；构建脚本拒绝覆盖已有输出目录。1.1.0 已完成本地正式签名包、安装器和 ZIP 启动验证；实际 WebView2 更新与回滚使用单独的隔离 fixture 入口，绝不作为正式成品或线上发布。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
 ./Build-Tests.ps1 -Entry PZ3D.CorePackageTests -Output ./artifacts/core-package-tests.exe
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
-# Task 4 完成后：
+# 使用已有保护私钥：
 ./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml
 ```
 
@@ -40,18 +40,24 @@
 
 `Build-Setup.ps1 -CoreReleaseDirectory <发布目录>` 构建正式安装器；其 `-PublicKey` 仅用于明确选择信任公钥（测试用自己的 fixture 公钥）。无参数仍保留旧单 EXE 安装器验证兼容。安装器 `--verify-setup` 在系统临时目录创建隔离安装，核对 v2 版本/全部哈希并验证卸载保留未知个人文件。
 
-## 首次启动及 Task 4 集成
+## 首次启动及更新集成
 
 ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntime/CoreBootstrap/manifest.json` 和 `manifest.sig` 经嵌入公钥验证后，`CoreDeployment.AdoptPortable(root)` 校验所有现有核心文件，原位创建 installationId、owner marker 与 schema 2 安装记录。失败不会把修改的文件认领为自有文件；安装器原有“空目录”要求不受影响。
 
 正常启动顺序是 `AdoptPortable(root)` → `CoreUpdateTransaction.Recover(root)` → `ModernAssets.Prepare()` → 初始化界面。已有记录时 AdoptPortable 验证当前记录匹配有效签名清单并幂等返回，不预检磁盘 sidecar 字节，所以 Recover 可以先恢复中断更新造成的损坏。该认证从 bootstrap 或现存更新任务目录查找匹配的签名清单，绝不信任磁盘公钥或仅凭未签名记录。完全丢失/破坏签名资料则失败关闭。
 
-健康检查启动分支必须在普通恢复分支前处理，不能调用 Recover；由 Task 4 校验任务、候选进程身份与 nonce，真实加载 UI/bridge 后确认健康。已有记录的 AdoptPortable 是无写入、无互斥锁的认证读取，因此候选进程可在更新助手持有事务锁期间初始化。`ModernAssets.Prepare()` 内部也执行幂等 AdoptPortable，再通过 `PrepareOwned` 验证全部 Web sidecar。工具桥接读取 `BundledAssets.ReadOwnAsset`；其正式分支读取已认证安装记录并核对 Assets 字节，旧测试/截图构建无嵌入公钥时才回退内嵌资源。
+健康检查启动分支必须在普通恢复分支前处理，不能调用 Recover；由原生宿主和助手校验任务、候选进程 PID/启动时间/路径与 nonce，真实加载 UI/bridge 后确认健康。已有记录的 AdoptPortable 是无写入、无互斥锁的认证读取，因此候选进程可在更新助手持有事务锁期间初始化。`ModernAssets.Prepare()` 内部也执行幂等 AdoptPortable，再通过 `PrepareOwned` 验证全部 Web sidecar。工具桥接读取 `BundledAssets.ReadOwnAsset`；其正式分支读取已认证安装记录并核对 Assets 字节，旧测试/截图构建无嵌入公钥时才回退内嵌资源。
 
 卸载后仅剩运行中的卸载器时，复制已核对哈希的自身至已绑定 installationId 的 runtime 子路径。worker 校验自身路径/哈希、父 PID/启动时间/路径及根目录 ownership，等待父退出，再核对只剩自有卸载器并删除其与记录。绝不执行任意参数指定程序或递归删除根目录。worker 和任务备份仍作为诊断保留。
 
-初次安装中断可能留下 runtime 资料；选择新空目录重试，不自动清空旧目录。Windows 传统 .NET 长路径限制仍适用，请选择较短的独立目录。真实 WebView2 健康确认、游戏/工具退出协调及最终正式包验证归 Task 4；该阶段测试不能证明游戏内效果。
+初次安装中断可能留下 runtime 资料；选择新空目录重试，不自动清空旧目录。Windows 传统 .NET 长路径限制仍适用，请选择较短的独立目录。真实 WebView2 健康确认、失败页面超时回滚、旧页面重启一次及自有卸载已通过隔离测试。测试使用合成游戏/用户/数据根目录，不连接 Steam 或更改实际授权；不能证明游戏内效果。
 
 ## 发布前
 
-完成 Task 4、所有回归与真实启动验证后，核对 CHANGELOG、版本、完整文件哈希和公钥身份，再由维护者明确决定发布。可以预备 GitHub 草稿 Release，但本次实现没有创建、上传或推送任何 Release。
+发布前再次核对 CHANGELOG、版本、完整文件哈希和公钥身份，由维护者明确决定发布。本次实现没有创建草稿、上传 Release、推送分支或合并 main。官方 latest 渠道没有发布时，显示不可用，绝不冒充最新版。
+
+## 本地验证边界
+
+`Test-CoreNativeUpdate.ps1` 构建临时签名 fixture，运行真实 ModernForm/WebView2、独立原生更新通道及正式助手入口；验证仅 app.js 下载、健康成功、故意坏页面回滚、旧界面重启一次和自有卸载。其 A 的 VERSION、EXE AppVersion、清单和记录均为 1.1.0；B 仅用于文件稀疏性与协议测试，清单/记录为 1.1.1，字节未变的 VERSION/EXE 仍为 1.1.0。此 fixture 不可发布，也不证明真实版本升级仅下载 JS。正式新版本必须同步 VERSION 与所有 EXE 元数据，通常需要下载完整小 EXE；本实现没有二进制差分。
+
+正式包保持18文件允许清单，三个 EXE/嵌入 VERSION/磁盘 VERSION/发布清单/安装记录均为1.1.0。正式密钥从既有仓库外受保护路径显式传入，未改写或生成新正式密钥。本地实测产物、SHA-256、截图与准确命令见 `docs/core-release-verification.md`。

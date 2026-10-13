@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Diagnostics;
 
 namespace PZ3D {
  public sealed class CoreUpdatePlan {
@@ -13,6 +14,9 @@ namespace PZ3D {
  public sealed class CoreUpdateTaskInfo {
   public string TaskId,Root,Directory,InstallationId,Version,State,Nonce,Error;
   public bool HealthConfirmed;
+  public int HealthPid;
+  public long HealthStartTicks;
+  public string HealthPath;
  }
  public sealed class CoreUpdateResult {
   public string TaskId,State,Message;
@@ -24,6 +28,7 @@ namespace PZ3D {
  // Journals describe intent before any installed bytes change. Every backup and
  // candidate is rechecked against its recorded digest before use during recovery.
  public static class CoreUpdateTransaction {
+  sealed class HealthReceipt {public string nonce,path;public int pid;public long startTicks;}
   internal sealed class Journal {
    public string root,installationId,taskId,nonce,state,baselineRecord,targetRecord,error;
    public int started;
@@ -119,8 +124,9 @@ namespace PZ3D {
   public static CoreUpdateTaskInfo GetTaskInfo(string root,string taskId,string publicKeyXml) {
    root=CoreDeployment.Root(root);var j=Load(root,taskId);var target=VerifyStored(root,j,publicKeyXml);ValidateTargetRecord(root,j,target);
    string receipt=PathAt(root,taskId,"health-confirmed");
-   bool confirmed=(j.state=="PendingHealth"||j.state=="Succeeded")&&File.Exists(receipt)&&CoreDeployment.Utf8.GetString(CoreDeployment.ReadBytes(receipt,64))==j.nonce;
-   return new CoreUpdateTaskInfo {TaskId=taskId,Root=root,Directory=CoreDeployment.Safe(root,CoreDeployment.Tasks+"/"+taskId),InstallationId=j.installationId,Version=target.version,State=j.state,Nonce=j.nonce,Error=j.error,HealthConfirmed=confirmed};
+   HealthReceipt health=null;if((j.state=="PendingHealth"||j.state=="Succeeded")&&File.Exists(receipt)){byte[] raw=CoreDeployment.ReadBytes(receipt,8192);CoreReleaseProtocol.ReadStoredObject(raw,"nonce","path","pid","startTicks");health=CoreDeployment.Json.Deserialize<HealthReceipt>(CoreDeployment.Utf8.GetString(raw));}
+   bool confirmed=health!=null&&health.nonce==j.nonce&&health.pid>0&&health.startTicks>0&&Path.IsPathRooted(health.path);
+   return new CoreUpdateTaskInfo {TaskId=taskId,Root=root,Directory=CoreDeployment.Safe(root,CoreDeployment.Tasks+"/"+taskId),InstallationId=j.installationId,Version=target.version,State=j.state,Nonce=j.nonce,Error=j.error,HealthConfirmed=confirmed,HealthPid=confirmed?health.pid:0,HealthStartTicks=confirmed?health.startTicks:0,HealthPath=confirmed?health.path:null};
   }
   static void ValidateTargetRecord(string root,Journal j,CoreManifest target) {if(j.targetRecord!=Convert.ToBase64String(RecordBytes(TargetRecord(root,j,target))))throw new InvalidDataException("Journal target record differs from signed release.");}
   public static string HealthArguments(string root,string taskId) {return HealthArguments(root,taskId,CoreUpdateTrust.PublicKeyXml);}
@@ -131,13 +137,14 @@ namespace PZ3D {
    // Confirmation reads the pending journal and never invokes normal recovery.
    root=CoreDeployment.Root(root);var j=Load(root,taskId);var target=VerifyStored(root,j,publicKeyXml);ValidateTargetRecord(root,j,target);
    if(j.state!="PendingHealth"||j.nonce!=nonce)throw new InvalidDataException("Health task or nonce is not pending.");
-   ValidateInstalled(root,j,target);CoreDeployment.Atomic(root,Rel(taskId,"health-confirmed"),CoreDeployment.Utf8.GetBytes(nonce));
+   ValidateInstalled(root,j,target);using(var current=Process.GetCurrentProcess()){var receipt=new HealthReceipt{nonce=nonce,pid=current.Id,startTicks=current.StartTime.ToUniversalTime().Ticks,path=current.MainModule.FileName};CoreDeployment.Atomic(root,Rel(taskId,"health-confirmed"),CoreDeployment.Utf8.GetBytes(CoreDeployment.Json.Serialize(receipt)));}
   }
   public static CoreUpdateResult Apply(string root,string taskId,Func<string,bool> health,Action<string> checkpoint=null) {return Apply(root,taskId,health,checkpoint,CoreUpdateTrust.PublicKeyXml);}
   public static CoreUpdateResult Apply(string root,string taskId,Func<string,bool> health,Action<string> checkpoint,string publicKeyXml) {
    root=CoreDeployment.Root(root);using(CoreDeployment.Acquire(root))return ApplyLocked(root,taskId,health,checkpoint,publicKeyXml);
   }
-  internal static CoreUpdateResult ApplyLocked(string root,string taskId,Func<string,bool> health,Action<string> checkpoint,string key) {
+  internal static CoreUpdateResult ApplyWithRelease(string root,string taskId,Func<string,bool> health,Action releaseCandidate,string key){root=CoreDeployment.Root(root);using(CoreDeployment.Acquire(root))return ApplyLocked(root,taskId,health,null,key,releaseCandidate);}
+  internal static CoreUpdateResult ApplyLocked(string root,string taskId,Func<string,bool> health,Action<string> checkpoint,string key,Action releaseCandidate=null) {
    if(health==null)throw new ArgumentNullException("health");var j=Load(root,taskId);
    if(j.state!="Staged")throw new CoreUpdateException(j.state,"This task cannot be applied again.",null);
    CoreManifest target;CoreInstallRecord baseline;CoreUpdatePlan plan;
@@ -169,6 +176,7 @@ namespace PZ3D {
     ValidateInstalled(root,j,target);j.state="Succeeded";Save(root,j);return Result(j);
    }catch(Exception failure) {
     j.error=failure.Message;
+    if(releaseCandidate!=null)try{releaseCandidate();}catch(Exception release){j.state="Conflicted";j.error="Candidate release failed; installed files retained: "+release.Message;Save(root,j);throw new CoreUpdateException("Conflicted",j.error,release);}
     try{Rollback(root,j,target,checkpoint);}catch(Exception rollback) {j.state="Conflicted";j.error="Apply: "+failure.Message+"; recovery: "+rollback.Message;try{Save(root,j);}catch{}throw new CoreUpdateException("Conflicted",j.error,rollback);}
     throw new CoreUpdateException("RolledBack","Update failed; previous installation restored. "+failure.Message,failure);
    }

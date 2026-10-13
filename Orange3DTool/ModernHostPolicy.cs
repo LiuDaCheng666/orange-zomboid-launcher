@@ -9,10 +9,17 @@ namespace PZ3D {
    Uri uri;if(!Uri.TryCreate(source,UriKind.Absolute,out uri)||uri.Scheme!="https"||uri.Host!="orange.local"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.AbsolutePath!="/index.html")throw new Exception("拒绝非本地受信界面的请求。");
    if(text==null||text.Length>262144)throw new Exception("界面请求过大或为空。");
    var request=new JavaScriptSerializer{MaxJsonLength=262144,RecursionLimit=24}.Deserialize<Dictionary<string,object>>(text);object id,action,payload;
-   if(request==null||!request.TryGetValue("id",out id)||!(id is string)||!Regex.IsMatch((string)id,@"^[A-Za-z0-9_-]{1,96}$")||!request.TryGetValue("action",out action)||!(action is string)||!Actions.Contains((string)action))throw new Exception("未知或无效的界面操作。");
+   if(request==null||!request.TryGetValue("id",out id)||!(id is string)||!Regex.IsMatch((string)id,@"^[A-Za-z0-9_-]{1,96}$")||!request.TryGetValue("action",out action)||!(action is string)||(!Actions.Contains((string)action)&&!CoreAction((string)action)))throw new Exception("未知或无效的界面操作。");
    if(!request.TryGetValue("payload",out payload)||!(payload is Dictionary<string,object>))throw new Exception("操作参数必须是对象。");
+   if(CoreAction((string)action)) {
+    var p=(Dictionary<string,object>)payload;object protocol,confirmed,drafts;
+    bool apply=(string)action=="coreUpdateApply";
+    if(!p.TryGetValue("protocol",out protocol)||!(protocol is int)||(int)protocol!=1||p.Count!=(apply?3:1))throw new Exception("启动器页面与本机更新协议不兼容，请重新安装完整版本。");
+    if(apply&&(!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed||!p.TryGetValue("drafts",out drafts)||!(drafts is bool)||(bool)drafts))throw new Exception("请先保存编辑，并确认重启启动器。");
+   }
    if(((string)action=="chooseGame"||(string)action=="importShader")&&((Dictionary<string,object>)payload).Count>0)throw new Exception("文件与目录必须由本机选择窗口确认，界面不能提供路径。");
    return request;
   }
+  internal static bool CoreAction(string action){return action=="coreUpdateStatus"||action=="coreUpdateCheck"||action=="coreUpdateDownload"||action=="coreUpdateCancel"||action=="coreUpdateApply";}
  }
 }
