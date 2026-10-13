@@ -18,6 +18,8 @@ namespace PZ3D {
   readonly Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> fetch;
   readonly Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> networkFetch;
   readonly SemaphoreSlim networkLane=new SemaphoreSlim(1,1);readonly List<CancellationTokenSource> networkRequests=new List<CancellationTokenSource>();CancellationTokenSource hallRequest;
+  sealed class HallReceipt {public long Order;public string Id;}
+  long hallOrder;string hallReceiptId="";
   public static readonly HashSet<string> NativeNetworkReads=new HashSet<string>{"steamConnection","steamSubscriptions","steamSearch","steamDetails","serverHall","serverQuery","updatesGet"};
   public Action<int,string> Progress;
   public Action<string,object> Event;
@@ -37,11 +39,14 @@ namespace PZ3D {
   void Check(){cancel.Token.ThrowIfCancellationRequested();foreach(string path in new[]{engine.Game,engine.Config,engine.Mods,user,data})LauncherMaintenance.NoReparse(path);if(LaunchProfiles.Pending(engine))throw new Exception("启动会话尚未恢复，请退出游戏并刷新状态后再修改。");engine.Guard();}
   public void Cancel(){lock(gate){if(!disposed){cancel.Cancel();foreach(var request in networkRequests)request.Cancel();}}}
   public static bool IsHallCancel(string action,Dictionary<string,object> payload){object scope;return action=="cancel"&&payload!=null&&payload.TryGetValue("scope",out scope)&&scope is string&&(string)scope=="hall";}
-  void CancelHall(){lock(gate){if(!disposed&&hallRequest!=null)hallRequest.Cancel();}}
+  void CancelHall(string requestId){lock(gate){if(!disposed&&hallReceiptId==requestId){hallOrder++;hallReceiptId="";if(hallRequest!=null)hallRequest.Cancel();}}}
+  static string NetworkId(Dictionary<string,object> payload){object raw;string id=payload.TryGetValue("requestId",out raw)?raw as string:Guid.NewGuid().ToString("N");if(string.IsNullOrEmpty(id)||id.Length>80||!Regex.IsMatch(id,@"^[A-Za-z0-9_-]+$"))throw new Exception("网络请求标识无效。");return id;}
+  public void ReserveHall(Dictionary<string,object> payload){string id=NetworkId(payload);lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");hallReceiptId=id;payload["requestId"]=id;payload["_hallReceipt"]=new HallReceipt{Order=++hallOrder,Id=id};if(hallRequest!=null)hallRequest.Cancel();}}
+  void DrainNetworkBeforeLaunch(){lock(gate){hallOrder++;hallReceiptId="";foreach(var request in networkRequests)request.Cancel();}var watch=Stopwatch.StartNew();while(true){cancel.Token.ThrowIfCancellationRequested();lock(gate)if(networkRequests.Count==0)return;if(watch.ElapsedMilliseconds>7000)throw new Exception("Steam 查询尚未释放，未启动游戏。请稍后重试。");Thread.Sleep(20);}}
   object ExecuteNetwork(string action,Dictionary<string,object> payload){
-   payload=payload??new Dictionary<string,object>();object raw;string requestId=payload.TryGetValue("requestId",out raw)?raw as string:Guid.NewGuid().ToString("N");if(string.IsNullOrEmpty(requestId)||requestId.Length>80||!Regex.IsMatch(requestId,@"^[A-Za-z0-9_-]+$"))throw new Exception("网络请求标识无效。");
+   payload=payload??new Dictionary<string,object>();object receiptValue;HallReceipt receipt=null;if(action=="serverHall"){if(!payload.TryGetValue("_hallReceipt",out receiptValue)||!(receiptValue is HallReceipt))ReserveHall(payload);receipt=(HallReceipt)payload["_hallReceipt"];}string requestId=NetworkId(payload);
    var tokenSource=new CancellationTokenSource();Engine selected;
-   lock(gate){if(disposed){tokenSource.Dispose();throw new ObjectDisposedException("ModernController");}if(busy){tokenSource.Dispose();throw new Exception("正在修改本地文件，请完成后再查询网络。");}if(networkRequests.Count>=16){tokenSource.Dispose();throw new Exception("等待的网络请求过多，请稍后重试。");}selected=engine;if(action=="serverHall"){if(hallRequest!=null)hallRequest.Cancel();hallRequest=tokenSource;}networkRequests.Add(tokenSource);}
+   lock(gate){if(disposed){tokenSource.Dispose();throw new ObjectDisposedException("ModernController");}if(busy){tokenSource.Dispose();throw new Exception("正在修改本地文件，请完成后再查询网络。");}if(receipt!=null&&(receipt.Order!=hallOrder||receipt.Id!=requestId)){tokenSource.Dispose();throw new OperationCanceledException("已忽略被刷新替代的大厅请求。");}if(networkRequests.Count>=16){tokenSource.Dispose();throw new Exception("等待的网络请求过多，请稍后重试。");}selected=engine;if(action=="serverHall")hallRequest=tokenSource;networkRequests.Add(tokenSource);}
    bool acquired=false;
    try{if(action.StartsWith("steam",StringComparison.Ordinal)||action=="serverHall"){networkLane.Wait(tokenSource.Token);acquired=true;}tokenSource.Token.ThrowIfCancellationRequested();var result=networkFetch(selected,action=="serverHall"?"hall":action.StartsWith("steam",StringComparison.Ordinal)?action.Substring(5).ToLowerInvariant():action,payload,(v,t)=>{var callback=Event;if(callback!=null)callback("networkProgress",new{requestId=requestId,value=v,text=t});},tokenSource.Token,batch=>{tokenSource.Token.ThrowIfCancellationRequested();var node=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(new JavaScriptSerializer().Serialize(batch));object rows;if(!node.TryGetValue("servers",out rows))throw new Exception("大厅增量响应缺少服务器列表。");var callback=Event;if(callback!=null)callback("hallBatch",new{requestId=requestId,servers=rows});});tokenSource.Token.ThrowIfCancellationRequested();return result;}
    catch(Exception ex){try{journal.Diagnostic(action+" · 网络读取未完成 · "+ex.Message);}catch{}throw;}
@@ -49,11 +54,11 @@ namespace PZ3D {
   }
   public object Execute(string action,Dictionary<string,object> payload){
    if(action=="taskGet")return journal.Snapshot();if(action=="playtimeGet")return PlaytimeTracker.Snapshot(data);
-   if(action=="cancel"){if(IsHallCancel(action,payload)){CancelHall();return Message("已停止本次大厅查询，已收到的列表保留。");}Cancel();return Message("已请求取消；当前安全文件阶段完成后停止。");}
+   if(action=="cancel"){if(IsHallCancel(action,payload)){CancelHall(Text(payload,"requestId"));return Message("已停止指定大厅查询，已收到的列表保留。");}Cancel();return Message("已请求取消；当前安全文件阶段完成后停止。");}
    if(NativeNetworkReads.Contains(action))return ExecuteNetwork(action,payload);
    lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");if(action=="setGame"&&networkRequests.Count>0)throw new Exception("网络查询进行中，不能切换安装目录；请取消查询后再选择。");if(busy)throw new Exception("正在执行任务，请等待完成或取消。");busy=true;cancel.Dispose();cancel=new CancellationTokenSource();}
    bool mutation=!NativeReads.Contains(action);
-   try{if(mutation){journal.Begin(action,TaskTitle(action,payload));Report(-1,"正在处理 "+TaskTitle(action,payload));}object result=Dispatch(action,payload??new Dictionary<string,object>());if(mutation){string message=SafeResultMessage(result,TaskTitle(action,payload));lock(gate){log.Add(DateTime.Now.ToString("HH:mm:ss")+" "+message);if(log.Count>100)log.RemoveAt(0);}bool partial=message.Contains("[失败]");journal.Finish(partial?"partial":"completed",message);Report(partial?-1:100,partial?"部分完成；请核对各组件失败原因和当前配置。":"操作完成；游戏内效果仍需验证");}return result;}
+   try{if(mutation){journal.Begin(action,TaskTitle(action,payload));Report(-1,"正在处理 "+TaskTitle(action,payload));}if(action=="launch"||action=="profileLaunch")DrainNetworkBeforeLaunch();object result=Dispatch(action,payload??new Dictionary<string,object>());if(mutation){string message=SafeResultMessage(result,TaskTitle(action,payload));lock(gate){log.Add(DateTime.Now.ToString("HH:mm:ss")+" "+message);if(log.Count>100)log.RemoveAt(0);}bool partial=message.Contains("[失败]");journal.Finish(partial?"partial":"completed",message);Report(partial?-1:100,partial?"部分完成；请核对各组件失败原因和当前配置。":"操作完成；游戏内效果仍需验证");}return result;}
    catch(Exception ex){if(!mutation){try{journal.Diagnostic(action+" · 读取失败 · "+ex.Message);}catch{}}if(mutation){journal.Finish(ex is OperationCanceledException?"cancelled":"failed",ex.Message);lock(gate){log.Add(DateTime.Now.ToString("HH:mm:ss")+" "+LauncherJournal.Sanitize(ex.Message));}Report(-1,ex is OperationCanceledException?"任务已取消":ex.Message);}throw;}
    finally{lock(gate)busy=false;}
   }
