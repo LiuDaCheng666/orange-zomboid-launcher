@@ -194,7 +194,7 @@ Keep native fixtures able to validate the same boundary that the future bridge w
 ### Task 5: Takeover controller, confirmations and visible UI
 
 **Files:**
-- Modify: `Orange3DTool/ModernController.cs`, `Orange3DTool/ModernHostPolicy.cs`, `Orange3DTool/LauncherFeatures.cs`, `Orange3DTool/Program.cs` help, `Orange3DTool/ModernHost.cs` only for native routing/confirmation if needed.
+- Modify: `Orange3DTool/ModernController.cs`, `Orange3DTool/ModernHostPolicy.cs`, `Orange3DTool/LauncherFeatures.cs`, `Orange3DTool/Program.cs` help and narrowly scoped legacy installation-conflict affordance, `Orange3DTool/ModernHost.cs` only for native routing/confirmation if needed.
 - Modify: `Orange3DTool/Web/app.js`, `Orange3DTool/Web/app.css`.
 - Create/Test: `Orange3DTool/Web/buddy-takeover-ui-tests.cjs`.
 - Modify/Test: `Orange3DTool/ModernHostTests.cs`, `Orange3DTool/ModernControllerTests.cs`, `Orange3DTool/LauncherFeaturesTests.cs`, `Orange3DTool/Web/memory-policy-ui-tests.cjs`.
