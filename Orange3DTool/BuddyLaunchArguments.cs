@@ -110,9 +110,9 @@ namespace PZ3D {
     char c=text[i];
     if(c=='^'&&!quoted){if(i+1<text.Length)i++;else syntax[i]=c;continue;}
     if(c=='"'){quoted=!quoted;continue;}
-    // In handle duplication (for example 2>&1), ampersand is not a command
+    // In handle duplication (for example 2>&1 or 0<&0), ampersand is not a command
     // boundary. The preceding redirect must itself be active, not escaped.
-    if(c=='&'&&i>0&&syntax[i-1]=='>')continue;
+    if(c=='&'&&i>0&&(syntax[i-1]=='>'||syntax[i-1]=='<'))continue;
     if(!quoted&&"()<>|&".IndexOf(c)>=0)syntax[i]=c;
    }
    return new string(syntax);

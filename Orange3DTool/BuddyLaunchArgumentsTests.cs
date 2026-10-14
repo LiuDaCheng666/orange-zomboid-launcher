@@ -99,7 +99,13 @@ namespace PZ3D {
     "> start-java.bat 2>&1 (\r\necho java -agentlib:zb^\r\nNative -jar game.jar\r\n)\r\n",
     "> start-java.bat if exist game.jar (\r\necho ready\r\n) 2>&1 else (\r\necho java -agentlib:zbNative -jar game.jar\r\n)\r\n",
     "echo ready ^>& java -agentlib:zbNative -jar game.jar\r\n",
-    "echo ready 2>&1 & java -agentlib:zbNative -jar game.jar\r\n"
+    "echo ready 2>&1 & java -agentlib:zbNative -jar game.jar\r\n",
+    "> start-java.bat 0<&0 (\r\necho java -agentlib:zbNative -jar game.jar\r\n)\r\ncall start-java.bat\r\n",
+    "> start-java.bat 2>&1 0<&0 (\r\necho java -agentlib:z\"bNative\" -jar game.jar\r\n)\r\n",
+    "> start-java.bat 0<&0 (\r\necho java -agentlib:zb^\r\nNative -jar game.jar\r\n)\r\n",
+    "> start-java.bat if exist game.jar (\r\necho ready\r\n) 0<&0 else (\r\necho java -agentlib:zbNative -jar game.jar\r\n)\r\n",
+    "echo ready ^<& java -agentlib:zbNative -jar game.jar\r\n",
+    "echo ready 0<&0 & java -agentlib:zbNative -jar game.jar\r\n"
    };
    // Treating literal operators, unrelated output, or Java operands as agents is a break.
    string[] harmless={
@@ -132,7 +138,13 @@ namespace PZ3D {
     "echo -agentlib:zbNative ^>^&1\r\n",
     "echo \"-agentlib:zbNative >&1\"\r\n",
     "echo ready 2>&1 & pause\r\n",
-    "java -Dnote=-agentlib:zbNative -jar game.jar 2>&1 & pause\r\n"
+    "java -Dnote=-agentlib:zbNative -jar game.jar 2>&1 & pause\r\n",
+    "echo -agentlib:zbNative & > ready.txt 0<&0 (\r\necho ready\r\n)\r\n",
+    "> ready.txt 0<&0 (\r\necho ready\r\n) & echo -agentlib:zbNative\r\n",
+    "echo -agentlib:zbNative ^<^&0\r\n",
+    "echo \"-agentlib:zbNative <&0\"\r\n",
+    "echo ready 0<&0 & pause\r\n",
+    "java -Dnote=-agentlib:zbNative -jar game.jar 0<&0 & pause\r\n"
    };
    int failures=0;
    for(int i=0;i<refused.Length;i++){
