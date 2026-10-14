@@ -20,10 +20,14 @@ namespace PZ3D {
    if(operation!="InstallComponents"&&operation!="InstallSelected3D"&&operation!="EnableShootClient")return null;
    var preview=BuddyTakeover.Preview(engine,environment);return preview.supported&&preview.hasConflicts?preview:null;
   }
+  internal static string BuddyTakeoverSummary(BuddyTakeoverResult result){
+   string message=result.cleanupCompleted&&!result.steamVerified?"已清理已识别的游戏文件参数；Steam 启动项未核实、未接管。":result.message;
+   return (result.status=="partial"?"[失败] Steam 重新打开未完成；旧参数清理已校验。\n":"")+message+"\n组件安装仍须继续原安装流程；本次游戏加载待验证。";
+  }
   void LegacyBuddyTakeover(bool recover,Func<string> continueInstall=null){
    if(Program.PreviewMode){Write("预览：旧参数接管只展示界面，未执行修改。");return;}
    BuddyTakeoverResult result=null;
-   Run(()=>{result=ConfirmBuddyTakeover(GetEngine(),recover,(title,body)=>(bool)Invoke(new Func<bool>(()=>MessageBox.Show(this,body,title,MessageBoxButtons.OKCancel,MessageBoxIcon.Warning)==DialogResult.OK)),ReportDownload,downloadCancel.Token);if(result.status=="cancelled")throw new OperationCanceledException(result.message);if(result.status=="failed"||result.status=="confirmationRequired"||result.status=="recoveryRequired")throw new Exception(result.message);return (result.status=="partial"?"[失败] Steam 重新打开未完成；旧参数清理已校验。\n":"")+result.message+"\n组件安装仍须继续原安装流程；本次游戏加载待验证。";},recover?"正在核对接管恢复记录":"正在扫描旧 Buddy 启动参数",()=>{if(continueInstall!=null&&result.cleanupCompleted&&!result.recoveryPending&&MessageBox.Show(this,"旧参数清理已校验。Steam 登录与就绪状态请在客户端确认。\n是否继续刚才的组件安装？安装仍会重新校验文件；Java 授权逐文件决定。","继续原组件安装",MessageBoxButtons.OKCancel,MessageBoxIcon.Question)==DialogResult.OK)Run(continueInstall,"正在继续原组件安装");});
+   Run(()=>{result=ConfirmBuddyTakeover(GetEngine(),recover,(title,body)=>(bool)Invoke(new Func<bool>(()=>MessageBox.Show(this,body,title,MessageBoxButtons.OKCancel,MessageBoxIcon.Warning)==DialogResult.OK)),ReportDownload,downloadCancel.Token);if(result.status=="cancelled")throw new OperationCanceledException(result.message);if(result.status=="failed"||result.status=="confirmationRequired"||result.status=="recoveryRequired")throw new Exception(result.message);return BuddyTakeoverSummary(result);},recover?"正在核对接管恢复记录":"正在扫描旧 Buddy 启动参数",()=>{if(continueInstall!=null&&result.cleanupCompleted&&!result.recoveryPending&&MessageBox.Show(this,BuddyTakeoverSummary(result)+"\nSteam 登录与就绪状态请在客户端确认。\n是否继续刚才的组件安装？安装仍会重新校验文件；Java 授权逐文件决定。","继续原组件安装",MessageBoxButtons.OKCancel,MessageBoxIcon.Question)==DialogResult.OK)Run(continueInstall,"正在继续原组件安装");});
   }
   internal static void DisplayMemoryInfo(NumericUpDown input,Label label,LauncherMemoryInfo info,int heap){
    input.Minimum=1;input.Maximum=Math.Max(1,Math.Max(heap,info.MaximumHeapGiB));input.Value=heap;
