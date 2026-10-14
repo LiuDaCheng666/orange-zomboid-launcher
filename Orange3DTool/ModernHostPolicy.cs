@@ -21,9 +21,11 @@ namespace PZ3D {
    }
    if(((string)action=="chooseGame"||(string)action=="importShader")&&((Dictionary<string,object>)payload).Count>0)throw new Exception("文件与目录必须由本机选择窗口确认，界面不能提供路径。");
    if((string)action=="launchPreflight")ValidatePreflightPayload((Dictionary<string,object>)payload);
+   if((string)action=="gameDiagnostics")GameDiagnostics.ValidatePayload((Dictionary<string,object>)payload);
    if(BuddyAction((string)action))ValidateBuddyPayload((string)action,(Dictionary<string,object>)payload);
    return request;
   }
+  static ModernHostPolicy(){Actions.Add("gameDiagnostics");}
   internal static bool BuddyAction(string action){return action=="buddyPreview"||action=="buddyTakeover"||action=="buddyRecover";}
   internal static string ValidatePreflightPayload(Dictionary<string,object> payload){object kind;if(payload.Count==0)return "normal";if(payload.Count==1&&payload.TryGetValue("targetKind",out kind)&&kind is string&&new[]{"normal","save","server"}.Contains((string)kind))return (string)kind;throw new Exception("启动预检只接受空对象或明确的 normal/save/server 类型，界面不能提供路径、凭据或授权决定。");}
   internal static void ValidateBuddyPayload(string action,Dictionary<string,object> p){

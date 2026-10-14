@@ -27,6 +27,7 @@ namespace PZ3D {
   public Action<string,object> Event;
   public bool Busy{get{lock(gate)return busy||networkRequests.Count>0;}}
   public bool NetworkBusy{get{lock(gate)return networkRequests.Count>0;}}
+  static ModernController(){NativeReads.Add("gameDiagnostics");}
   public ModernController(string game,string user,string data,bool test=false):this(game,user,data,test,null){}
   internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download):this(game,user,data,test,download,null){}
   internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download,Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> network):this(game,user,data,test,download,network,null){}
@@ -57,6 +58,7 @@ namespace PZ3D {
    finally{if(acquired)networkLane.Release();lock(gate){networkRequests.Remove(tokenSource);if(hallRequest==tokenSource)hallRequest=null;}tokenSource.Dispose();}
   }
   public object Execute(string action,Dictionary<string,object> payload){
+   if(action=="gameDiagnostics"){GameDiagnostics.ValidatePayload(payload);lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");return GameDiagnostics.Read(engine);}}
    if(PlayProfiles.Action(action))PlayProfiles.ValidatePayload(action,payload??new Dictionary<string,object>());
    if(action=="launchPreflight"){string targetKind=ModernHostPolicy.ValidatePreflightPayload(payload??new Dictionary<string,object>());lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");return LaunchPreflight.Check(engine,busy||networkRequests.Count>0,Running(),targetKind);}}
    if(ModernHostPolicy.BuddyAction(action))ModernHostPolicy.ValidateBuddyPayload(action,payload??new Dictionary<string,object>());
