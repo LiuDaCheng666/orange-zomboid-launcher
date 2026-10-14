@@ -11,7 +11,7 @@ async function setup(browser, theme='dark',options={}) {
   await page.addInitScript(({pixel,theme,reminderDue})=>{
     window.sent=[]; window.failure=''; window.sortErrors=false; window.taskMode='unknown'; window.reply=null;window.held=[];window.holdAction='';window.pollCallbacks=[];window.playtimeDue=reminderDue;
     window.setInterval=(f)=>{pollCallbacks.push(f);return pollCallbacks.length;};
-    const mods=[{id:'base',title:'Foundation <img src=x onerror=alert(1)>',name:'Foundation',author:'Original Author',version:'42.1',description:'Original source description',source:'local',item:'123',workshopId:'123',cover:pixel,coverToken:'base-cover',hasCover:true,require:[],requires:[],loadAfter:[],loadBefore:[],conflicts:[],conflict:false,map:false},{id:'extra',title:'Extra Furniture',name:'Extra Furniture',author:'Author B',version:'42.2',description:'Requires Foundation',source:'workshop',item:'124',workshopId:'124',cover:'javascript:alert(1)',requires:['base'],require:['base'],loadAfter:[],loadBefore:[],conflicts:[],conflict:false,map:false}];
+    const mods=[{id:'base',title:'Foundation <img src=x onerror=alert(1)>',name:'Foundation',author:'Original Author',version:'42.1',description:'Original source description',source:'local',item:'123',workshopId:'123',cover:pixel,coverToken:'base-cover',hasCover:true,require:[],requires:[],loadAfter:[],loadBefore:[],conflicts:[],componentManaged:false,conflict:false,map:false},{id:'extra',title:'Extra Furniture',name:'Extra Furniture',author:'Author B',version:'42.2',description:'Requires Foundation',source:'workshop',item:'124',workshopId:'124',cover:'javascript:alert(1)',requires:['base'],require:['base'],loadAfter:[],loadBefore:[],conflicts:[],componentManaged:false,conflict:false,map:false}];
     const item={id:'123',title:'Workshop <svg onload=alert(1)>',description:'B42 original description',author:'Workshop Author',previewUrl:'http://unsafe.invalid/image.png',updated:1791849600,subscribed:true,downloaded:false,needsUpdate:true,sizeBytes:4096};
     window.chrome={webview:{addEventListener:(e,f)=>window.reply=f,postMessage:m=>{
       sent.push(m);
@@ -48,6 +48,8 @@ async function setup(browser, theme='dark',options={}) {
         case 'settingsGet':data={stamp:'s',rows:[],warnings:[]};break;
         case 'shadersGet':data={selected:'original',stamp:'s',packs:[{id:'original',name:'Original',valid:true}]};break;
         case 'help':data={message:'fixture'};break;
+        case 'playProfiles':data={stamp:'play-1',selectedId:'',profiles:[],selectedProfile:null,pendingRecovery:{pending:false,state:'none',stamp:'',canRecover:false,locations:[],warnings:[]},warnings:[]};break;
+        case 'launchPreflight':data={canLaunch:true,checkedUtc:'2026-10-15T00:00:00Z',items:[],message:'Request readiness checked'};break;
         default:data={message:'fixture'};
       }
       const response={data:{id:m.id,ok:true,data}};if(window.holdAction===m.action)held.push({request:m,response});else queueMicrotask(()=>reply(response));
@@ -57,12 +59,12 @@ async function setup(browser, theme='dark',options={}) {
   page.setDefaultTimeout(7000);
   return {page,errors};
 }
-async function route(page,name){await page.locator(`nav [data-page="${name}"]`).click();}
+async function route(page,name){await page.evaluate(n=>location.hash=n,name);await page.waitForFunction(n=>document.querySelector('#page').dataset.route===n,name);}
 async function sent(page,action){await page.waitForFunction(a=>window.sent.some(m=>m.action===a),action);return page.evaluate(a=>window.sent.filter(m=>m.action===a).at(-1).payload,action);}
 const tests=[];function test(name,fn){tests.push({name,fn});}
 test('eleven navigable routes remain visible in both themes and narrow windows',async browser=>{
   const shots=path.resolve(__dirname,'../../artifacts/full-ui-shots');fs.mkdirSync(shots,{recursive:true});
-  for(const theme of ['dark','light']){const {page,errors}=await setup(browser,theme);assert.equal(await page.locator('nav [data-page]').count(),11);
+  for(const theme of ['dark','light']){const {page,errors}=await setup(browser,theme);assert.equal(await page.locator('nav [data-page]').count(),6);
     for(const viewport of [{width:1100,height:760},{width:733,height:507},{width:500,height:760}]){await page.setViewportSize(viewport);
       for(const name of routes){await route(page,name);await page.waitForTimeout(30);assert.equal(await page.locator('#page').getAttribute('data-route'),name);assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,name+' overflow');assert.equal(await page.locator('nav [data-page="help"]').evaluate(e=>e.getBoundingClientRect().bottom<=innerHeight),true,'navigation visible');if(viewport.width===1100)await page.screenshot({path:path.join(shots,`${theme}-${name}.png`)});}
     }assert.deepEqual(errors,[]);await page.close();}

@@ -14,6 +14,8 @@
 
 ## 开发状态
 
+当前候选版本为1.2.0（2026-10-15）。首页选择完整游玩配置与当前实际设置分开；变化先预览、明确应用，再按普通／存档／服务器目标重新体检。便携 JSON 由原生导出和校验，导入仅新建；有界日志诊断保留脱敏原文证据和未核实时间，不自动修复或上传。六个一级分类保留全部原有路由，模组多选只编辑草稿；组件 ID 的批量资格由原生分类，不按作者名字或来源猜测。全局内存／光影／Viewpoint 设置不表示每个配置拥有隔离游戏或工坊版本。
+
 已实现：核心 Viewpoint/中文与可选扩展、富模组目录、命名配置、独立存档清单和依赖排序预览、原版存档/角色截图、原版服务器收藏只读导入、公共大厅、Steam 搜索/订阅列表与确认下载、中文参数、可追踪任务/脱敏日志、独立游玩计时及休息提醒、两套主题及无注册表写入的安装卸载。原版收藏正在写入时拒绝读取/导入。Java 更新需逐文件重新授权；所有“已配置”与“本次已加载”严格区分。
 
 真实只读验证成功获取 Steam 搜索、完整订阅列表和服务器大厅；未在测试中订阅/下载条目，也未执行真实进服/读档。直达存档/服务器和扩展的纯客户端联机效果仍需游戏内验证，不把进程启动冒充进服成功。
@@ -31,12 +33,14 @@ npm test
 ./Build-CoreRelease.ps1 -VersionOnly
 ./Test-CorePackageBuild.ps1
 # 使用明确的仓库外私钥路径和新的输出目录打包：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-r4
 ```
 
 正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。
 
-正式输出位于 `dist/<VERSION>/`：`core/` 文件夹、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。完整 ZIP 解压到独立可写目录后运行“橙子启动器.exe”；不要只复制 EXE。1.1.0 的本地签名包和真实 WebView2 更新/回滚闭环已验证，线上更新渠道尚未发布。顶部“启动器更新”手动检查并验证签名；下载完成后保存编辑、退出游戏，再确认重启。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与发布说明见 [核心发布指南](docs/core-release.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
+正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。当前1.2.0本机验收候选为 `dist/1.2.0-experience-verified-r4`，重建须选另一个全新目录；保留已验收1.1.1及历史记录，线上更新渠道尚未发布。完整 ZIP 解压到独立可写目录后运行“橙子启动器.exe”；不要只复制 EXE。顶部“启动器更新”手动检查并验证签名；下载完成后保存编辑、退出游戏，再确认重启。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
+
+交互方法仅概念参考 [PCL](https://github.com/Meloong-Git/PCL)（[原项目许可](https://github.com/Meloong-Git/PCL/blob/main/LICENCE)），没有复制代码、图标或分发素材。
 
 ## 许可范围
 

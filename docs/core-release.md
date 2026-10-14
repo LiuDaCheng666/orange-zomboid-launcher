@@ -1,6 +1,6 @@
 # 核心发布与签名
 
-正式版本来自根目录 VERSION（当前 1.1.0）。旧单 EXE 为未正式编号构建，不追称 1.0.0。已经发布的版本不可重用；构建脚本拒绝覆盖已有输出目录。1.1.0 已完成本地正式签名包、安装器和 ZIP 启动验证；实际 WebView2 更新与回滚使用单独的隔离 fixture 入口，绝不作为正式成品或线上发布。
+正式版本来自根目录 VERSION（当前 1.2.0）。本机统一体验候选位于 `dist/1.2.0-experience-verified-r4/`，验证记录见 [1.2.0-verification.md](releases/1.2.0-verification.md)。这里只是本机隔离验收，没有上传、合并 main 或正式发布；选择配置不等于应用，启动请求不等于游戏已加载。已验收的 1.1.1 产物和历史记录保留不动。旧单 EXE 为未正式编号构建，不追称 1.0.0；版本不可重用，构建脚本拒绝覆盖输出目录。真实更新与回退使用隔离 fixture，不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
@@ -8,7 +8,7 @@
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
 # 使用已有保护私钥：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-r4
 ```
 
 私钥位于仓库外，由当前 Windows 用户独占 ACL 保护。不可打印、上传、嵌入二进制或提交私钥。正式公钥为仓库根目录 release-public-key.xml，嵌入所有正式可执行文件的资源名为 `Launcher.UpdatePublicKey.xml`。磁盘中的公钥只供审计，绝不作为运行时信任根。签名私钥与该公钥不匹配时构建失败。
@@ -28,11 +28,11 @@
 
 `Build-CoreRelease.ps1` 默认编译 `PZ3D.Program`、`PZ3D.CoreUpdaterProgram`、`PZ3D.UninstallerProgram`。缺少更新助手源码立即停止，不生成占位助手。`-CoreDirectory <目录>` 可对预先构建的完整核心文件集进行同样的正式校验；输出仍要求明确签名私钥。`-OutputDirectory` 仅用于选择新的输出目录。`Orange3DTool/Build-Modern.ps1 -Core -SigningKey <路径>` 转交同一入口。
 
-`dist/1.1.0/` 包含：
+当前 `dist/1.2.0-experience-verified-r4/` 包含：
 
 - `core/`：18个签名核心文件及 runtime 下两份签名引导元数据。
-- `orange-launcher-v1.1.0-win-x64.zip`：与 core 相同的可直接解压运行布局。
-- `orange-launcher-setup-v1.1.0.exe`：嵌入相同完整包、签名清单；运行前重新认证，安装必须是新的空目录。
+- `orange-launcher-v1.2.0-win-x64.zip`：与 core 相同的可直接解压运行布局。
+- `orange-launcher-setup-v1.2.0.exe`：嵌入相同完整包、签名清单；运行前重新认证，安装必须是新的空目录。
 - `update-manifest.json`、`update-manifest.sig`：签名的原始 UTF-8 JSON 与二进制分离签名。
 - `<完整小写SHA256>.bin`：清单 URL 对应资源；相同字节共享资产名。
 
@@ -60,10 +60,10 @@ ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntim
 
 发布前再次核对 CHANGELOG、版本、完整文件哈希和公钥身份，由维护者明确决定发布。本次实现没有创建草稿、上传 Release、推送分支或合并 main。官方 latest 渠道没有发布时，显示不可用，绝不冒充最新版。
 
-## 本地验证边界
+## 1.1.0 历史验证边界（保留）
 
 `Test-CoreNativeUpdate.ps1` 构建临时签名 fixture，运行真实 ModernForm/WebView2、独立原生更新通道及正式助手入口；验证仅 app.js 下载、健康成功、故意坏页面回滚、旧界面重启一次和自有卸载。其 A 的 VERSION、EXE AppVersion、清单和记录均为 1.1.0；B 仅用于文件稀疏性与协议测试，清单/记录为 1.1.1，字节未变的 VERSION/EXE 仍为 1.1.0。此 fixture 不可发布，也不证明真实版本升级仅下载 JS。正式新版本必须同步 VERSION 与所有 EXE 元数据，通常需要下载完整小 EXE；本实现没有二进制差分。
 
 同一脚本还独立构建 full fixture：A 所有版本为1.1.0，B 清单、VERSION、三个 EXE 元数据/嵌入版本和安装记录全部为1.1.1。成功路径验证真实运行 AppVersion=1.1.1，失败路径验证三个 EXE 的原1.1.0完整字节恢复、旧界面只启动一次；两条路径均验证自有卸载保留无关文件。fixture 密钥隔离，未上传任何发布渠道。
 
-正式包保持18文件允许清单，三个 EXE/嵌入 VERSION/磁盘 VERSION/发布清单/安装记录均为1.1.0。正式密钥从既有仓库外受保护路径显式传入，未改写或生成新正式密钥。本地实测产物、SHA-256、截图与准确命令见 `docs/core-release-verification.md`。
+当时正式包保持18文件允许清单，三个 EXE/嵌入 VERSION/磁盘 VERSION/发布清单/安装记录均为1.1.0。正式密钥从既有仓库外受保护路径显式传入，未改写或生成新正式密钥。当前和历史实测产物、SHA-256、截图与准确命令见 `docs/core-release-verification.md`。
