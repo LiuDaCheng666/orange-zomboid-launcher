@@ -10,6 +10,9 @@ using System.Security.Principal;
 using System.Web.Script.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
+using System.Runtime.InteropServices;
+using System.ComponentModel;
 namespace PZ3D {
  internal sealed class BuddyTakeoverPreview {
   public string stamp,message,recoveryState;
@@ -41,6 +44,49 @@ namespace PZ3D {
   internal abstract long Milliseconds {get;}
   internal abstract void Wait(int milliseconds);
   internal virtual void Replace(string temporary,string target,string displaced){System.IO.File.Replace(temporary,target,displaced);}
+  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]
+  struct RenameInformation {
+   internal uint ReplaceIfExists;
+   internal IntPtr RootDirectory;
+   internal uint FileNameLength;
+   internal char FileName;
+  }
+  [DllImport("kernel32.dll",SetLastError=true)]
+  [return:MarshalAs(UnmanagedType.Bool)]
+  static extern bool SetFileInformationByHandle(SafeFileHandle file,int informationClass,IntPtr information,uint size);
+  internal virtual void MoveAbsent(string source,string target){
+   LauncherMaintenance.NoReparse(source);
+   LauncherMaintenance.NoReparse(target);
+   File.Move(source,target); // The two-argument overload never overwrites an existing target.
+  }
+  internal virtual bool RestoreOwned(string candidate,string target,string retired,byte[] expected){
+   foreach(string path in new[]{candidate,target,retired})LauncherMaintenance.NoReparse(path);
+   // Deny writes and deletion for the entire ownership check and handle rename.
+   // Rename this exact verified file; a pathname check followed by Replace is not conditional.
+   using(var owned=new FileStream(target,FileMode.Open,FileSystemRights.Read|FileSystemRights.Delete,FileShare.None,4096,FileOptions.None)){
+    if(owned.Length!=expected.Length)return false;
+    var block=new byte[4096];
+    int at=0,count;
+    while((count=owned.Read(block,0,block.Length))>0){
+     for(int i=0;i<count;i++)if(block[i]!=expected[at+i])return false;
+     at+=count;
+    }
+    if(at!=expected.Length)return false;
+    byte[] name=Encoding.Unicode.GetBytes(Path.GetFullPath(retired));
+    int offset=Marshal.OffsetOf(typeof(RenameInformation),"FileName").ToInt32();
+    int length=checked(offset+name.Length+2);
+    IntPtr information=Marshal.AllocHGlobal(length);
+    try{
+     Marshal.Copy(new byte[length],0,information,length);
+     Marshal.WriteInt32(information,Marshal.OffsetOf(typeof(RenameInformation),"FileNameLength").ToInt32(),name.Length);
+     Marshal.Copy(name,0,IntPtr.Add(information,offset),name.Length);
+     if(!SetFileInformationByHandle(owned.SafeFileHandle,3,information,(uint)length))throw new Win32Exception(Marshal.GetLastWin32Error());
+    }finally{Marshal.FreeHGlobal(information);}
+    // A writer can fill the now-vacant name. Refuse in that case; retain both private files.
+    MoveAbsent(candidate,target);
+   }
+   return true;
+  }
  }
  // This boundary is never selected in Engine.TestMode. No process termination API is used.
  internal sealed class NativeBuddyTakeoverEnvironment:BuddyTakeoverEnvironment {
@@ -127,7 +173,14 @@ namespace PZ3D {
   static void CleanStage(string stage,byte[] before,byte[] after){LauncherMaintenance.NoReparse(stage);if(!Directory.Exists(stage))return;foreach(string name in new[]{"new","old","newer"}){string file=Path.Combine(stage,name);LauncherMaintenance.NoReparse(file);if(File.Exists(file)){byte[] bytes=Read(file);if(!bytes.SequenceEqual(before)&&!bytes.SequenceEqual(after))throw new Refusal(ConflictMessage);File.Delete(file);}}if(!Directory.EnumerateFileSystemEntries(stage).Any())Directory.Delete(stage);else throw new Refusal(ConflictMessage);}
   static void Replace(BuddyTakeoverEnvironment env,string target,byte[] before,byte[] after,Record r){LauncherMaintenance.NoReparse(target);if(!Read(target).SequenceEqual(before))throw new Refusal("目标文件发生并发变化，未覆盖。");string stage=StageDirectory(target,r);CleanStage(stage,before,after);PrivateDirectory(stage);string temp=Path.Combine(stage,"new"),displaced=Path.Combine(stage,"old");bool safe=false;try{WriteNew(temp,after);LauncherMaintenance.NoReparse(target);if(!Read(target).SequenceEqual(before))throw new Refusal("目标文件发生并发变化，未覆盖。");env.Replace(temp,target,displaced);
     // Verify what the atomic operation actually displaced, not merely an earlier read.
-    if(!Read(displaced).SequenceEqual(before)){if(Read(target).SequenceEqual(after)){string newer=Path.Combine(stage,"newer");env.Replace(displaced,target,newer);if(Read(newer).SequenceEqual(after)){File.Delete(newer);safe=true;}}throw new Refusal(ConflictMessage);}if(!Read(target).SequenceEqual(after))throw new IOException();safe=true;
+    if(!Read(displaced).SequenceEqual(before)){
+     // The corrective boundary must prove ownership under an exclusive handle as well.
+     // Never swap an older foreign file over a second writer's newer update.
+     string newer=Path.Combine(stage,"newer");
+     if(env.RestoreOwned(displaced,target,newer,after))safe=true;
+     throw new Refusal(ConflictMessage);
+    }
+    if(!Read(target).SequenceEqual(after))throw new IOException();safe=true;
    }finally{if(safe)CleanStage(stage,before,after);}}
   static string TargetPath(Engine e,Record r,Entry entry){if(Names.Contains(entry.target))return Path.Combine(e.Game,entry.target);if(entry.target!="steam"||r.account==0||string.IsNullOrWhiteSpace(r.root)||!Path.IsPathRooted(r.root)||!Same(r.exe,Path.Combine(r.root,"steam.exe")))throw new InvalidDataException();return Path.Combine(r.root,"userdata",r.account.ToString(System.Globalization.CultureInfo.InvariantCulture),"config","localconfig.vdf");}
   static Record Load(Engine e){var r=Serializer().Deserialize<Record>(Encoding.UTF8.GetString(Read(JournalPath(e),32768)));if(r==null||r.version!=1||!Same(r.game,e.Game)||r.key!=Key(e)||!Regex.IsMatch(r.id??"","^[a-f0-9]{32}$")||r.entries==null||r.entries.Count>5||r.entries.Select(x=>x.target).Distinct().Count()!=r.entries.Count)throw new InvalidDataException();LauncherMaintenance.NoReparse(Transaction(e,r));for(int i=0;i<r.entries.Count;i++){var entry=r.entries[i];LauncherMaintenance.NoReparse(TargetPath(e,r,entry));if(!Regex.IsMatch(entry.before??"","^[A-F0-9]{64}$")||!Regex.IsMatch(entry.after??"","^[A-F0-9]{64}$")||Hash(Read(Backup(e,r,i,false)))!=entry.before||Hash(Read(Backup(e,r,i,true)))!=entry.after)throw new InvalidDataException();}return r;}

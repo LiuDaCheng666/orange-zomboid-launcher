@@ -22,6 +22,7 @@ namespace PZ3D {
    internal Fixture F; internal bool Steam,Running=true,Game,Timeout,ReopenFail,Crash;
    internal int Shutdowns,Reopens,Writes,FailWrite,CrashAt=1;internal long Clock,Birth=100;internal uint Account=12345;
    internal Action OnShutdown,OnWait,OnReplace;
+   internal Action<string,string> OnMoveAbsent;
    internal Fake(Fixture f){F=f;}
    internal override BuddySteamIdentity Capture(){return new BuddySteamIdentity(Steam?SteamLaunchOptions.Read(Path.Combine(F.Root,"steam"),Account):SteamLaunchOptions.Unavailable(),Steam?77:0,Steam?Birth:0,Steam?Path.Combine(F.Root,"steam","steam.exe"):null);}
    internal override BuddySteamState Inspect(BuddySteamIdentity bound){if(bound.Birth!=Birth||bound.Options.Account!=Account)return BuddySteamState.Changed;return Running?BuddySteamState.Running:BuddySteamState.Exited;}
@@ -31,6 +32,8 @@ namespace PZ3D {
    internal override long Milliseconds {get{return Clock;}}
    internal override void Wait(int ms){Clock+=ms;if(OnWait!=null)OnWait();}
    internal override void Replace(string temp,string target,string displaced){Writes++;if(OnReplace!=null)OnReplace();if(FailWrite==Writes)throw new IOException("secretFixture must not leak");base.Replace(temp,target,displaced);if(Crash&&Writes==CrashAt)Environment.Exit(73);}
+   internal override bool RestoreOwned(string candidate,string target,string retired,byte[] expected){Writes++;if(OnReplace!=null)OnReplace();return base.RestoreOwned(candidate,target,retired,expected);}
+   internal override void MoveAbsent(string source,string target){if(OnMoveAbsent!=null)OnMoveAbsent(source,target);base.MoveAbsent(source,target);}
   }
   static void Consent(){var f=new Fixture(true);byte[] before=File.ReadAllBytes(f.E.Config);var p=f.Preview();Check(p.supported&&p.requiresSteamExit&&p.knownIdentity,"native preview identifies exact app conflict");Check(!Directory.Exists(f.E.Data),"preview has no file effects");Check(f.Apply(p,false).status=="cancelled","false confirmation cancels");var c=new CancellationToken(true);Check(f.Apply(p,true,true,c).status=="cancelled","pre-cancel returns cancelled");Check(f.Apply(p,true,false).status=="confirmationRequired","exit has separate consent");Check(!Directory.Exists(f.E.Data)&&before.SequenceEqual(File.ReadAllBytes(f.E.Config))&&f.OS.Shutdowns==0&&f.OS.Reopens==0,"no consent means zero write shutdown or reopen");}
   static void GameOnly(){var f=new Fixture();string bat=Path.Combine(f.E.Game,"ProjectZomboid32.bat");File.WriteAllText(bat,"java -agentlib:zbNative -Xmx2g -jar game.jar --keep\r\n",new UnicodeEncoding(false,true));var p=f.Preview();var r=f.Apply(p);Check(r.cleanupCompleted&&r.status=="completed"&&!r.componentInstallCompleted&&!r.steamVerified,"cleanup distinct from Steam verification and install");Check(File.ReadAllText(f.E.Config)=="{\"vmArgs\":[\"-Xmx8g\",\"-agentlib:zbNative\"],\"custom\":42}","known JSON cleaned and normal native plus heap preserved");Check(File.ReadAllText(bat)=="java -Xmx2g -jar game.jar --keep\r\n"&&File.ReadAllBytes(bat).Take(2).SequenceEqual(new byte[]{255,254}),"BAT only removes known agent preserving UTF16 BOM");Check(f.OS.Shutdowns==0&&f.OS.Reopens==0&&!BuddyTakeover.Pending(f.E),"game only never exits Steam and clears pending");}
@@ -48,6 +51,35 @@ namespace PZ3D {
    var race=new Fixture();race.OS.OnReplace=()=>{if(race.OS.Writes==1)File.WriteAllText(race.E.Config,"foreign-exact-atomic-boundary");};r=race.Apply(race.Preview());Check(!r.cleanupCompleted&&File.ReadAllText(race.E.Config)=="foreign-exact-atomic-boundary","atomic replacement race retains exact foreign bytes");
   }
   static Fixture CrashFixture(bool steam){var f=new Fixture(steam);string exe=Process.GetCurrentProcess().MainModule.FileName;using(var child=Process.Start(new ProcessStartInfo(exe,(steam?"--buddy-steam-crash":"--buddy-crash")+" \""+f.Root+"\""){UseShellExecute=false,CreateNoWindow=true})){Check(child.WaitForExit(20000)&&child.ExitCode==73,"isolated interruption leaves durable transaction evidence");}return f;}
+  static void CompensationRace(){
+   var f=new Fixture();
+   f.OS.OnReplace=()=>{if(f.OS.Writes==1)File.WriteAllText(f.E.Config,"foreign-edit-one");if(f.OS.Writes==2)File.WriteAllText(f.E.Config,"foreign-edit-two");};
+   var result=f.Apply(f.Preview());
+   Check(File.ReadAllText(f.E.Config)=="foreign-edit-two","compensation never leaves the newest foreign bytes overwritten by older foreign bytes");
+   Check(result.status=="recoveryRequired"&&result.recoveryPending&&!result.rollbackCompleted,"two-writer compensation conflict stays pending");
+   var stage=Directory.GetDirectories(f.E.Game,".ob-*").Single();
+   Check(Directory.GetFiles(stage).Any(path=>File.ReadAllText(path)=="foreign-edit-one"),"first displaced foreign update remains private conflict evidence");
+   var recovery=BuddyTakeover.Recovery(new Engine(f.E.Game,f.E.User,f.E.Data,true),f.OS);
+   Check(recovery.pending&&!recovery.supported&&File.ReadAllText(f.E.Config)=="foreign-edit-two","fresh recovery scan preserves newest foreign target and refuses stale restoration");
+   var sameSize=new Fixture();byte[] newest=null;
+   sameSize.OS.OnReplace=()=>{if(sameSize.OS.Writes==1)File.WriteAllText(sameSize.E.Config,"first-external-update");if(sameSize.OS.Writes==2){newest=Enumerable.Repeat((byte)'x',File.ReadAllBytes(sameSize.E.Config).Length).ToArray();File.WriteAllBytes(sameSize.E.Config,newest);}};
+   result=sameSize.Apply(sameSize.Preview());
+   Check(result.recoveryPending&&newest.SequenceEqual(File.ReadAllBytes(sameSize.E.Config)),"exclusive compensation compares exact bytes rather than only file length");
+   var filled=new Fixture();
+   filled.OS.OnReplace=()=>{if(filled.OS.Writes==1)File.WriteAllText(filled.E.Config,"foreign-before-correction");};
+   filled.OS.OnMoveAbsent=(source,target)=>File.WriteAllText(target,"newest-foreign-fills-vacant-name");
+   result=filled.Apply(filled.Preview());
+   Check(result.recoveryPending&&File.ReadAllText(filled.E.Config)=="newest-foreign-fills-vacant-name","writer filling corrective rename gap stays current because installation cannot overwrite");
+   stage=Directory.GetDirectories(filled.E.Game,".ob-*").Single();
+   Check(File.ReadAllText(Path.Combine(stage,"old"))=="foreign-before-correction"&&File.ReadAllText(Path.Combine(stage,"newer"))=="{\"vmArgs\":[\"-Xmx8g\",\"-agentlib:zbNative\"],\"custom\":42}","failed no-overwrite correction retains foreign candidate and retired own bytes");
+   var interrupted=new Fixture();
+   interrupted.OS.OnReplace=()=>{if(interrupted.OS.Writes==1)File.WriteAllText(interrupted.E.Config,"foreign-preserved-before-move-fault");};
+   interrupted.OS.OnMoveAbsent=(source,target)=>{throw new IOException("fixture no-overwrite move failure");};
+   result=interrupted.Apply(interrupted.Preview());
+   recovery=BuddyTakeover.Recovery(new Engine(interrupted.E.Game,interrupted.E.User,interrupted.E.Data,true),interrupted.OS);
+   stage=Directory.GetDirectories(interrupted.E.Game,".ob-*").Single();
+   Check(result.recoveryPending&&recovery.pending&&!recovery.supported&&!File.Exists(interrupted.E.Config)&&File.ReadAllText(Path.Combine(stage,"old"))=="foreign-preserved-before-move-fault"&&File.Exists(Path.Combine(stage,"newer")),"move failure preserves complete private evidence and requires explicit manual recovery");
+  }
   static void RecoveryBoundaries(){
    var f=CrashFixture(true);var state=BuddyTakeover.Recovery(f.E,f.OS);Check(state.pending&&state.supported&&state.requiresSteamExit,"Steam recovery identifies separate exit consent");var cancelled=BuddyTakeover.Recover(f.E,state.stamp,false,false,null,CancellationToken.None,f.OS);Check(cancelled.status=="cancelled"&&cancelled.recoveryPending,"cancelled recovery still truthfully reports pending");var unconfirmed=BuddyTakeover.Recover(f.E,state.stamp,true,false,null,CancellationToken.None,f.OS);Check(unconfirmed.status=="confirmationRequired"&&unconfirmed.recoveryPending&&f.OS.Shutdowns==0,"recovery exit approval remains pending with no process effects");
    f.OS.Account=54321;Check(!BuddyTakeover.Recovery(f.E,f.OS).supported,"other account cannot authorize recorded Steam recovery");f.OS.Account=12345;state=BuddyTakeover.Recovery(f.E,f.OS);var result=BuddyTakeover.Recover(f.E,state.stamp,true,true,null,CancellationToken.None,f.OS);Check(result.status=="recovered"&&!result.recoveryPending&&f.OS.Shutdowns==1&&f.OS.Reopens==1&&File.ReadAllText(f.VdfPath)==Vdf&&File.ReadAllText(f.E.Config)==Dirty,"confirmed same-account recovery restores both files and requests same-client reopen");
@@ -56,7 +88,7 @@ namespace PZ3D {
    var safeCancel=CrashFixture(false);state=BuddyTakeover.Recovery(safeCancel.E,safeCancel.OS);var token=new CancellationTokenSource();safeCancel.OS.OnReplace=()=>token.Cancel();result=BuddyTakeover.Recover(safeCancel.E,state.stamp,true,true,null,token.Token,safeCancel.OS);Check(result.status=="cancelled"&&!result.recoveryPending&&File.ReadAllText(safeCancel.E.Config)==Dirty,"cancellation during recovery finishes safe rollback before reporting cancelled");
   }
   static void Interrupted(){var f=new Fixture();string exe=Process.GetCurrentProcess().MainModule.FileName;using(var child=Process.Start(new ProcessStartInfo(exe,"--buddy-crash \""+f.Root+"\""){UseShellExecute=false,CreateNoWindow=true})){Check(child.WaitForExit(20000)&&child.ExitCode==73,"fixture process interruption occurs after real atomic write");}var restarted=new Engine(f.E.Game,f.E.User,f.E.Data,true);var state=BuddyTakeover.Recovery(restarted,f.OS);Check(state.pending&&state.supported&&!state.requiresSteamExit,"reconstructed service offers explicit interrupted recovery");var before=File.ReadAllBytes(f.E.Config);Check(BuddyTakeover.Recover(restarted,state.stamp,false,false,null,CancellationToken.None,f.OS).status=="cancelled"&&before.SequenceEqual(File.ReadAllBytes(f.E.Config)),"recovery false consent is read-only");var r=BuddyTakeover.Recover(restarted,state.stamp,true,false,null,CancellationToken.None,f.OS);Check(r.status=="recovered"&&!BuddyTakeover.Pending(restarted)&&File.ReadAllText(f.E.Config)==Dirty,"explicit recovery restores interrupted original bytes");}
-  public static void Run(){foreach(var test in new Action[]{Consent,GameOnly,Flush,Stale,ExitFailure,Guards,Rollback,Reopen,Defaults,Interrupted,LateChecks,RecoveryBoundaries})test();Console.WriteLine("BUDDY TAKEOVER PASSED");}
-  public static int Main(string[] args){try{if(args.Length==2&&(args[0]=="--buddy-crash"||args[0]=="--buddy-steam-crash")){if(!Path.GetFullPath(args[1]).StartsWith(Path.GetFullPath(LauncherTestPaths.Root)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))return 75;bool steam=args[0]=="--buddy-steam-crash";var f=new Fixture(steam,args[1]);f.OS.Crash=true;f.OS.CrashAt=steam?2:1;f.Apply(f.Preview());return 74;}if(args.Length==1&&args[0]=="--recovery"){RecoveryBoundaries();return 0;}if(args.Length==1&&args[0]=="--late"){LateChecks();return 0;}if(args.Length==1&&args[0]=="--all-red"){int failed=0;foreach(var test in new Action[]{Consent,GameOnly,Flush,Stale,ExitFailure,Guards,Rollback,Reopen,Defaults,Interrupted}){try{test();}catch(Exception e){failed++;Console.WriteLine(test.Method.Name+": "+e.Message);}}return failed==0?0:1;}Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
+  public static void Run(){foreach(var test in new Action[]{Consent,GameOnly,Flush,Stale,ExitFailure,Guards,Rollback,Reopen,Defaults,Interrupted,LateChecks,RecoveryBoundaries,CompensationRace})test();Console.WriteLine("BUDDY TAKEOVER PASSED");}
+  public static int Main(string[] args){try{if(args.Length==2&&(args[0]=="--buddy-crash"||args[0]=="--buddy-steam-crash")){if(!Path.GetFullPath(args[1]).StartsWith(Path.GetFullPath(LauncherTestPaths.Root)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))return 75;bool steam=args[0]=="--buddy-steam-crash";var f=new Fixture(steam,args[1]);f.OS.Crash=true;f.OS.CrashAt=steam?2:1;f.Apply(f.Preview());return 74;}if(args.Length==1&&args[0]=="--compensation"){CompensationRace();return 0;}if(args.Length==1&&args[0]=="--recovery"){RecoveryBoundaries();return 0;}if(args.Length==1&&args[0]=="--late"){LateChecks();return 0;}if(args.Length==1&&args[0]=="--all-red"){int failed=0;foreach(var test in new Action[]{Consent,GameOnly,Flush,Stale,ExitFailure,Guards,Rollback,Reopen,Defaults,Interrupted}){try{test();}catch(Exception e){failed++;Console.WriteLine(test.Method.Name+": "+e.Message);}}return failed==0?0:1;}Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
  }
 }
