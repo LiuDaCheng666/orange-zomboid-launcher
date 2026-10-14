@@ -66,7 +66,7 @@ Assert(File.ReadAllBytes(engine.Config).SequenceEqual(original), "import never a
 
 **Interfaces:** `GameDiagnostics.Read(Engine e)` returns `checkedUtc`, `findings`, `warnings`, `sources`, `reportText`. Each finding includes stable `id`, `severity`, `confidence` (`confirmed|suspected`), `title`, `message`, `evidence`, `source`, `historical`, `nextStep`. Native action `gameDiagnostics` accepts empty payload; export text is already redacted. Read-only, no uploads/deletions or automatic fixes.
 
-- [ ] Add failing tests for actual instrument/load-agent lines, Java heap error vs system swap/commit error, missing class/dependency, duplicate mod, EXCEPTION_ACCESS_VIOLATION, subscription-not-confirmed, unrelated lines containing only a mod name, historical timestamps, bounded UTF-8/legacy logs and malformed/reparse/oversized sources. Include password/SteamID/token/IP/path redaction assertions.
+- [x] Add failing tests for actual instrument/load-agent lines, Java heap error vs system swap/commit error, missing class/dependency, duplicate mod, EXCEPTION_ACCESS_VIOLATION, subscription-not-confirmed, unrelated lines containing only a mod name, historical timestamps, bounded UTF-8/legacy logs and malformed/reparse/oversized sources. Include password/SteamID/token/IP/path redaction assertions.
 
 ```csharp
 // Break caught: ordinary mod mention is falsely blamed for a crash.
@@ -74,9 +74,9 @@ var report = Analyze("Loading Viewpoint successfully", DateTime.UtcNow);
 Assert(report.findings.Count == 0, "successful load is not a culprit");
 ```
 
-- [ ] Run `Build-Tests.ps1 -Entry PZ3D.GameDiagnosticsTests -Output artifacts/game-diagnostics-tests.exe`, record red output.
-- [ ] Collect only known console/logs/hs_err and tool diagnostic files, bounded file count/bytes with tail retention. Do not recursively crawl saves or read arbitrary supplied paths. Distinguish game log errors from launcher task errors, explicitly mark old sources, surface unreadable source warnings, and apply privacy sanitization before findings/report exposure. Each conclusion retains actual supporting lines and narrowly qualified next steps.
-- [ ] Run diagnostic/privacy regression tests, commit and report boundary schema for frontend. Do not claim the rule can diagnose network latency or GPU bottlenecks from insufficient logs.
+- [x] Run `Build-Tests.ps1 -Entry PZ3D.GameDiagnosticsTests -Output artifacts/game-diagnostics-tests.exe`, record red output.
+- [x] Collect only known console/logs/hs_err and tool diagnostic files, bounded file count/bytes with tail retention. Do not recursively crawl saves or read arbitrary supplied paths. Distinguish game log errors from launcher task errors, explicitly mark old sources, surface unreadable source warnings, and apply privacy sanitization before findings/report exposure. Each conclusion retains actual supporting lines and narrowly qualified next steps.
+- [x] Run diagnostic/privacy regression tests, commit and report boundary schema for frontend. Do not claim the rule can diagnose network latency or GPU bottlenecks from insufficient logs.
 
 ## Task 4: Unified experience UI and integration
 
