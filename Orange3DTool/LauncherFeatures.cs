@@ -2,9 +2,29 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
 namespace PZ3D {
  sealed partial class MainForm {
+  internal static BuddyTakeoverResult ConfirmBuddyTakeover(Engine engine,bool recover,Func<string,string,bool> confirm,Action<int,string> progress,CancellationToken token,BuddyTakeoverEnvironment environment=null){
+   string stamp,message;string[] locations;bool supported,exit;
+   if(recover){var state=BuddyTakeover.Recovery(engine,environment);stamp=state.stamp;message=state.message;locations=state.locations;supported=state.pending&&state.supported;exit=state.requiresSteamExit;}
+   else{var preview=BuddyTakeover.Preview(engine,environment);stamp=preview.stamp;message=preview.message;locations=preview.locations;supported=preview.supported;exit=preview.requiresSteamExit;}
+   if(!supported)throw new Exception(message+"\n请核对正确 Steam 客户端及私有恢复资料，保留未知参数和外部编辑；不要整份覆盖 VDF。");
+   bool yes=confirm(recover?"恢复本轮接管改动？":"接管旧 Buddy 启动参数？",message+"\n\n"+string.Join("\n",locations)+"\n\n保留其他参数；组件安装、Java 授权和游戏启动仍须分别决定。");
+   bool steam=yes&&exit&&confirm("正常退出并重新打开 Steam？","一次性请求当前已核实的客户端正常退出，最多等待 30 秒。处理后请求重新打开同一客户端；登录与就绪须在 Steam 中确认。");
+   if(exit&&!steam)yes=false;
+   return recover?BuddyTakeover.Recover(engine,stamp,yes,steam,progress,token,environment):BuddyTakeover.Apply(engine,stamp,yes,steam,progress,token,environment);
+  }
+  internal static BuddyTakeoverPreview LegacyInstallConflict(Engine engine,string operation,BuddyTakeoverEnvironment environment=null){
+   if(operation!="InstallComponents"&&operation!="InstallSelected3D"&&operation!="EnableShootClient")return null;
+   var preview=BuddyTakeover.Preview(engine,environment);return preview.supported&&preview.hasConflicts?preview:null;
+  }
+  void LegacyBuddyTakeover(bool recover,Func<string> continueInstall=null){
+   if(Program.PreviewMode){Write("预览：旧参数接管只展示界面，未执行修改。");return;}
+   BuddyTakeoverResult result=null;
+   Run(()=>{result=ConfirmBuddyTakeover(GetEngine(),recover,(title,body)=>(bool)Invoke(new Func<bool>(()=>MessageBox.Show(this,body,title,MessageBoxButtons.OKCancel,MessageBoxIcon.Warning)==DialogResult.OK)),ReportDownload,downloadCancel.Token);if(result.status=="cancelled")throw new OperationCanceledException(result.message);if(result.status=="failed"||result.status=="confirmationRequired"||result.status=="recoveryRequired")throw new Exception(result.message);return (result.status=="partial"?"[失败] Steam 重新打开未完成；旧参数清理已校验。\n":"")+result.message+"\n组件安装仍须继续原安装流程；本次游戏加载待验证。";},recover?"正在核对接管恢复记录":"正在扫描旧 Buddy 启动参数",()=>{if(continueInstall!=null&&result.cleanupCompleted&&!result.recoveryPending&&MessageBox.Show(this,"旧参数清理已校验。Steam 登录与就绪状态请在客户端确认。\n是否继续刚才的组件安装？安装仍会重新校验文件；Java 授权逐文件决定。","继续原组件安装",MessageBoxButtons.OKCancel,MessageBoxIcon.Question)==DialogResult.OK)Run(continueInstall,"正在继续原组件安装");});
+  }
   internal static void DisplayMemoryInfo(NumericUpDown input,Label label,LauncherMemoryInfo info,int heap){
    input.Minimum=1;input.Maximum=Math.Max(1,Math.Max(heap,info.MaximumHeapGiB));input.Value=heap;
    label.Text="当前最大堆："+heap+" GiB · 系统可见总内存："+info.TotalGiB+" GiB · 当前系统可用："+info.AvailableGiB+" GiB\n基础推荐："+info.RecommendedHeapGiB+" GiB · 设置上限（按总量）："+info.MaximumHeapGiB+" GiB。推荐是起始建议，下次启动生效。";
@@ -20,6 +40,12 @@ namespace PZ3D {
    var heapActions=new FlowLayoutPanel{AutoSize=true,WrapContents=true};heapActions.Controls.Add(Button("读取当前配置",reload));heapActions.Controls.Add(Button("保存启动内存",()=>{int selected=(int)input.Value;Run(()=>LauncherMaintenance.SetHeapGiB(GetEngine(),selected),"正在保存游戏启动内存");}));memory.Controls.Add(heapActions);
    if(!Program.PreviewMode){try{reload();}catch(Exception ex){heapState.Text=ex.Message;}}
    var maintenance=Page(tabs,"维护与诊断");
+   var buddyState=new Label{Name="launcher-buddy-state",AutoSize=true,MaximumSize=new Size(950,0),Margin=new Padding(8),Text="先扫描旧启动参数；不会在打开软件时接管。"};maintenance.Controls.Add(buddyState);
+   AddButton(maintenance,"扫描旧启动参数",()=>{if(Program.PreviewMode){buddyState.Text="预览：只展示扫描入口。";return;}var preview=BuddyTakeover.Preview(GetEngine());var recovery=BuddyTakeover.Recovery(GetEngine());buddyState.Text=preview.message+"\n"+string.Join(" · ",preview.locations)+(recovery.pending?"\n有待恢复的接管记录："+recovery.message:"");});
+   AddButton(maintenance,"接管旧启动参数",()=>LegacyBuddyTakeover(false));
+   AddButton(maintenance,"恢复本轮接管改动",()=>LegacyBuddyTakeover(true));
+   AddText(maintenance,"已识别 Buddy 参数先确认范围；需要改 Steam 启动项时再单独确认正常退出。未知目录、选项或复杂 BAT 保留并人工核对。恢复只处理本轮自有改动，不能整份覆盖更新后的 VDF；必要时先打开并登录正确客户端，再刷新恢复状态。接管后可继续原组件安装，逐文件决定 Java 授权。");
+   if(!Program.PreviewMode){try{var recovery=BuddyTakeover.Recovery(GetEngine());if(recovery.pending)buddyState.Text="有待恢复的接管记录："+recovery.message;}catch(Exception ex){buddyState.Text=ex.Message;}}
    AddText(maintenance,"操作前必须退出游戏。清缓存不会备份缓存，不清除角色、车辆数据库、单人存档和个人模组；安装配置的恢复备份仍保留。删除后下次进服需要重新获取地图，第一次进入可能更慢。");
    AddButton(maintenance,"清除多人地图缓存",()=>{if(MessageBox.Show(this,"将清除本机全部已缓存服务器的多人地图区块缓存，不备份。\n保留角色和车辆数据库、未知文件及其他存档。下次进服重新下载地图。\n请先退出游戏，确定清除？","清除多人缓存",MessageBoxButtons.OKCancel,MessageBoxIcon.Warning)==DialogResult.OK)Run(()=>LauncherMaintenance.ClearMultiplayerCache(GetEngine()),"正在清除多人地图缓存");});
    AddText(maintenance,"工坊全量重下载仅针对 Project Zomboid（108600）的工坊本地文件。保留订阅、其他游戏、个人本地 mods 和存档。必须先核对 Steam 订阅清单，无法核对就不会开始删除。下载中不要退出 Steam；失败后必须完成重试才可启动。");

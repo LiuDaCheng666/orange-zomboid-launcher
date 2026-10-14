@@ -11,6 +11,11 @@ namespace PZ3D {
    var policy=typeof(Engine).Assembly.GetType("PZ3D.ModernHostPolicy");Check(policy!=null,"modern bridge origin and command policy exists");var accept=policy.GetMethod("Validate");
    Func<string,string,bool> valid=(source,json)=>{try{accept.Invoke(null,new object[]{source,json});return true;}catch{return false;}};
    Check(valid("https://orange.local/index.html","{\"id\":\"1\",\"action\":\"memoryGet\",\"payload\":{}}"),"local trusted memory read accepted");
+   foreach(string action in new[]{"buddyPreview","buddyTakeover","buddyRecover"}){
+    string payload=action=="buddyPreview"?"{}":"{\"stamp\":\"opaque\",\"confirmed\":true,\"steamExitConfirmed\":false}";
+    Check(valid("https://orange.local/index.html","{\"id\":\"b\",\"action\":\""+action+"\",\"payload\":"+payload+"}"),"safe Buddy action accepted: "+action);
+    foreach(string bad in new[]{"{\"path\":\"forged\"}","{\"stamp\":\"opaque\",\"confirmed\":true}","{\"stamp\":\"opaque\",\"confirmed\":false,\"steamExitConfirmed\":false}","{\"stamp\":\"opaque\",\"confirmed\":true,\"steamExitConfirmed\":\"true\"}","{\"stamp\":\"opaque\",\"confirmed\":true,\"steamExitConfirmed\":false,\"account\":42}","{\"stamp\":\"opaque\",\"confirmed\":true,\"steamExitConfirmed\":false,\"executable\":\"steam.exe\"}"})Check(!valid("https://orange.local/index.html","{\"id\":\"b\",\"action\":\""+action+"\",\"payload\":"+bad+"}"),"Buddy payload refuses missing consent, wrong types or extra target: "+action);
+   }
    Check(!valid("https://evil.test/index.html","{\"id\":\"1\",\"action\":\"maintenance\",\"payload\":{\"kind\":\"cache\",\"confirmed\":true}}"),"external origin cannot drive destructive backend");
    Check(!valid("https://orange.local.evil.test/","{\"id\":\"1\",\"action\":\"status\",\"payload\":{}}"),"lookalike origin rejected");
    Check(!valid("https://orange.local/index.html","{\"id\":\"1\",\"action\":\"shell\",\"payload\":{}}"),"unknown host execution action rejected");
