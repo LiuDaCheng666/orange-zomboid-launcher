@@ -26,7 +26,7 @@
 
 **Interfaces:** `LaunchPreflight.Check(Engine e, bool busy, bool running)` returns serializable report with `canLaunch`, `checkedUtc`, `items` (id/status/title/message/route) and `message`; a target-aware overload also accepts validated `targetKind` (`normal|save|server`). Native action `launchPreflight` accepts empty payload or only optional validated `targetKind`, default normal. `ModernController` emits existing progress events and consumes the report on real launch paths. Server launch must not be blocked by ordinary local-mod dependencies which its existing session mechanism intentionally excludes; malformed/unrecoverable configuration remains fatal.
 
-- [ ] Write tests exercising a clean synthetic Engine, malformed JSON, missing Buddy files, old javaagent, pending recovery, missing mod dependency, pending Java approvals, no-Xmx advisory and stale readiness. Independently assert no writes occur.
+- [x] Write tests exercising a clean synthetic Engine, malformed JSON, missing Buddy files, old javaagent, pending recovery, missing mod dependency, pending Java approvals, no-Xmx advisory and stale readiness. Independently assert no writes occur.
 
 ```csharp
 // Break caught: a failed launch configuration is incorrectly allowed.
@@ -35,10 +35,10 @@ Assert(!report.canLaunch, "missing Buddy file blocks launch");
 Assert(report.items.Any(i => i.id == "launch-config" && i.status == "error"), "specific issue exposed");
 ```
 
-- [ ] Compile/run `./Build-Tests.ps1 -Entry PZ3D.LaunchPreflightTests -Output artifacts/preflight-tests.exe` then the EXE; record expected red output before implementation.
-- [ ] Implement bounded read-only report using existing checks, default-mod sort and current Java approvals. Pending authorization is advisory and has a direct action route; do not require a previously unseen server Java file. Distinguish advisory heap/free-memory conditions from fatal config errors. Check only known paths and guard reparse points; expose no secrets. Real `launch`/`profileLaunch` rerun checks immediately before starting, preserving network drain/session protections. Stage names must not claim game-ready or connection success.
-- [ ] Run focused tests plus `ModernTests`/launcher launch regression entrypoints available in this repo; preserve baseline tests and add actual controller-boundary tests. Save TDD commands/results in report.
-- [ ] Self-review and commit only task files after fresh passing verification; report report-field contract and exact native action to coordinator.
+- [x] Compile/run `./Build-Tests.ps1 -Entry PZ3D.LaunchPreflightTests -Output artifacts/preflight-tests.exe` then the EXE; record expected red output before implementation.
+- [x] Implement bounded read-only report using existing checks, default-mod sort and current Java approvals. Pending authorization is advisory and has a direct action route; do not require a previously unseen server Java file. Distinguish advisory heap/free-memory conditions from fatal config errors. Check only known paths and guard reparse points; expose no secrets. Real `launch`/`profileLaunch` rerun checks immediately before starting, preserving network drain/session protections. Stage names must not claim game-ready or connection success.
+- [x] Run focused tests plus `ModernTests`/launcher launch regression entrypoints available in this repo; preserve baseline tests and add actual controller-boundary tests. Save TDD commands/results in report.
+- [x] Self-review and commit only task files after fresh passing verification; report report-field contract and exact native action to coordinator.
 
 ## Task 2: Play profiles and safe JSON sharing
 
