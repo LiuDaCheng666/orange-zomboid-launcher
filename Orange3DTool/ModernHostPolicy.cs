@@ -10,8 +10,9 @@ namespace PZ3D {
    Uri uri;if(!Uri.TryCreate(source,UriKind.Absolute,out uri)||uri.Scheme!="https"||uri.Host!="orange.local"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.AbsolutePath!="/index.html")throw new Exception("拒绝非本地受信界面的请求。");
    if(text==null||text.Length>262144)throw new Exception("界面请求过大或为空。");
    var request=new JavaScriptSerializer{MaxJsonLength=262144,RecursionLimit=24}.Deserialize<Dictionary<string,object>>(text);object id,action,payload;
-   if(request==null||!request.TryGetValue("id",out id)||!(id is string)||!Regex.IsMatch((string)id,@"^[A-Za-z0-9_-]{1,96}$")||!request.TryGetValue("action",out action)||!(action is string)||(!Actions.Contains((string)action)&&!CoreAction((string)action)&&!BuddyAction((string)action)))throw new Exception("未知或无效的界面操作。");
+   if(request==null||!request.TryGetValue("id",out id)||!(id is string)||!Regex.IsMatch((string)id,@"^[A-Za-z0-9_-]{1,96}$")||!request.TryGetValue("action",out action)||!(action is string)||(!Actions.Contains((string)action)&&!CoreAction((string)action)&&!BuddyAction((string)action)&&!PlayProfiles.Action((string)action)))throw new Exception("未知或无效的界面操作。");
    if(!request.TryGetValue("payload",out payload)||!(payload is Dictionary<string,object>))throw new Exception("操作参数必须是对象。");
+   if(PlayProfiles.Action((string)action))PlayProfiles.ValidatePayload((string)action,(Dictionary<string,object>)payload);
    if(CoreAction((string)action)) {
     var p=(Dictionary<string,object>)payload;object protocol,confirmed,drafts;
     bool apply=(string)action=="coreUpdateApply";

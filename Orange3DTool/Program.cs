@@ -84,7 +84,10 @@ if(args.Contains("--self-test")) { try { BuddyTakeoverTests.Run(); SteamLaunchOp
   Dictionary<string,object> ReadConfig(){return Json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Config));}
   static string[] Args(Dictionary<string,object> c){return ((System.Collections.IEnumerable)c["vmArgs"]).Cast<object>().Select(o=>o.ToString()).ToArray();}
   public bool Enabled {get{try{return Args(ReadConfig()).Any(Agent) && File.Exists(Mods) && Regex.IsMatch(File.ReadAllText(Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}catch{return false;}}}
-  public void Guard(){
+  public void Guard(){GuardCore(false);}
+  internal void GuardPlayProfile(){GuardCore(true);}
+  void GuardCore(bool ownProfileTransaction){
+   if(!ownProfileTransaction&&PlayProfileTransaction.Pending(this))throw new Exception(PlayProfileTransaction.PendingMessage);
    BuddyTakeover.Guard(this);
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
    if(!TestMode && GameProcessGuard.IsRunning(Game))throw new Exception("请完全退出游戏后再切换（包括直接运行的游戏 Java 进程）。");

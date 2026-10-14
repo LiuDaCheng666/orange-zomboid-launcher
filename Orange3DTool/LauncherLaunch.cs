@@ -14,6 +14,7 @@ namespace PZ3D {
    if(cfg.TryGetValue("windows",out value)){var branches=value as Dictionary<string,object>;if(branches==null)throw new Exception("windows分支格式无效");foreach(object raw in branches.Values){var branch=raw as Dictionary<string,object>;if(branch==null)throw new Exception("windows分支格式无效");foreach(string arg in Arguments(branch))yield return arg;}}
   }
   public static string Reason(Engine e,bool busy,bool running){
+   if(PlayProfileTransaction.Pending(e))return PlayProfileTransaction.PendingMessage;
    if(BuddyTakeover.Pending(e))return "旧 Buddy 参数接管尚未恢复，请先检查维护页恢复状态。";
    if(busy)return "正在执行任务，请等待完成或取消后再启动。";
    if(running)return "游戏已经运行，请切回游戏或退出后再启动。";
