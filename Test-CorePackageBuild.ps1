@@ -1,6 +1,14 @@
+param([string]$ExpectedVersion='')
 $ErrorActionPreference='Stop'
 & (Join-Path $PSScriptRoot 'Build-Tests.ps1') -Entry PZ3D.CoreReleaseTool -Output (Join-Path $PSScriptRoot 'artifacts\core-release-tool.exe')
 $tool=Join-Path $PSScriptRoot 'artifacts\core-release-tool.exe'
+if(-not $ExpectedVersion){$ExpectedVersion=(Get-Content -Raw (Join-Path $PSScriptRoot 'VERSION')).Trim()}
+$assembly=[Reflection.Assembly]::LoadFile($tool)
+$stream=$assembly.GetManifestResourceStream('Launcher.Version.txt')
+try{$reader=[IO.StreamReader]::new($stream);try{$embeddedVersion=$reader.ReadToEnd().Trim()}finally{$reader.Dispose()}}finally{$stream.Dispose()}
+$info=[Diagnostics.FileVersionInfo]::GetVersionInfo($tool)
+if($assembly.GetName().Version.ToString() -ne "$ExpectedVersion.0" -or $info.FileVersion -ne "$ExpectedVersion.0" -or $info.ProductVersion -ne $ExpectedVersion -or $embeddedVersion -ne $ExpectedVersion){throw "Release metadata expected $ExpectedVersion; assembly=$($assembly.GetName().Version), file=$($info.FileVersion), product=$($info.ProductVersion), embedded=$embeddedVersion"}
+Write-Output "PASS: release metadata assembly/file/product/embedded version $ExpectedVersion"
 $fixture=Join-Path $PSScriptRoot ('artifacts\TestFixtures\package-build-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixture | Out-Null
 $private=Join-Path $fixture 'fixture-private.xml';$public=Join-Path $fixture 'fixture-public.xml'
@@ -29,6 +37,9 @@ if($LASTEXITCODE -ne 0){throw 'Actual fixture pack failed'}
 if($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath (Join-Path $fixture 'mismatched-key'))){throw 'Signing key mismatch did not fail before output'}
 & $tool validate (Join-Path $release 'core') $release $public
 if($LASTEXITCODE -ne 0){throw 'Actual fixture validation failed'}
+$manifest=Get-Content -Raw (Join-Path $release 'update-manifest.json') | ConvertFrom-Json
+if($manifest.version -ne $ExpectedVersion){throw 'Signed manifest version mismatch'}
+foreach($name in @('橙子启动器.exe','橙子更新助手.exe','卸载橙子启动器.exe')){$info=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $release "core\$name"));if($info.FileVersion -ne "$ExpectedVersion.0" -or $info.ProductVersion -ne $ExpectedVersion){throw "Packaged executable version mismatch: $name"}}
 & $tool pack $core $again $private $public
 if($LASTEXITCODE -ne 0){throw 'Repeated fixture pack failed'}
 foreach($name in @('update-manifest.json','update-manifest.sig',"orange-launcher-v$version-win-x64.zip")){if((Get-FileHash -LiteralPath (Join-Path $release $name)).Hash -ne (Get-FileHash -LiteralPath (Join-Path $again $name)).Hash){throw "Unchanged fixture output is unstable: $name"}}
@@ -43,6 +54,7 @@ $neverStarted=Join-Path $fixture 'never-started';[IO.Compression.ZipFile]::Extra
 if($LASTEXITCODE -ne 0){throw 'ZIP uninstaller must work before first launcher start'}
 & (Join-Path $extracted '橙子启动器.exe')
 if($LASTEXITCODE -ne 0){throw 'Direct ZIP fixture failed'}
+if((Get-Content -Raw (Join-Path $extracted 'orange-installation.json') | ConvertFrom-Json).version -ne $ExpectedVersion){throw 'Direct ZIP install record version mismatch'}
 $sha=[Security.Cryptography.SHA256]::Create()
 try{$rootHash=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($extracted.ToUpperInvariant()))).Replace('-','')}finally{$sha.Dispose()}
 $mutex=[Threading.Mutex]::new($false,('Global\OrangeLauncher.Core.'+$rootHash))

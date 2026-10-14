@@ -11,6 +11,10 @@ $source=Join-Path $FixtureRoot 'source';New-Item -ItemType Directory -Path $sour
 $project=Join-Path $PSScriptRoot 'Orange3DTool';$sdk=Join-Path $PSScriptRoot 'Dependencies\WebView2';$compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $refs=@('/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Management.dll','/reference:System.IO.Compression.dll','/reference:System.IO.Compression.FileSystem.dll','/reference:System.Security.dll',"/reference:$sdk\lib\net462\Microsoft.Web.WebView2.Core.dll","/reference:$sdk\lib\net462\Microsoft.Web.WebView2.WinForms.dll")
 $versionAttributes=& (Join-Path $PSScriptRoot 'Build-Version.ps1')
+$currentVersion=(Get-Content -Raw (Join-Path $PSScriptRoot 'VERSION')).Trim()
+$parts=$currentVersion.Split('.')
+$nextVersion="$($parts[0]).$($parts[1]).$([int]$parts[2]+1)"
+if([int]$parts[2] -ge 65534){throw 'Next fixture patch version exceeds assembly limits'}
 foreach($entry in @(@('PZ3D.CoreUpdateNativeFixtureTests','橙子启动器.exe'),@('PZ3D.CoreUpdaterProgram','橙子更新助手.exe'),@('PZ3D.CoreUpdateNativeFixtureTests','卸载橙子启动器.exe'))){
  & $compiler /nologo /target:winexe /platform:x64 "/main:$($entry[0])" "/out:$source\$($entry[1])" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$PSScriptRoot\VERSION,Launcher.Version.txt" $refs $versionAttributes (Get-ChildItem -LiteralPath $project -Filter '*.cs').FullName
  if($LASTEXITCODE -ne 0){throw 'Native fixture compile failed'}
@@ -26,23 +30,23 @@ $release=Join-Path $FixtureRoot 'release'
 if($LASTEXITCODE -ne 0){throw 'Fixture base pack failed'}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 foreach($layout in $(if($RecoveryOnly){@('full')}else{@('sparse','full')})){foreach($case in $(if($RecoveryOnly){@('interrupted')}elseif($layout -eq 'full'){@('healthy','failed','interrupted')}else{@('healthy','failed')})){
- $root=Join-Path $FixtureRoot "$layout-$case";[IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $release 'orange-launcher-v1.1.0-win-x64.zip'),$root)
+ $root=Join-Path $FixtureRoot "$layout-$case";[IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $release "orange-launcher-v$currentVersion-win-x64.zip"),$root)
  $feed=Join-Path $root 'fixture-feed';New-Item -ItemType Directory -Path $feed | Out-Null
  $manifest=Get-Content -Raw (Join-Path $release 'update-manifest.json') | ConvertFrom-Json
- $manifest.version='1.1.1';$manifest.notes='Native WebView fixture; not a published release'
+ $manifest.version=$nextVersion;$manifest.notes='Native WebView fixture; not a published release'
  $text=[IO.File]::ReadAllText((Join-Path $root 'Web\app.js'))
  if($case -ne 'failed'){$text+="`n// Native sparse update fixture`n"}else{$text="throw new Error('Deliberately failed native page fixture');"}
  $bytes=[Text.UTF8Encoding]::new($false).GetBytes($text);[IO.File]::WriteAllBytes((Join-Path $feed 'app.js'),$bytes)
  $sha=[Security.Cryptography.SHA256]::Create();try{$hash=[BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-','')}finally{$sha.Dispose()}
- foreach($file in $manifest.files){$file.url=$file.url.Replace('/v1.1.0/','/v1.1.1/');if($file.path -eq 'Web/app.js'){$file.sha256=$hash;$file.length=$bytes.Length;$file.url='https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.1.1/app.js'}}
+ foreach($file in $manifest.files){$file.url=$file.url.Replace("/v$currentVersion/","/v$nextVersion/");if($file.path -eq 'Web/app.js'){$file.sha256=$hash;$file.length=$bytes.Length;$file.url="https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v$nextVersion/app.js"}}
  $raw=[Text.UTF8Encoding]::new($false).GetBytes(($manifest | ConvertTo-Json -Depth 8 -Compress));[IO.File]::WriteAllBytes((Join-Path $feed 'update-manifest.json'),$raw)
  $rsa=[Security.Cryptography.RSACryptoServiceProvider]::new();try{$rsa.PersistKeyInCsp=$false;$rsa.FromXmlString([IO.File]::ReadAllText($private));[IO.File]::WriteAllBytes((Join-Path $feed 'update-manifest.sig'),$rsa.SignData($raw,[Security.Cryptography.CryptoConfig]::MapNameToOID('SHA256')))}finally{$rsa.Dispose()}
  if($layout -eq 'full'){
   $nextSource=Join-Path $FixtureRoot "$layout-$case-source";New-Item -ItemType Directory -Path $nextSource | Out-Null
   Get-ChildItem -LiteralPath $source | Copy-Item -Destination $nextSource -Recurse
-  [IO.File]::WriteAllText((Join-Path $nextSource 'VERSION'),'1.1.1',[Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText((Join-Path $nextSource 'VERSION'),$nextVersion,[Text.UTF8Encoding]::new($false))
   $nextAttributes=Join-Path $FixtureRoot 'Fixture.Version.g.cs'
-  [IO.File]::WriteAllText($nextAttributes,'using System.Reflection; [assembly: AssemblyVersion("1.1.1.0")] [assembly: AssemblyFileVersion("1.1.1.0")] [assembly: AssemblyInformationalVersion("1.1.1")]',[Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText($nextAttributes,"using System.Reflection; [assembly: AssemblyVersion(`"$nextVersion.0`")] [assembly: AssemblyFileVersion(`"$nextVersion.0`")] [assembly: AssemblyInformationalVersion(`"$nextVersion`")]",[Text.UTF8Encoding]::new($false))
   foreach($entry in @(@('PZ3D.CoreUpdateNativeFixtureTests','橙子启动器.exe'),@('PZ3D.CoreUpdaterProgram','橙子更新助手.exe'),@('PZ3D.CoreUpdateNativeFixtureTests','卸载橙子启动器.exe'))){
    & $compiler /nologo /target:winexe /platform:x64 "/main:$($entry[0])" "/out:$nextSource\$($entry[1])" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$nextSource\VERSION,Launcher.Version.txt" $refs $nextAttributes (Get-ChildItem -LiteralPath $project -Filter '*.cs').FullName
    if($LASTEXITCODE -ne 0){throw 'Version-bumped native fixture compile failed'}
@@ -75,7 +79,7 @@ foreach($layout in $(if($RecoveryOnly){@('full')}else{@('sparse','full')})){fore
  if($layout -eq 'sparse'){
   if((Get-Content (Join-Path $root 'downloaded-files.txt')).Count -ne 1 -or (Get-Content -Raw (Join-Path $root 'downloaded-files.txt')).Trim() -ne 'app.js'){throw 'Sparse fixture downloaded unexpected assets'}
  }else{
-  $expectedVersion=if($case -eq 'healthy'){'1.1.1'}else{'1.1.0'}
+  $expectedVersion=if($case -eq 'healthy'){$nextVersion}else{$currentVersion}
   if((Get-Content -Raw (Join-Path $root 'native-running-version')).Trim() -ne $expectedVersion){throw 'Actual running native AppVersion mismatch'}
   if((Get-Content -Raw (Join-Path $root 'VERSION')).Trim() -ne $expectedVersion -or (Get-Content -Raw (Join-Path $root 'orange-installation.json') | ConvertFrom-Json).version -ne $expectedVersion){throw 'VERSION/install record mismatch'}
   foreach($name in @('橙子启动器.exe','橙子更新助手.exe','卸载橙子启动器.exe')){

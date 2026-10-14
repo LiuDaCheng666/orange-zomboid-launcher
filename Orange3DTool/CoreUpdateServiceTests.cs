@@ -13,8 +13,11 @@ namespace PZ3D {
   static object Invoke(object s,string name){try{return s.GetType().GetMethod(name).Invoke(s,null);}catch(TargetInvocationException e){throw e.InnerException;}}
   static Dictionary<string,object> Snapshot(object s){return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(new JavaScriptSerializer().Serialize(Invoke(s,"Status")));}
   static void Until(object s,string state){var end=DateTime.UtcNow.AddSeconds(10);while((string)Snapshot(s)["state"]!=state){if(DateTime.UtcNow>end)throw new Exception("FAIL: expected "+state+", got "+new JavaScriptSerializer().Serialize(Snapshot(s)));Thread.Sleep(10);}}
+  static string NextVersion(){var current=new Version(AppVersion.Current);return current.Major+"."+current.Minor+"."+(current.Build+1);}
+  static string InstallCurrent(){string root=CoreFixture.Root();CoreDeployment.Install(root,CoreFixture.Manifest(AppVersion.Current,CoreFixture.A),CoreFixture.A,CoreFixture.Key);return root;}
+  static void CurrentRelease(){string root=InstallCurrent();var current=CoreFixture.Manifest(AppVersion.Current,CoreFixture.A);int downloads=0;using(var service=new CoreUpdateService(root,CoreFixture.Key,token=>new[]{current.VerifiedEnvelope.Raw,current.VerifiedEnvelope.Signature},(url,token)=>{downloads++;throw new Exception("Current release must not download");})){service.Check();Until(service,"Latest");CoreFixture.Check(service.Status().latestVersion==AppVersion.Current&&downloads==0,"signed current release is Latest without downloading");CoreFixture.Same(root,CoreFixture.A,"current release check preserves installation");}}
   static void RetryCache(){
-   string root=CoreFixture.Install();var files=CoreFixture.B();files["Web/app.css"]=CoreFixture.Bytes("new-css");var target=CoreFixture.Manifest("1.1.1",files);int js=0,css=0;bool fail=true;
+   string root=InstallCurrent();var files=CoreFixture.B();files["Web/app.css"]=CoreFixture.Bytes("new-css");var target=CoreFixture.Manifest(NextVersion(),files);int js=0,css=0;bool fail=true;
    using(var entered=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())using(var controller=new ModernController(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true,null,(e,a,p,progress,token,batch)=>{entered.Set();release.Wait();return new{items=new object[0]};}))
    using(var service=new CoreUpdateService(root,CoreFixture.Key,token=>new[]{target.VerifiedEnvelope.Raw,target.VerifiedEnvelope.Signature},(url,token)=>{if(url.EndsWith("app.js")){js++;return new MemoryStream(CoreFixture.Bytes("new-js"));}css++;return new MemoryStream(CoreFixture.Bytes(fail?"bad-css":"new-css"));})) {
     var busy=Task.Run(()=>controller.Execute("updatesGet",new Dictionary<string,object>()));CoreFixture.Check(entered.Wait(5000)&&controller.Busy,"real controller network lane is occupied");service.Check();Until(service,"Available");CoreFixture.Check(!busy.IsCompleted,"core check finishes while real controller remains occupied");release.Set();busy.Wait();
@@ -22,18 +25,19 @@ namespace PZ3D {
    }
   }
   static void Service() {
+   CurrentRelease();
    RetryCache();
    CoreFixture.Check(CoreReleaseNetwork.Allowed(new Uri("https://release-assets.githubusercontent.com/github-production-release-asset/file?sig=x")),"official HTTPS release asset redirect accepted");
    foreach(string uri in new[]{"http://github.com/file","https://github.com.evil.invalid/file","https://github.com:444/file","https://user@github.com/file","https://example.invalid/file"})CoreFixture.Check(!CoreReleaseNetwork.Allowed(new Uri(uri)),"unsafe download redirect refused: "+uri);
    var type=typeof(CoreFixture).Assembly.GetType("PZ3D.CoreUpdateService");CoreFixture.Check(type!=null,"authenticated native update service exists");
-   string root=CoreFixture.Install();var target=CoreFixture.Manifest("1.1.1",CoreFixture.B());int opens=0,checks=0;bool corrupt=false,block=false;
+   string root=InstallCurrent();var target=CoreFixture.Manifest(NextVersion(),CoreFixture.B());int opens=0,checks=0;bool corrupt=false,block=false;
    using(var entered=new ManualResetEventSlim())using(var proceed=new ManualResetEventSlim()) {
     Func<CancellationToken,byte[][]> lookup=t=>{Interlocked.Increment(ref checks);return new[]{target.VerifiedEnvelope.Raw,corrupt?new byte[256]:target.VerifiedEnvelope.Signature};};
     Func<string,CancellationToken,Stream> open=(url,t)=>{Interlocked.Increment(ref opens);CoreFixture.Check(url.EndsWith("/app.js"),"sparse download fetches only changed JS");entered.Set();if(block){t.WaitHandle.WaitOne(10000);t.ThrowIfCancellationRequested();}proceed.Wait(t);return new MemoryStream(CoreFixture.Bytes("new-js"));};
     var service=Activator.CreateInstance(type,BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{root,CoreFixture.Key,lookup,open},null);
     try {
      corrupt=true;Invoke(service,"Check");Until(service,"Error");CoreFixture.Check(string.IsNullOrEmpty((string)Snapshot(service)["latestVersion"]),"unauthenticated publication never offered");
-     corrupt=false;Invoke(service,"Check");Until(service,"Available");CoreFixture.Check((string)Snapshot(service)["currentVersion"]=="1.1.0"&&(string)Snapshot(service)["latestVersion"]=="1.1.1","native authority supplies both versions");
+     corrupt=false;Invoke(service,"Check");Until(service,"Available");CoreFixture.Check((string)Snapshot(service)["currentVersion"]==AppVersion.Current&&(string)Snapshot(service)["latestVersion"]==target.version,"native authority supplies both versions");
      block=true;Invoke(service,"Download");CoreFixture.Check(entered.Wait(5000),"download starts asynchronously");Invoke(service,"Download");CoreFixture.Check(opens==1,"repeated download starts one job");
      using(var child=Process.Start(new ProcessStartInfo(typeof(CoreFixture).Assembly.Location,"--lock \""+root+"\""){UseShellExecute=false,CreateNoWindow=true})){CoreFixture.Check(child.WaitForExit(5000)&&child.ExitCode==0,"real other process specifically refused by download mutex");}
      Invoke(service,"Cancel");Until(service,"Cancelled");using(CoreDeployment.Acquire(root))CoreFixture.Check(true,"cancel releases thread-affine mutex");CoreFixture.Same(root,CoreFixture.A,"cancel preserves current installation");

@@ -9,3 +9,11 @@ $version=(Get-Content -Raw (Join-Path $PSScriptRoot 'VERSION')).Trim()
 $info=[Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
 if($info.FileVersion -ne "$version.0" -or $info.ProductVersion -ne $version){throw 'New legacy executable metadata differs from VERSION'}
 Write-Output "PASS: actual default legacy native UI/service and version metadata; $output"
+$shots=Join-Path $PSScriptRoot ("artifacts/$version-legacy-captures-"+[Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $shots | Out-Null
+foreach($theme in @('dark','light')){foreach($page in @('启动与内存','维护与诊断')){
+ $image=Join-Path $shots ($theme+'-'+$page+'.png')
+ $process=Start-Process -FilePath $exe -ArgumentList @('--preview',('"'+$image+'"'),'--page',('"'+$page+'"'),'--theme',$theme,'--size','1100x760') -WindowStyle Hidden -PassThru
+ if(-not $process.WaitForExit(45000) -or $process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $image)){throw "Actual WinForms legacy capture failed: $image"}
+ Write-Output "PASS: actual WinForms legacy $theme/$page; $image"
+}}
