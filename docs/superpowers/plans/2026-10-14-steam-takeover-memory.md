@@ -233,7 +233,7 @@ The mutation calls use the service's own guarded preflight: do not put the ordin
 
 **Files:**
 - Modify: `VERSION`, `CHANGELOG.md`, `使用说明.md`, `docs/core-release-verification.md` (append new version evidence, preserve1.1.0).
-- Modify/Test: `Test-CoreNativeUpdate.ps1`, `Orange3DTool/CoreUpdateNativeFixtureTests.cs`, `Test-CoreLegacyStartup.ps1`, `Test-CorePackageBuild.ps1` only to remove old hardcodedfixtureversions or include new assets/tests safely. The interruption driver verifies against its current embedded `AppVersion.Current`, not a literal old version.
+- Modify/Test: `Test-CoreNativeUpdate.ps1`, `Orange3DTool/CoreUpdateNativeFixtureTests.cs`, `Orange3DTool/CoreUpdateServiceTests.cs`, `Test-CoreLegacyStartup.ps1`, `Test-CorePackageBuild.ps1` only to remove old hardcodedfixtureversions or include new assets/tests safely. The interruption driver verifies against its current embedded `AppVersion.Current`, not a literal old version.
 - Modify: release allowlist/build scripts only if genuinely required by compiled-native additions. Parser/migration C# compiles intoexistingmain/helper/uninstaller EXEs; no thirdparty DLL introduced.
 - Create: `docs/releases/1.1.1-verification.md` and `artifacts/1.1.1-*` evidence/output.
 
