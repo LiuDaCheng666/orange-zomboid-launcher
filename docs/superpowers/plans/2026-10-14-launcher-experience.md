@@ -24,7 +24,7 @@
 
 **Files:** Create `Orange3DTool/LaunchPreflight.cs`, `Orange3DTool/LaunchPreflightTests.cs`; modify `ModernController.cs`, `ModernHostPolicy.cs`, and focused existing launch tests as required. Existing `LauncherLaunch.cs`, `JavaApprovals.cs`, `ModConfigurations.cs`, `LaunchProfiles.cs` are reused, not duplicated wholesale.
 
-**Interfaces:** `LaunchPreflight.Check(Engine e, bool busy, bool running)` returns serializable report with `canLaunch`, `checkedUtc`, `items` (id/status/title/message/route) and `message`. Native action `launchPreflight` accepts empty payload. `ModernController` emits existing progress events and consumes the report on real launch paths.
+**Interfaces:** `LaunchPreflight.Check(Engine e, bool busy, bool running)` returns serializable report with `canLaunch`, `checkedUtc`, `items` (id/status/title/message/route) and `message`; a target-aware overload also accepts validated `targetKind` (`normal|save|server`). Native action `launchPreflight` accepts empty payload or only optional validated `targetKind`, default normal. `ModernController` emits existing progress events and consumes the report on real launch paths. Server launch must not be blocked by ordinary local-mod dependencies which its existing session mechanism intentionally excludes; malformed/unrecoverable configuration remains fatal.
 
 - [ ] Write tests exercising a clean synthetic Engine, malformed JSON, missing Buddy files, old javaagent, pending recovery, missing mod dependency, pending Java approvals, no-Xmx advisory and stale readiness. Independently assert no writes occur.
 
