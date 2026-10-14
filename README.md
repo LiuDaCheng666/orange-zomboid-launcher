@@ -33,12 +33,12 @@ npm test
 ./Build-CoreRelease.ps1 -VersionOnly
 ./Test-CorePackageBuild.ps1
 # 使用明确的仓库外私钥路径和新的输出目录打包：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-r4
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-final
 ```
 
 正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。
 
-正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。当前1.2.0本机验收候选为 `dist/1.2.0-experience-verified-r4`，重建须选另一个全新目录；保留已验收1.1.1及历史记录，线上更新渠道尚未发布。完整 ZIP 解压到独立可写目录后运行“橙子启动器.exe”；不要只复制 EXE。顶部“启动器更新”手动检查并验证签名；下载完成后保存编辑、退出游戏，再确认重启。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
+正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。1.2.0最终本机候选计划构建到全新目录 `dist/1.2.0-experience-verified-final`，目前待协调者构建和验证；r4在b81d9ab源码修正后已被取代，仅保留为历史证据，不能证明当前源码成品。保留已验收1.1.1及历史记录，线上更新渠道尚未发布。完整 ZIP 解压到独立可写目录后运行“橙子启动器.exe”；不要只复制 EXE。顶部“启动器更新”手动检查并验证签名；下载完成后保存编辑、退出游戏，再确认重启。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
 
 交互方法仅概念参考 [PCL](https://github.com/Meloong-Git/PCL)（[原项目许可](https://github.com/Meloong-Git/PCL/blob/main/LICENCE)），没有复制代码、图标或分发素材。
 

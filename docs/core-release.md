@@ -1,6 +1,6 @@
 # 核心发布与签名
 
-正式版本来自根目录 VERSION（当前 1.2.0）。本机统一体验候选位于 `dist/1.2.0-experience-verified-r4/`，验证记录见 [1.2.0-verification.md](releases/1.2.0-verification.md)。这里只是本机隔离验收，没有上传、合并 main 或正式发布；选择配置不等于应用，启动请求不等于游戏已加载。已验收的 1.1.1 产物和历史记录保留不动。旧单 EXE 为未正式编号构建，不追称 1.0.0；版本不可重用，构建脚本拒绝覆盖输出目录。真实更新与回退使用隔离 fixture，不能作为正式发布产物。
+正式版本来自根目录 VERSION（当前 1.2.0）。最终本机统一体验候选计划使用全新目录 `dist/1.2.0-experience-verified-final/`，目前待协调者构建和验证。r4在b81d9ab源码修正后已被取代；[1.2.0-verification.md](releases/1.2.0-verification.md)中的r4结果和哈希仅为历史记录，不证明当前源码成品。这里只是本机隔离验收，没有上传、合并 main 或正式发布；选择配置不等于应用，启动请求不等于游戏已加载。已验收的 1.1.1 产物和历史记录保留不动。旧单 EXE 为未正式编号构建，不追称 1.0.0；版本不可重用，构建脚本拒绝覆盖输出目录。真实更新与回退使用隔离 fixture，不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
@@ -8,7 +8,7 @@
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
 # 使用已有保护私钥：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-r4
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-final
 ```
 
 私钥位于仓库外，由当前 Windows 用户独占 ACL 保护。不可打印、上传、嵌入二进制或提交私钥。正式公钥为仓库根目录 release-public-key.xml，嵌入所有正式可执行文件的资源名为 `Launcher.UpdatePublicKey.xml`。磁盘中的公钥只供审计，绝不作为运行时信任根。签名私钥与该公钥不匹配时构建失败。
@@ -28,7 +28,7 @@
 
 `Build-CoreRelease.ps1` 默认编译 `PZ3D.Program`、`PZ3D.CoreUpdaterProgram`、`PZ3D.UninstallerProgram`。缺少更新助手源码立即停止，不生成占位助手。`-CoreDirectory <目录>` 可对预先构建的完整核心文件集进行同样的正式校验；输出仍要求明确签名私钥。`-OutputDirectory` 仅用于选择新的输出目录。`Orange3DTool/Build-Modern.ps1 -Core -SigningKey <路径>` 转交同一入口。
 
-当前 `dist/1.2.0-experience-verified-r4/` 包含：
+计划构建的 `dist/1.2.0-experience-verified-final/` 应包含以下产物；当前尚未生成或验证：
 
 - `core/`：18个签名核心文件及 runtime 下两份签名引导元数据。
 - `orange-launcher-v1.2.0-win-x64.zip`：与 core 相同的可直接解压运行布局。
