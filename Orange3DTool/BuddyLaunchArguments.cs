@@ -82,14 +82,19 @@ namespace PZ3D {
    for(int i=0;i<text.Length;i++){char c=text[i];if(c=='^'&&!quoted){if(i+1<text.Length)i++;continue;}if(c=='"'){quoted=!quoted;continue;}if(!quoted&&(c=='&'||c=='|')){parts.Add(text.Substring(start,i-start));start=i+1;}}
    if(quoted)throw new FormatException();parts.Add(text.Substring(start));return parts;
   }
-  static BuddyCleanupResult CleanBatLine(string text){
-   var commands=BatCommands(text);if(commands.Count==1)return CleanBatCommand(text);
+  static bool BatInOutput(bool[] context,int start,int length){
+   if(context==null)return false;
+   for(int i=start;i<context.Length&&i<start+length;i++)if(context[i])return true;
+   return false;
+  }
+  static BuddyCleanupResult CleanBatLine(string text,bool[] context=null,int offset=0){
+   var commands=BatCommands(text);if(commands.Count==1)return CleanBatCommand(text,BatInOutput(context,offset,text.Length));
    int boundary=0;
    foreach(string command in commands){
-    boundary+=command.Length;
+    bool enclosingOutput=BatInOutput(context,offset+boundary,command.Length);boundary+=command.Length;
     // Conditional OR does not pipe echo output into the next command.
     bool pipedOutput=boundary<text.Length&&text[boundary]=='|'&&(boundary+1==text.Length||text[boundary+1]!='|');boundary++;
-    if(!BatComment(command)&&CleanBatCommand(command,pipedOutput).RemovedCount>0)throw new FormatException();
+    if(!BatComment(command)&&CleanBatCommand(command,pipedOutput||enclosingOutput).RemovedCount>0)throw new FormatException();
    }
    return new BuddyCleanupResult(text,text,0,true);
   }
@@ -97,6 +102,62 @@ namespace PZ3D {
    bool quoted=false;
    for(int i=0;i<text.Length;i++){char c=text[i];if(c=='^'&&!quoted){if(i+1<text.Length)i++;continue;}if(c=='"'){quoted=!quoted;continue;}if(!quoted&&(c=='<'||c=='>'))return true;}
    return false;
+  }
+  // Keep only active boundary operators. Quoted/escaped symbols are literal output.
+  static string BatSyntax(string text){
+   var syntax=new string(' ',text.Length).ToCharArray();bool quoted=false;
+   for(int i=0;i<text.Length;i++){
+    char c=text[i];
+    if(c=='^'&&!quoted){if(i+1<text.Length)i++;else syntax[i]=c;continue;}
+    if(c=='"'){quoted=!quoted;continue;}
+    if(!quoted&&"()<>|&".IndexOf(c)>=0)syntax[i]=c;
+   }
+   return new string(syntax);
+  }
+  sealed class BatLogicalLine {internal int First,Last,Offset;internal string Text,Syntax;}
+  sealed class BatOutputGroup {internal int First;internal bool Redirected;}
+  static bool BatGroupRedirection(string syntax,int at,bool prefix){
+   for(int i=at+(prefix?-1:1);i>=0&&i<syntax.Length;i+=prefix?-1:1){
+    char c=syntax[i];if(c=='<'||c=='>')return true;
+    if(c=='&'||c=='('||c==')')return false;
+    if(c=='|')return !prefix&&(i+1==syntax.Length||syntax[i+1]!='|');
+   }
+   return false;
+  }
+  static bool[] BatOutputContexts(string[] lines,out List<BatLogicalLine> logical,out int[] offsets){
+   logical=new List<BatLogicalLine>();offsets=new int[lines.Length];int length=0;
+   for(int i=0;i<lines.Length;i++){
+    int first=i;var joined=new StringBuilder();bool continued;
+    do{
+     offsets[i]=length+joined.Length;string text=lines[i].TrimEnd('\r','\n'),syntax=BatSyntax(text);
+     continued=!BatComment(text)&&i+1<lines.Length&&syntax.Length>0&&syntax[syntax.Length-1]=='^';
+     joined.Append(continued?text.Substring(0,text.Length-1):text);
+     if(continued)i++;
+    }while(continued);
+    string value=joined.ToString();logical.Add(new BatLogicalLine{First=first,Last=i,Offset=length,Text=value,Syntax=BatComment(value)?"":BatSyntax(value)});length+=value.Length;
+   }
+   var context=new bool[length];var transfers=new int[length+1];
+   var groups=new Stack<BatOutputGroup>();
+   foreach(var line in logical){
+    BatOutputGroup adjacent=null;
+    for(int i=0;i<line.Syntax.Length;i++){
+     if(line.Syntax[i]=='&'||line.Syntax[i]=='|')adjacent=null;
+     else if(line.Syntax[i]=='('){
+      // Adjacent groups without a command separator may share compound output
+      // (for example IF/ELSE). Carry uncertainty; do not evaluate the condition.
+      groups.Push(new BatOutputGroup{First=adjacent==null?line.Offset+i:adjacent.First,Redirected=BatGroupRedirection(line.Syntax,i,true)||adjacent!=null&&adjacent.Redirected});adjacent=null;
+     }
+     else if(line.Syntax[i]==')'&&groups.Count>0){
+      var group=groups.Pop();group.Redirected|=BatGroupRedirection(line.Syntax,i,false);
+      if(group.Redirected){transfers[group.First]++;transfers[line.Offset+i+1]--;}
+      adjacent=group;
+     }
+    }
+   }
+   // An unterminated redirected group cannot establish a harmless echo boundary.
+   foreach(var group in groups)if(group.Redirected)transfers[group.First]++;
+   int active=0;for(int i=0;i<length;i++){active+=transfers[i];context[i]=active>0;}
+   return context;
   }
   static BuddyCleanupResult CleanBatCommand(string text,bool pipedOutput=false){
    var assignment=Regex.Match(text,@"^(?<prefix>\s*@?(?i:set)\s+)(?<quote>""?)(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$");
@@ -109,8 +170,8 @@ namespace PZ3D {
    var tokens=Tokens(text);if(tokens.Count>0){string executable=tokens[0].Value.TrimStart('@').Replace('\\','/').Split('/').Last();if(new[]{"java","java.exe","javaw","javaw.exe"}.Contains(executable,StringComparer.OrdinalIgnoreCase)){
     try{return CleanJavaInvocation(text,tokens);}catch(FormatException){if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None||Candidate(t.Value)))throw;return new BuddyCleanupResult(text,text,0,true);}
    }
-   // Boundaries were already separated. Redirected/piped output can become a
-   // later invocation, so only demonstrably literal Buddy output is exempt.
+   // Includes output transferred by an enclosing group or continued command.
+   // Such output can become a later invocation, so it is not a harmless echo.
    if(string.Equals(tokens[0].Value.TrimStart('@'),"echo",StringComparison.OrdinalIgnoreCase)){
     if((pipedOutput||BatHasRedirection(text))&&tokens.Any(t=>Candidate(t.Value)))throw new FormatException();
     return new BuddyCleanupResult(text,text,0,true);
@@ -122,8 +183,10 @@ namespace PZ3D {
   internal static BuddyCleanupResult CleanBat(string bat){
    if(bat==null||bat.Length>Limit)return new BuddyCleanupResult(bat,bat,0,false);int total=0;var output=new StringBuilder();
    try{var lines=Regex.Matches(bat,@"[^\r\n]*(?:\r\n|\r|\n|$)").Cast<Match>().Where(m=>m.Length>0).Select(m=>m.Value).ToArray();bool complex=lines.Where(line=>!BatComment(line)).Any(line=>line.IndexOfAny(new[]{'(',')','^'})>=0||Regex.IsMatch(line,@"^\s*@?(?i:if|for|else)(?:\s|$)"));
-    foreach(string raw in lines){string text=raw.TrimEnd('\r','\n'),ending=raw.Substring(text.Length);if(BatComment(text)){output.Append(raw);continue;}
-     var cleaned=CleanBatLine(text);if(cleaned.RemovedCount>0&&(complex||text.IndexOfAny(new[]{'%','!','^','&','|','<','>','(',')'})>=0))throw new FormatException();output.Append(cleaned.Text).Append(ending);total+=cleaned.RemovedCount;
+    List<BatLogicalLine> logical;int[] offsets;bool[] context=BatOutputContexts(lines,out logical,out offsets);
+    foreach(var line in logical)if(line.Last>line.First&&!BatComment(line.Text)&&CleanBatLine(line.Text,context,line.Offset).RemovedCount>0)throw new FormatException();
+    for(int i=0;i<lines.Length;i++){string raw=lines[i],text=raw.TrimEnd('\r','\n'),ending=raw.Substring(text.Length);if(BatComment(text)){output.Append(raw);continue;}
+     var cleaned=CleanBatLine(text,context,offsets[i]);if(cleaned.RemovedCount>0&&(complex||text.IndexOfAny(new[]{'%','!','^','&','|','<','>','(',')'})>=0))throw new FormatException();output.Append(cleaned.Text).Append(ending);total+=cleaned.RemovedCount;
     }return new BuddyCleanupResult(bat,output.ToString(),total,true);
    }catch{return new BuddyCleanupResult(bat,bat,0,false);}
   }
