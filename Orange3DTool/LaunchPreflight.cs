@@ -13,11 +13,12 @@ namespace PZ3D {
   public LaunchPreflightItem[] items;
  }
  sealed class LaunchReadBudget {
+  internal sealed class Exhausted:IOException {internal Exhausted():base("预检累计读取预算不足，相关来源尚未核实。") {}}
   int remainingDirectories=4096;long remainingBytes;
   public bool Incomplete {get;private set;}
   public LaunchReadBudget(long maximumBytes){if(maximumBytes<0)throw new ArgumentOutOfRangeException("maximumBytes");remainingBytes=maximumBytes;}
   internal void Unknown(){Incomplete=true;}
-  internal void Charge(long bytes,long maximum=long.MaxValue){if(bytes<0||bytes>maximum||bytes>remainingBytes){Incomplete=true;throw new IOException("预检文件超出读取预算。");}remainingBytes-=bytes;}
+  internal void Charge(long bytes,long maximum=long.MaxValue){if(bytes<0||bytes>maximum){Incomplete=true;throw new IOException("预检文件超出大小限制。");}if(bytes>remainingBytes){Incomplete=true;throw new Exhausted();}remainingBytes-=bytes;}
   internal string[] Directories(string path){try{LauncherMaintenance.NoReparse(path);if(!Directory.Exists(path))return new string[0];var result=Directory.EnumerateDirectories(path).Take(remainingDirectories+1).ToArray();if(result.Length>remainingDirectories){remainingDirectories=0;throw new IOException("预检目录超出累计数量上限。");}remainingDirectories-=result.Length;return result;}catch{Incomplete=true;throw;}}
   internal byte[] Read(string path,int maximum){try{LauncherMaintenance.NoReparse(path);if(!File.Exists(path))return null;using(var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)){Charge(input.Length,maximum);var bytes=new byte[(int)input.Length];int offset=0,count;while(offset<bytes.Length&&(count=input.Read(bytes,offset,bytes.Length-offset))>0)offset+=count;if(offset!=bytes.Length)throw new IOException("预检文件读取未完成。");return bytes;}}catch{Incomplete=true;throw;}}
  }

@@ -238,3 +238,50 @@ git diff --check
 All six builds and EXEs exited 0 with clean compilation output. Results: preflight 130 PASS; Java approval success; mod configurations 308 assertions/0 failed cases; launch profiles 15 PASS; controller 69 PASS; addon activation, explicit minor-version selection, and path-confinement checks passed. `git diff --check` exited 0. Addon regression was included because this fix modifies its existing resolver; no broad package/release gate was run.
 
 Fix files: `LaunchPreflight.cs`, `LaunchPreflightTests.cs`, `ViewpointAddons.cs`, `InstallWorkflow.cs`, `JavaApprovals.cs`, `LaunchProfiles.cs`, `LaunchProfilesTests.cs`, `ModConfigurations.cs`, `SaveProfiles.cs`, and this report. Self-review confirms the budgets are passed into the nested resolver and source/preload calls instead of restarted there, original identity checks precede server filtering, normal callers retain their selection contracts, and report/launch/network/recovery protections remain unchanged. No real Steam/game/save or registry/pagefile mutation was performed. Both numbered findings are addressed; no blocker remains.
+
+## Fix round 2 — exhausted retention-to-collector handoff
+
+Fix base: `105640eb828149feb705988f7836cfd73aacca44`. The original two findings remain closed. This fix addresses only the new Important finding (item 3) in `task-1-fix1-review.md`.
+
+Root cause: the now-shared budget could be consumed by valid server preload retention before the collector reread a valid `workshop-paths.json`. That cumulative-byte refusal escaped the collector, became the generic fatal `mods` error, and incorrectly blocked a server launch.
+
+The budget now distinguishes cumulative-byte exhaustion using the internal `LaunchReadBudget.Exhausted : IOException`. Invalid sizes and per-file-size limits retain their ordinary fatal exception classification. `SaveProfiles.Entries` catches only this typed exhaustion around its cache-byte read, records advisory unknown evidence, and continues collecting known/selected/local paths. JSON parsing and cache schema/path/count validation occur outside that catch. Previously safe entries and entries still inspectable within the remaining allowance are retained; there is no blanket catch around the sorter or entire collector, no empty-result shortcut, and no budget reset.
+
+Native payloads/report fields/routes are unchanged. Reusable adapter signatures are unchanged. New internal exception contract: `LaunchReadBudget.Exhausted` means cumulative bytes could not be inspected; it is not evidence that cache content is malformed. Proven malformed JSON, unsupported cache structure, relative recorded paths, and oversized cache files still produce a blocking `mods` item.
+
+### RED/GREEN evidence
+
+Before the fix, after writing the new tests:
+
+```powershell
+./Build-Tests.ps1 -Entry PZ3D.LaunchPreflightTests -Output artifacts/preflight-tests.exe
+& 'artifacts/preflight-tests.exe' --review-zero
+& 'artifacts/preflight-tests.exe' --review-handoff
+& 'artifacts/preflight-tests.exe' --review-cache
+```
+
+Build exited 0. `--review-zero` exited 1 with `System.IO.IOException: 预检文件超出读取预算。` through `LaunchReadBudget.Read → SaveProfiles.Entries → ModConfigurations.SortForPreflight`; no SortResult was returned. `--review-handoff` confirmed that valid preload retention succeeded, then exited 1 at `FAIL: server preflight keeps exhausted valid cache evidence advisory`. The handoff fixture uses a valid 900,000-byte JSON cache and a valid approximately 15 MB preload ZIP/JAR: retention leaves too few bytes to reread that cache, while small local metadata remains safely inspectable. `--review-cache` passed before the fix (8 assertions), establishing existing malformed-cache behavior rather than replacing it.
+
+After the fix, the same build and flag commands exited 0: zero-budget adapter 3 PASS, actual server handoff/controller 4 PASS, malformed-cache preservation 8 PASS. The zero-budget fixture now returns advisory sort evidence. A 32-byte collector budget still preserves a later inspected `Known` local entry after skipping a larger valid cache. The actual controller's server report has `canLaunch=true` with a warning `mods` item, creates no journal/consent/staged state, and `profileLaunch` reaches the absolute test-mode real-start prohibition. Tests continue beyond `Retained` into the collector, native report, and controller launch boundary.
+
+### Fresh scoped regression commands
+
+```powershell
+./Build-Tests.ps1 -Entry PZ3D.LaunchPreflightTests -Output artifacts/preflight-tests.exe
+& 'artifacts/preflight-tests.exe'
+./Build-Tests.ps1 -Entry PZ3D.ModConfigurationsTests -Output artifacts/task1-fix2-ModConfigurationsTests.exe
+& 'artifacts/task1-fix2-ModConfigurationsTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.SaveProfilesTests -Output artifacts/task1-fix2-SaveProfilesTests.exe
+& 'artifacts/task1-fix2-SaveProfilesTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.LaunchProfilesTests -Output artifacts/task1-fix2-LaunchProfilesTests.exe
+& 'artifacts/task1-fix2-LaunchProfilesTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.JavaApprovalsTests -Output artifacts/task1-fix2-JavaApprovalsTests.exe
+& 'artifacts/task1-fix2-JavaApprovalsTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.ModernControllerTests -Output artifacts/task1-fix2-ModernControllerTests.exe
+& 'artifacts/task1-fix2-ModernControllerTests.exe'
+git diff --check
+```
+
+All six builds and EXEs exited 0 with clean compile output: preflight 145 PASS, mod configurations 308 assertions/0 failed cases, save profiles 62 assertions, launch profiles 15 PASS, Java approval success, and controller 69 PASS. `git diff --check` exited 0. The prior 130 preflight assertions remain passing.
+
+Only `LaunchPreflight.cs`, `SaveProfiles.cs`, `LaunchPreflightTests.cs`, and this report changed. Self-review confirms cache exhaustion is caught at the byte-collection boundary rather than masking downstream malformation, safely inspectable entries remain available, and no real Steam/game/save mutation or process start was performed. No budget, native contract, memory limit, session guard, or unrelated behavior was relaxed. Item 3 is addressed; no blocker remains.
