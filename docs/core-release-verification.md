@@ -1,6 +1,8 @@
-# 当前1.1.1最终修复后验收（2026-10-14）
+# 当前 1.1.1 候选包验证（2026-10-14）
 
-当前正式资产为 `E:/Projects/OrangeLauncher/dist/1.1.1-final-verified/`；完整18文件哈希和证据见 [1.1.1-verification.md](releases/1.1.1-verification.md)。BAT无害Echo与无加载器链误拒已修复，真实／含糊的加载器链、包装与重定向／管道仍拒绝；最终源码聚焦210、全量原生910、核心621条PASS，十套浏览器全部exit0。
+状态：限定复审未通过，剩余 1 项 Important 阻断，不能作为完成版交付。多行 BAT 整块末尾的重定向可将 Buddy 启动命令写入另一个脚本后调用，分类器漏判；当前目录／哈希仅保留候选包机械验证证据，不表示最终安全验收。协调者独立重跑原生 910／核心 621 条 PASS，仍未覆盖该缺失边界。复审证据、裁定及后续状态见 [1.1.1-verification.md](releases/1.1.1-verification.md)。未上传发布。
+
+当前候选资产为 `E:/Projects/OrangeLauncher/dist/1.1.1-final-verified/`；完整18文件哈希和证据见 [1.1.1-verification.md](releases/1.1.1-verification.md)。BAT无害Echo与无加载器链误拒已修复，已覆盖的真实／含糊加载器链、包装与单行重定向／管道仍拒绝，整块重定向漏判尚未修复；锁定源码聚焦210、全量原生910、核心621条PASS，十套浏览器全部exit0。
 
 | 当前资产 | 字节 | SHA256 |
 | --- | ---: | --- |
@@ -13,7 +15,7 @@
 
 新的包回归、5/5真实原生1.1.1→1.1.2升级／回退／中断恢复（`artifacts/TestFixtures/1.1.1-final-native-update-locked`）、实际默认／旧界面截图全部通过。正式PS5完整认证脚本exit0，实际ZIP安装18项哈希、installer精确提取及限定卸载保留个人文件／诊断均通过；原进程出生身份、健康授权、单次旧版重启及文件所有权校验未放宽。日志前缀 `artifacts/1.1.1-final-fix-locked-`、`artifacts/1.1.1-final-formal-`；完整报告 `.superpowers/sdd/2026-10-14-steam-takeover-memory/final-fix-report.md`。
 
-`dist/1.1.1-verified-2` 是已被替代的历史验收，最初PS7宿主失败与本波CS0016宿主占用尝试均保留，全部1.1.0证据如下保留。未在线玩家复测、未修改真实Steam／游戏／授权／注册表，未推送、合并main或上传；等待本波限定复审。任何后续代码／包内输入修改须重新构建唯一目录。
+`dist/1.1.1-verified-2` 是已被替代的历史验收，最初PS7宿主失败与本波CS0016宿主占用尝试均保留，全部1.1.0证据如下保留。未在线玩家复测、未修改真实Steam／游戏／授权／注册表，未推送、合并main或上传；本波限定复审发现阻断，按修复／复审上限暂停，等待用户方向。任何后续代码／包内输入修改须重新构建唯一目录。
 
 # 1.1.0 本地签名发布验证
 
