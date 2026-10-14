@@ -151,3 +151,90 @@ New tests independently compare the complete fixture file set, bytes, last-write
 Reviewed the changed files against the Task 1 brief and the approved server-target clarification. The implementation retains existing BAT/Steam guards, JSON/Buddy safety, cancellation/network drain, session protection, target validation, recovery ownership, and memory bounds. No existing regression test was weakened or deleted. The report contains bounded, generic public messages rather than raw exceptions/paths/credentials. Server retention calls the existing algorithm rather than introducing a second selection policy.
 
 Meaningful limits are intentional and exposed: unknown Java home, unrecorded external Steam sources, uninspected metadata, and unseen server files remain advisory. A report is a point-in-time check; both actual launch actions obtain fresh reports rather than consuming prior page readiness. Actual game load/read/connection success was not tested or claimed. Broad release/package gates and subsequent frontend/profile tasks remain coordinator-owned. No unresolved blocker was found.
+
+## Fix round 1 — review Important 1 and Important 2
+
+Fix base: `08b08c5a09d3091ce28431c7d48c402adbe95166`. Work began on `dff2e94`, which contained only the coordinator's subsequent Task 2 plan clarification. Both numbered findings in `task-1-review.md` were reproduced before production changes. This section supersedes the initial self-review's claim that optional helper calls were already fully budgeted.
+
+### Important 1: optional resolver budgets
+
+Root cause: both Java capture and server retention called the ordinary optional-addon resolver. That resolver independently materialized all candidate/version directories and read candidate metadata outside either caller's budget. Retention could also inspect the preload JAR outside the mod-phase budget.
+
+Fixed by carrying a reusable `LaunchReadBudget` through the existing resolver selection algorithm. Its directory enumeration stops at the shared remaining directory allowance plus one refusal sentinel, and its bounded stream reads charge a shared byte allowance before allocating or reading. Optional-source cache reads, candidate/common/active metadata, and preload inspection consume the same budget as their caller. A budget refusal marks `Incomplete` and cannot pick an uninspected payload.
+
+Server preflight now shares one 4,096-directory/16 MiB budget across retention and dependency catalog scanning. Java capture shares its 4,096-directory/128 MiB budget across inventory, source checks, optional resolution, metadata, and JAR hashing. Unknown optional evidence propagates to advisory report status instead of being called absent or successfully inspected. Ordinary resolution, explicit authorization, actual launch-session retention, and normal catalog behavior continue through null-budget overloads with their prior selection semantics.
+
+New coverage uses an optional addon with 4,097 extra version directories, proves ordinary resolution remains supported, then proves Java preflight refuses that uninspected source and server retention marks it unknown. Another fixture resolves two valid optional sources against one 30,000-byte allowance: the first source is retained with its original selected payload; the second cannot reset the metadata allowance. The same cumulative behavior is exercised through retention. Fixture bytes, timestamps, and directory sets remain unchanged on refusal.
+
+### Important 2: original identities before server filtering
+
+Root cause: the original recognizable mods-block text was parsed, but ID/count/uniqueness validation happened only after ordinary server-excluded IDs had disappeared. In addition, the existing catalog's opaque-ID predicate intentionally accepts embedded backslashes and did not independently reject a traversal-shaped `../invalid` ID.
+
+Added a preflight-specific validator that reuses the existing trimmed ID, maximum-2000, maximum-200-character, control/syntax, and uniqueness checks. It narrowly rejects `.` or `..` path segments while preserving qualified `\\Qualified`, embedded opaque `Opaque\\Value`, and ordinary dotted namespaces. The original list is validated before retention/filtering for every target. The normal catalog's opaque-ID predicate and normal sorting/activation behavior are unchanged.
+
+Tests cover excluded traversal IDs, duplicate ordinary IDs, a 201-character ID, and 2,001 ordinary IDs. All yield a blocking `mods` item before the server controller reaches its real-start prohibition. A valid 2,000-ID original list still permits server exclusion of ordinary mods. Previously covered ordinary dependency exclusions still permit server preparation; malformed original line syntax still blocks.
+
+### Reusable internal signatures
+
+Native `launchPreflight` payloads, the eight report item IDs/routes, and all public report fields are unchanged. Internal adapters available to subsequent PlayProfiles work are:
+
+```csharp
+// Returns the existing normalized IDs or throws on proven malformation.
+ModConfigurations.ValidatePreflightMods(string[] mods) : string[];
+
+// One instance must be carried through a complete phase; never reset per addon.
+new LaunchReadBudget(long maximumBytes);
+LaunchReadBudget.Incomplete : bool; // read-only
+
+LaunchProfiles.Retained(Engine e, LaunchReadBudget budget) : string[];
+ViewpointAddons.Find(Engine e, ViewpointAddon addon, LaunchReadBudget budget) : AddonFiles;
+ViewpointAddons.Resolve(Engine e, ViewpointAddon addon, Version version, LaunchReadBudget budget) : AddonFiles;
+ViewpointAddons.Metadata(string path, LaunchReadBudget budget) : Dictionary<string,string>;
+ViewpointAddons.Preload(AddonFiles files, LaunchReadBudget budget) : bool;
+InstallWorkflow.Source(Engine e, ulong item, LaunchReadBudget budget) : string;
+ModConfigurations.SortForPreflight(Engine e, string[] mods, LaunchReadBudget budget = null) : SortResult;
+SaveProfiles.Entries(Engine e, List<string> warnings, bool knownPathsOnly = false, LaunchReadBudget budget = null) : List<Entry>;
+```
+
+Call `ValidatePreflightMods` on the original parsed list before excluding any ordinary IDs. For server checks, reuse one budget for `Retained` and `SortForPreflight`. A null optional budget preserves normal resolver/capture caller behavior; normal `Retained(Engine)` still exists. `LaunchProfilesTests` specifies that one-argument reflection signature explicitly now that a budget-aware overload also exists; its behavioral assertions were not weakened.
+
+### Exact RED/GREEN commands and results
+
+After writing the new tests, before production changes:
+
+```powershell
+./Build-Tests.ps1 -Entry PZ3D.LaunchPreflightTests -Output artifacts/preflight-tests.exe
+& 'artifacts/preflight-tests.exe' --review-1
+& 'artifacts/preflight-tests.exe' --review-cumulative
+& 'artifacts/preflight-tests.exe' --review-2
+```
+
+Compile exited 0. Each independent RED execution exited 1:
+
+- `--review-1`: `FAIL: optional version directories cannot escape Java preflight's cumulative limit` after confirming the ordinary resolver supported the fixture.
+- `--review-cumulative`: `FAIL: optional helpers accept a shared preflight read budget` after confirming ordinary retention kept both valid preload addons.
+- `--review-2`: `FAIL: server filtering cannot hide malformed ordinary identities or count`.
+
+After the budget fix, rebuilding with the same build command and rerunning `--review-1` and `--review-cumulative` exited 0 (10 and 5 PASS respectively). After original-identity prevalidation, the same build command and `--review-2` exited 0 (12 PASS). The full final preflight executable exited 0 with 130 PASS, including the preserved initial 106 assertions and the added review/boundary coverage.
+
+Fresh shared verification compiled each entrypoint and ran its EXE:
+
+```powershell
+./Build-Tests.ps1 -Entry PZ3D.LaunchPreflightTests -Output artifacts/preflight-tests.exe
+& 'artifacts/preflight-tests.exe'
+./Build-Tests.ps1 -Entry PZ3D.JavaApprovalsTests -Output artifacts/task1-fix1-JavaApprovalsTests.exe
+& 'artifacts/task1-fix1-JavaApprovalsTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.ModConfigurationsTests -Output artifacts/task1-fix1-ModConfigurationsTests.exe
+& 'artifacts/task1-fix1-ModConfigurationsTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.LaunchProfilesTests -Output artifacts/task1-fix1-LaunchProfilesTests.exe
+& 'artifacts/task1-fix1-LaunchProfilesTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.ModernControllerTests -Output artifacts/task1-fix1-ModernControllerTests.exe
+& 'artifacts/task1-fix1-ModernControllerTests.exe'
+./Build-Tests.ps1 -Entry PZ3D.AddonTests -Output artifacts/task1-fix1-AddonTests.exe
+& 'artifacts/task1-fix1-AddonTests.exe'
+git diff --check
+```
+
+All six builds and EXEs exited 0 with clean compilation output. Results: preflight 130 PASS; Java approval success; mod configurations 308 assertions/0 failed cases; launch profiles 15 PASS; controller 69 PASS; addon activation, explicit minor-version selection, and path-confinement checks passed. `git diff --check` exited 0. Addon regression was included because this fix modifies its existing resolver; no broad package/release gate was run.
+
+Fix files: `LaunchPreflight.cs`, `LaunchPreflightTests.cs`, `ViewpointAddons.cs`, `InstallWorkflow.cs`, `JavaApprovals.cs`, `LaunchProfiles.cs`, `LaunchProfilesTests.cs`, `ModConfigurations.cs`, `SaveProfiles.cs`, and this report. Self-review confirms the budgets are passed into the nested resolver and source/preload calls instead of restarted there, original identity checks precede server filtering, normal callers retain their selection contracts, and report/launch/network/recovery protections remain unchanged. No real Steam/game/save or registry/pagefile mutation was performed. Both numbered findings are addressed; no blocker remains.
