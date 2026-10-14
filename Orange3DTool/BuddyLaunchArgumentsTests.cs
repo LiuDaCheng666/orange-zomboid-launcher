@@ -93,7 +93,13 @@ namespace PZ3D {
     "if exist game.jar (\r\necho java -agentlib:zbNative -jar game.jar\r\n) else (\r\necho ready\r\n) > start-java.bat\r\n",
     "> start-java.bat if exist game.jar (\r\necho ready\r\n) else (\r\necho java -agentlib:zbNative -jar game.jar\r\n)\r\n",
     "if exist game.jar (\r\necho java -agentlib:zbNative -jar game.jar\r\n) e^lse (\r\necho ready\r\n) | cmd\r\n",
-    "if exist game.jar (\r\necho java -agentlib:zbNative -jar game.jar\r\n) ^\r\n else (\r\necho ready\r\n) >> start-java.bat\r\n"
+    "if exist game.jar (\r\necho java -agentlib:zbNative -jar game.jar\r\n) ^\r\n else (\r\necho ready\r\n) >> start-java.bat\r\n",
+    "> start-java.bat 2>&1 (\r\necho java -agentlib:zbNative -jar game.jar\r\n)\r\ncall start-java.bat\r\n",
+    "> start-java.bat 2>&1 3>&2 (\r\necho java -agentlib:z\"bNative\" -jar game.jar\r\n)\r\n",
+    "> start-java.bat 2>&1 (\r\necho java -agentlib:zb^\r\nNative -jar game.jar\r\n)\r\n",
+    "> start-java.bat if exist game.jar (\r\necho ready\r\n) 2>&1 else (\r\necho java -agentlib:zbNative -jar game.jar\r\n)\r\n",
+    "echo ready ^>& java -agentlib:zbNative -jar game.jar\r\n",
+    "echo ready 2>&1 & java -agentlib:zbNative -jar game.jar\r\n"
    };
    // Treating literal operators, unrelated output, or Java operands as agents is a break.
    string[] harmless={
@@ -120,7 +126,13 @@ namespace PZ3D {
     "(\r\necho ready\r\n) > ready.txt & echo -agentlib:zbNative\r\n",
     "(\r\necho ready\r\n) > ready.txt || echo -agentlib:zbNative\r\n",
     "echo -agentlib:zbNative ^\r\n & (\r\necho ready\r\n) > ready.txt\r\n",
-    "(\r\necho ready\r\n) ^\r\n > ready.txt & echo -agentlib:zbNative\r\n"
+    "(\r\necho ready\r\n) ^\r\n > ready.txt & echo -agentlib:zbNative\r\n",
+    "echo -agentlib:zbNative & > ready.txt 2>&1 (\r\necho ready\r\n)\r\n",
+    "> ready.txt 2>&1 (\r\necho ready\r\n) & echo -agentlib:zbNative\r\n",
+    "echo -agentlib:zbNative ^>^&1\r\n",
+    "echo \"-agentlib:zbNative >&1\"\r\n",
+    "echo ready 2>&1 & pause\r\n",
+    "java -Dnote=-agentlib:zbNative -jar game.jar 2>&1 & pause\r\n"
    };
    int failures=0;
    for(int i=0;i<refused.Length;i++){

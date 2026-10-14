@@ -78,8 +78,8 @@ namespace PZ3D {
   }
   // Locate possible command boundaries only. Do not execute, expand or rewrite shell syntax.
   static List<string> BatCommands(string text){
-   var parts=new List<string>();bool quoted=false;int start=0;
-   for(int i=0;i<text.Length;i++){char c=text[i];if(c=='^'&&!quoted){if(i+1<text.Length)i++;continue;}if(c=='"'){quoted=!quoted;continue;}if(!quoted&&(c=='&'||c=='|')){parts.Add(text.Substring(start,i-start));start=i+1;}}
+   var parts=new List<string>();bool quoted=false;int start=0;string syntax=BatSyntax(text);
+   for(int i=0;i<text.Length;i++){char c=text[i];if(c=='^'&&!quoted){if(i+1<text.Length)i++;continue;}if(c=='"'){quoted=!quoted;continue;}if(syntax[i]=='&'||syntax[i]=='|'){parts.Add(text.Substring(start,i-start));start=i+1;}}
    if(quoted)throw new FormatException();parts.Add(text.Substring(start));return parts;
   }
   static bool BatInOutput(bool[] context,int start,int length){
@@ -110,6 +110,9 @@ namespace PZ3D {
     char c=text[i];
     if(c=='^'&&!quoted){if(i+1<text.Length)i++;else syntax[i]=c;continue;}
     if(c=='"'){quoted=!quoted;continue;}
+    // In handle duplication (for example 2>&1), ampersand is not a command
+    // boundary. The preceding redirect must itself be active, not escaped.
+    if(c=='&'&&i>0&&syntax[i-1]=='>')continue;
     if(!quoted&&"()<>|&".IndexOf(c)>=0)syntax[i]=c;
    }
    return new string(syntax);
