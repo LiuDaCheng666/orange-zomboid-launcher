@@ -1,3 +1,20 @@
+# 当前1.1.1最终修复后验收（2026-10-14）
+
+当前正式资产为 `E:/Projects/OrangeLauncher/dist/1.1.1-final-verified/`；完整18文件哈希和证据见 [1.1.1-verification.md](releases/1.1.1-verification.md)。BAT无害Echo与无加载器链误拒已修复，真实／含糊的加载器链、包装与重定向／管道仍拒绝；最终源码聚焦210、全量原生910、核心621条PASS，十套浏览器全部exit0。
+
+| 当前资产 | 字节 | SHA256 |
+| --- | ---: | --- |
+| orange-launcher-setup-v1.1.1.exe | 6152704 | 038DF4A53C3B13EBBC52255991BC71E2EA0DA3E266389D13155D723BE2FF2D37 |
+| orange-launcher-v1.1.1-win-x64.zip | 4855146 | FAA4F98182CBA810274F1A8E1EAF37FB262A12357974EB1ECAADD7043EEBE05C |
+| update-manifest.json | 8720 | 7CF3F43B3E01CF5ED0EB87992F5CA8F8BCCFFC44AE435F299BB53BC983BECF2C |
+| update-manifest.sig | 384 | 4892C17F5C2F6FCEC099C3C474E24F232DD18B49203FD62DA6B5A1DD4A64FF47 |
+
+正式公钥SHA256仍 `943D7FC795E52E9C43AD1587CEF15457C1B8153130496C47BED4EB58044C355C`。三EXE assembly/file1.1.1.0、product／嵌入资源1.1.1，实际默认UI、认证记录和清单一致；18自有文件、20条ZIP及18个更新资产通过签名／长度／哈希，无第三方光影／模组／用户数据。外部私钥仅传路径至现有签名工具。
+
+新的包回归、5/5真实原生1.1.1→1.1.2升级／回退／中断恢复（`artifacts/TestFixtures/1.1.1-final-native-update-locked`）、实际默认／旧界面截图全部通过。正式PS5完整认证脚本exit0，实际ZIP安装18项哈希、installer精确提取及限定卸载保留个人文件／诊断均通过；原进程出生身份、健康授权、单次旧版重启及文件所有权校验未放宽。日志前缀 `artifacts/1.1.1-final-fix-locked-`、`artifacts/1.1.1-final-formal-`；完整报告 `.superpowers/sdd/2026-10-14-steam-takeover-memory/final-fix-report.md`。
+
+`dist/1.1.1-verified-2` 是已被替代的历史验收，最初PS7宿主失败与本波CS0016宿主占用尝试均保留，全部1.1.0证据如下保留。未在线玩家复测、未修改真实Steam／游戏／授权／注册表，未推送、合并main或上传；等待本波限定复审。任何后续代码／包内输入修改须重新构建唯一目录。
+
 # 1.1.0 本地签名发布验证
 
 状态：最终集成修复、限定范围复审及独立验收通过。未上传正式渠道、未推送或合并 main；不声明真实游戏兼容性。
@@ -73,9 +90,9 @@
 
 需系统已有WebView2，不安装运行库、不提权、不写注册表。任务、缓存、备份和日志保留，可能持续占用磁盘；同目录重装仍要求新的空目录。传统.NET长路径限制仍在。所有生命周期夹具使用合成游戏/用户目录；游戏、Steam订阅、真实存档、Java授权未被更改或作实际兼容性测试。其他非阻断P3测试可读性/保留策略后续项未扩入本轮。
 
-## 1.1.1 验收追加（2026-10-14）
+## 历史1.1.1验收追加（已被final-verified替代）
 
-本轮资产：`E:/Projects/OrangeLauncher/dist/1.1.1-verified-2/`，完整证据及18文件哈希见 [1.1.1-verification.md](releases/1.1.1-verification.md)。既有1.1.0证据和目录保留；首轮 `dist/1.1.1-verified` 的 PowerShell7诊断宿主类型兼容失败亦保留。改用WindowsPowerShell5运行相同认证检查后，正式EXE实际启动、1.1.1安装记录和限定卸载均通过，未修改生产信任或跳过认证。
+历史资产：`E:/Projects/OrangeLauncher/dist/1.1.1-verified-2/`，已由本文顶部 `final-verified` 替代；原证据及18文件哈希仍保留在 [1.1.1-verification.md](releases/1.1.1-verification.md) 历史段。既有1.1.0证据和目录保留；首轮 `dist/1.1.1-verified` 的 PowerShell7诊断宿主类型兼容失败亦保留。改用WindowsPowerShell5运行相同认证检查后，正式EXE实际启动、1.1.1安装记录和限定卸载均通过，未修改生产信任或跳过认证。
 
 VERSION、三EXE的assembly/file/product/嵌入资源、实际UI、安装记录、签名清单均为1.1.1（assembly/file为1.1.1.0）。公钥SHA256仍 `943D7FC795E52E9C43AD1587CEF15457C1B8153130496C47BED4EB58044C355C`。installer、完整ZIP和18个文件级更新资产通过签名、长度、哈希及自有文件allowlist检查，无第三方光影或原作者模组包。
 

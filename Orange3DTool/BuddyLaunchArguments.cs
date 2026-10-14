@@ -34,7 +34,8 @@ namespace PZ3D {
    if(!library&&!string.Equals(file,basename,StringComparison.OrdinalIgnoreCase)&&!Regex.IsMatch(file,@"^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+\\)"))return BuddyArgumentKind.Unknown;
    return BuddyArgumentKind.Known;
   }
-  static bool Candidate(string value){return Regex.IsMatch(value??"",@"(?i)-(?:javaagent:""?(?:[^""\r\n]*[\\/])?ZombieBuddy\.jar|agentlib:zbNative|agentpath:""?(?:[^""\r\n]*[\\/])?zbNative\.dll)(?=[\s""=]|$)");}
+  // A conservative refusal probe only; caret removal never authorizes a rewrite.
+  static bool Candidate(string value){return Regex.IsMatch((value??"").Replace("^",""),@"(?i)-(?:javaagent:""?(?:[^""\r\n]*[\\/])?ZombieBuddy\.jar|agentlib:zbNative|agentpath:""?(?:[^""\r\n]*[\\/])?zbNative\.dll)(?=[\s""=&|<>()]|$)");}
   internal sealed class ArgumentToken {internal int Start,End;internal string Value;}
   internal static List<ArgumentToken> Tokens(string line){
    if(line==null||line.Length>Limit||line.IndexOf('\0')>=0)throw new FormatException();var result=new List<ArgumentToken>();int at=0;
@@ -83,10 +84,21 @@ namespace PZ3D {
   }
   static BuddyCleanupResult CleanBatLine(string text){
    var commands=BatCommands(text);if(commands.Count==1)return CleanBatCommand(text);
-   foreach(string command in commands)if(!BatComment(command)&&CleanBatCommand(command,true).RemovedCount>0)throw new FormatException();
+   int boundary=0;
+   foreach(string command in commands){
+    boundary+=command.Length;
+    // Conditional OR does not pipe echo output into the next command.
+    bool pipedOutput=boundary<text.Length&&text[boundary]=='|'&&(boundary+1==text.Length||text[boundary+1]!='|');boundary++;
+    if(!BatComment(command)&&CleanBatCommand(command,pipedOutput).RemovedCount>0)throw new FormatException();
+   }
    return new BuddyCleanupResult(text,text,0,true);
   }
-  static BuddyCleanupResult CleanBatCommand(string text,bool requireKnown=false){
+  static bool BatHasRedirection(string text){
+   bool quoted=false;
+   for(int i=0;i<text.Length;i++){char c=text[i];if(c=='^'&&!quoted){if(i+1<text.Length)i++;continue;}if(c=='"'){quoted=!quoted;continue;}if(!quoted&&(c=='<'||c=='>'))return true;}
+   return false;
+  }
+  static BuddyCleanupResult CleanBatCommand(string text,bool pipedOutput=false){
    var assignment=Regex.Match(text,@"^(?<prefix>\s*@?(?i:set)\s+)(?<quote>""?)(?<name>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$");
    if(assignment.Success){
     string value=assignment.Groups["value"].Value,quote=assignment.Groups["quote"].Value;if(quote.Length>0){if(!value.EndsWith("\""))throw new FormatException();value=value.Substring(0,value.Length-1);}
@@ -95,9 +107,17 @@ namespace PZ3D {
     var clean=CleanTokens(value,args);return new BuddyCleanupResult(text,text.Substring(0,assignment.Groups["value"].Index)+clean.Text+quote,clean.RemovedCount,true);
    }
    var tokens=Tokens(text);if(tokens.Count>0){string executable=tokens[0].Value.TrimStart('@').Replace('\\','/').Split('/').Last();if(new[]{"java","java.exe","javaw","javaw.exe"}.Contains(executable,StringComparer.OrdinalIgnoreCase)){
-    try{return CleanJavaInvocation(text,tokens);}catch(FormatException){if(requireKnown||tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))throw;return new BuddyCleanupResult(text,text,0,true);}
-   }if(requireKnown&&!string.Equals(executable,"echo",StringComparison.OrdinalIgnoreCase))throw new FormatException();}
-   if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None))throw new FormatException();return new BuddyCleanupResult(text,text,0,true);
+    try{return CleanJavaInvocation(text,tokens);}catch(FormatException){if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None||Candidate(t.Value)))throw;return new BuddyCleanupResult(text,text,0,true);}
+   }
+   // Boundaries were already separated. Redirected/piped output can become a
+   // later invocation, so only demonstrably literal Buddy output is exempt.
+   if(string.Equals(tokens[0].Value.TrimStart('@'),"echo",StringComparison.OrdinalIgnoreCase)){
+    if((pipedOutput||BatHasRedirection(text))&&tokens.Any(t=>Candidate(t.Value)))throw new FormatException();
+    return new BuddyCleanupResult(text,text,0,true);
+   }}
+   // Unknown wrappers may carry an entire invocation inside one quoted token.
+   // Preserve agent-free commands, but do not claim such a possible loader is safe.
+   if(tokens.Any(t=>Classify(t.Value)!=BuddyArgumentKind.None||Candidate(t.Value)))throw new FormatException();return new BuddyCleanupResult(text,text,0,true);
   }
   internal static BuddyCleanupResult CleanBat(string bat){
    if(bat==null||bat.Length>Limit)return new BuddyCleanupResult(bat,bat,0,false);int total=0;var output=new StringBuilder();
