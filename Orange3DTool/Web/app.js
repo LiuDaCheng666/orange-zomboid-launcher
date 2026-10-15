@@ -246,7 +246,7 @@ function restoreDisclosures(){const saved=disclosureStates.get(state.route)||[];
 const sceneNames={original:'原封面',crossroads:'小镇路口',riverside:'雨后河畔',safehouse:'林间安全屋'},sceneSources={original:'home.png'},sceneLoaded=new Set(['original']),sceneFailed=new Set();
 try{const data=JSON.parse($('#home-scene-data')?.textContent||'{}');for(const id of ['crossroads','riverside','safehouse'])if(typeof data[id]==='string'&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data[id]))sceneSources[id]=data[id];}catch{}
 const sceneIds=Object.keys(sceneSources),sceneMotion=matchMedia('(prefers-reduced-motion: reduce)');
-let sceneId='original',scenePaused=sceneMotion.matches,sceneTimer=null,sceneNode=null,sceneLoadTicket=0;
+let sceneId='original',scenePaused=sceneMotion.matches,sceneTimer=null,sceneNode=null,sceneLoadTicket=0,sceneAutoEpoch=0;
 try{const pref=JSON.parse(localStorage.getItem('orange.homeScene'));if(pref&&sceneIds.includes(pref.id))sceneId=pref.id;if(typeof pref?.paused==='boolean')scenePaused=pref.paused;}catch{}
 function saveScene(){try{localStorage.setItem('orange.homeScene',JSON.stringify({id:sceneId,paused:scenePaused}));}catch{}}
 function paintScene(){
@@ -257,14 +257,16 @@ function paintScene(){
  const label=cover.querySelector('[data-scene-label]'),pause=cover.querySelector('[data-scene-pause]');
  if(label)label.textContent=sceneNames[paintedId];if(pause){pause.textContent=scenePaused?'继续轮播':'暂停轮播';pause.setAttribute('aria-pressed',String(scenePaused));}
 }
-async function selectScene(id,direction=1){
- const ticket=++sceneLoadTicket,cover=$('[data-home-cover]');
+function sceneEligible(cover){return cover&&!document.hidden&&!scenePaused&&!cover.matches(':hover')&&!cover.contains(document.activeElement)&&sceneIds.some(id=>id!=='original'&&!sceneFailed.has(id));}
+async function selectScene(id,direction=1,automatic=false){
+ const ticket=++sceneLoadTicket,cover=$('[data-home-cover]'),autoEpoch=sceneAutoEpoch;
+ const current=()=>ticket===sceneLoadTicket&&cover===$('[data-home-cover]')&&state.route==='home'&&(!automatic||autoEpoch===sceneAutoEpoch&&sceneEligible(cover));
  for(let n=0;n<sceneIds.length;n++){
   if(!sceneFailed.has(id)){
-   try{if(!sceneLoaded.has(id)){const image=new Image();image.src=sceneSources[id];await image.decode();sceneLoaded.add(id);}if(ticket!==sceneLoadTicket||cover!==$('[data-home-cover]')||state.route!=='home')return;sceneId=id;paintScene();saveScene();return;}
+   try{if(!sceneLoaded.has(id)){const image=new Image();image.src=sceneSources[id];await image.decode();sceneLoaded.add(id);}if(!current())return;sceneId=id;paintScene();saveScene();return;}
    catch{sceneFailed.add(id);}
   }
-  if(ticket!==sceneLoadTicket)return;
+  if(!current())return;
   id=sceneIds[(sceneIds.indexOf(id)+direction+sceneIds.length)%sceneIds.length];
  }
  sceneId='original';paintScene();saveScene();
@@ -275,9 +277,10 @@ function syncHomeScene(){
   cover.insertAdjacentHTML('beforeend',`<div class="scene-controls" data-scene-controls role="group" aria-label="首页封面"><button data-scene-prev data-safe aria-label="上一张封面">‹</button><span data-scene-label></span><button data-scene-next data-safe aria-label="下一张封面">›</button><button data-scene-pause data-safe aria-pressed="${scenePaused}"></button></div>`);
   paintScene();if(!sceneLoaded.has(sceneId))selectScene(sceneId);
  }}
- const eligible=cover&&!document.hidden&&!scenePaused&&!cover.matches(':hover')&&!cover.contains(document.activeElement)&&sceneIds.some(id=>id!=='original'&&!sceneFailed.has(id));
- if(!eligible&&sceneTimer!==null){clearTimeout(sceneTimer);sceneTimer=null;}
- if(eligible&&sceneTimer===null)sceneTimer=setTimeout(()=>{sceneTimer=null;selectScene(sceneIds[(sceneIds.indexOf(sceneId)+1)%sceneIds.length]).finally(syncHomeScene);},8000);
+ const eligible=sceneEligible(cover);
+ // A suspension retires pending autoplay even if eligibility returns before decode finishes.
+ if(!eligible){sceneAutoEpoch++;if(sceneTimer!==null){clearTimeout(sceneTimer);sceneTimer=null;}}
+ if(eligible&&sceneTimer===null)sceneTimer=setTimeout(()=>{sceneTimer=null;selectScene(sceneIds[(sceneIds.indexOf(sceneId)+1)%sceneIds.length],1,true).finally(syncHomeScene);},8000);
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-scene-prev],[data-scene-next],[data-scene-pause]');if(!b)return;if(b.hasAttribute('data-scene-pause')){scenePaused=!scenePaused;saveScene();paintScene();}else{const direction=b.hasAttribute('data-scene-prev')?-1:1;selectScene(sceneIds[(sceneIds.indexOf(sceneId)+direction+sceneIds.length)%sceneIds.length],direction);}syncHomeScene();});
 for(const event of ['pointerover','pointerout','focusin','focusout'])document.addEventListener(event,e=>{if(e.target.closest?.('[data-home-cover]'))queueMicrotask(syncHomeScene);});

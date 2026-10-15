@@ -14,6 +14,10 @@ async function fixture(b,{theme='dark',reduced=false,pref=null}={}){
  const time=new Date('2026-10-15T00:00:00Z');await p.clock.install({time});await p.clock.pauseAt(new Date(time.getTime()+1000));await p.goto(url);await p.waitForFunction(()=>!!orange.state.status&&!Object.keys(orange.state.experienceReads).length);await p.mouse.move(0,0);return f;
 }
 async function tick(p,ms=8000){await p.clock.fastForward(ms);await p.waitForTimeout(30);}
+async function holdCrossroadsDecode(p){
+ // Preserve real image decoding, delaying only its observable completion.
+ await p.evaluate(()=>{const decode=HTMLImageElement.prototype.decode;HTMLImageElement.prototype.decode=function(){const decoded=decode.call(this);return this.src===JSON.parse(document.querySelector('#home-scene-data').textContent).crossroads?decoded.then(()=>new Promise(resolve=>{window.releaseSceneDecode=resolve;})):decoded;};});
+}
 test('packaged gallery decodes unchanged candidates and rotates at eight seconds without replacing launch or actual nodes',async b=>{
  const{page:p,errors}=await fixture(b);try{
   assert.equal(await id(p),'original');
@@ -68,12 +72,33 @@ test('gallery stays usable and continues rotating while game-running and mutatio
 });
 test('a delayed decoded image cannot overwrite a newer manual choice or a route teardown',async b=>{
  for(const scenario of ['manual','route']){const{page:p}=await fixture(b);try{
-  // Retain the real decode and delay its completion only, to expose stale asynchronous paints.
-  await p.evaluate(()=>{const decode=HTMLImageElement.prototype.decode;HTMLImageElement.prototype.decode=function(){const decoded=decode.call(this);return this.src===JSON.parse(document.querySelector('#home-scene-data').textContent).crossroads?decoded.then(()=>new Promise(resolve=>{window.releaseSceneDecode=resolve;})):decoded;};});
+  await holdCrossroadsDecode(p);
   await p.locator('[data-scene-next]').click();await p.waitForFunction(()=>!!window.releaseSceneDecode);
   if(scenario==='manual'){await p.locator('[data-scene-prev]').click();await p.waitForFunction(()=>document.querySelector('[data-home-cover]').dataset.sceneId==='safehouse');await p.evaluate(()=>releaseSceneDecode());await p.waitForTimeout(30);assert.equal(await id(p),'safehouse');}
   else{await route(p,'help');await p.evaluate(()=>releaseSceneDecode());await route(p,'home');await p.waitForTimeout(30);assert.equal(await id(p),'original');}
  }finally{await p.close();}}
+});
+const sceneSuspensions={
+ hidden:{suspend:p=>p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));}),resume:p=>p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});document.dispatchEvent(new Event('visibilitychange'));})},
+ user:{suspend:p=>p.locator('[data-scene-pause]').click(),resume:async p=>{await p.locator('[data-scene-pause]').click();await p.mouse.move(0,0);await p.locator('#launch').focus();}},
+ pointer:{suspend:p=>p.locator('[data-home-cover]').hover(),resume:p=>p.mouse.move(0,0)},
+ focus:{suspend:p=>p.locator('[data-scene-next]').focus(),resume:p=>p.locator('#launch').focus()},
+ reduced:{suspend:p=>p.emulateMedia({reducedMotion:'reduce'}),resume:async p=>{await p.locator('[data-scene-pause]').click();await p.mouse.move(0,0);await p.locator('#launch').focus();}},
+ route:{suspend:p=>route(p,'help'),resume:async p=>{await route(p,'home');await p.waitForFunction(()=>!Object.keys(orange.state.experienceReads).length);}}
+};
+for(const [cause,change] of Object.entries(sceneSuspensions))for(const resumed of [false,true])test(`pending autoplay is cancelled by ${cause}${resumed?' even after resume':' while suspended'}`,async b=>{
+ const{page:p,errors}=await fixture(b);try{
+  await holdCrossroadsDecode(p);await tick(p);await p.waitForFunction(()=>!!window.releaseSceneDecode);
+  await change.suspend(p);if(cause==='reduced')await p.waitForFunction(()=>document.querySelector('[data-scene-pause]').getAttribute('aria-pressed')==='true');
+  if(resumed)await change.resume(p);
+  const saved=await p.evaluate(()=>localStorage.getItem('orange.homeScene'));
+  await p.evaluate(()=>releaseSceneDecode());await p.waitForTimeout(30);
+  if(cause!=='route'||resumed)assert.equal(await id(p),'original',`${cause} must invalidate the old automatic paint even after resume`);
+  assert.equal(await p.evaluate(()=>localStorage.getItem('orange.homeScene')),saved,'discarded autoplay cannot persist a new selection');
+  if(resumed){await tick(p,7999);assert.equal(await id(p),'original');await tick(p,1);await p.waitForFunction(()=>document.querySelector('[data-home-cover]').dataset.sceneId==='crossroads');}
+  else if(cause!=='route'){await p.locator('[data-scene-prev]').click();await p.waitForFunction(()=>document.querySelector('[data-home-cover]').dataset.sceneId==='safehouse');}
+  assert.deepEqual(errors,[]);
+ }finally{await p.close();}
 });
 test('real gallery screenshots keep readable controls and stable actual overlay in both themes at required sizes',async b=>{
  for(const theme of ['dark','light']){const{page:p,errors}=await fixture(b,{theme});try{for(const size of [{width:733,height:507},{width:1366,height:768},{width:1920,height:1080}]){await p.setViewportSize(size);await p.locator('main').evaluate(e=>e.scrollTop=0);await p.locator('[data-scene-next]').click();await p.waitForFunction(()=>document.querySelector('[data-home-cover]').dataset.sceneId!=='original');await p.screenshot({path:path.join(stage,`${theme}-${size.width}.png`)});const cover=await p.locator('[data-home-cover]').boundingBox(),controls=await p.locator('[data-scene-controls]').boundingBox(),actual=await p.locator('[data-home-actual]').boundingBox();assert.ok(controls.y+controls.height<=actual.y,'controls remain above actual summary');assert.ok(controls.x>=cover.x&&controls.x+controls.width<=cover.x+cover.width+1);assert.equal(await p.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true);}assert.deepEqual(errors,[]);}finally{await p.close();}}
