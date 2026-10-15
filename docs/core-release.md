@@ -1,6 +1,6 @@
 # 核心发布与签名
 
-正式版本来自根目录 VERSION（当前 1.2.0）。最终本机统一体验候选已构建并验收到全新目录 `dist/1.2.0-experience-verified-final/`；准确门禁、哈希和非阻断已知问题见[最终验证记录](releases/1.2.0-final-verification.md)。[1.2.0-verification.md](releases/1.2.0-verification.md)中的r4结果和哈希仅为历史记录，不证明当前源码成品。这里只是本机隔离验收，没有上传、合并 main 或正式发布；选择配置不等于应用，启动请求不等于游戏已加载。已验收的 1.1.1 产物和历史记录保留不动。旧单 EXE 为未正式编号构建，不追称 1.0.0；正式发布版本不可重用，本机历史候选不算线上发布，构建脚本拒绝覆盖输出目录。真实更新与回退使用隔离 fixture，不能作为正式发布产物。
+正式版本来自根目录 VERSION（当前源码 1.2.1）。本次增加原生安装向导和配置重新读取恢复；源码测试及正式产物门禁状态见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)。源码独立复查后才可签名构建到全新 `dist/1.2.1-installer-verified/`，不能用旧包证明新源码已交付。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；r4也仅为历史证据。这里是本机隔离验收，没有上传、合并 main 或线上发布；已验收1.1.1产物和历史记录同样保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
@@ -8,7 +8,7 @@
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
 # 使用已有保护私钥：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-final
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.1-installer-verified
 ```
 
 私钥位于仓库外，由当前 Windows 用户独占 ACL 保护。不可打印、上传、嵌入二进制或提交私钥。正式公钥为仓库根目录 release-public-key.xml，嵌入所有正式可执行文件的资源名为 `Launcher.UpdatePublicKey.xml`。磁盘中的公钥只供审计，绝不作为运行时信任根。签名私钥与该公钥不匹配时构建失败。
@@ -39,6 +39,8 @@
 独立 JS/CSS/图片与 DLL 按原字节复制；ZIP 项时间戳固定，重复打包相同输入得到相同清单、签名及 ZIP。再次编译 EXE 可能改变编译器时间戳，所以不声称跨编译 EXE 位级复现。依赖许可随 Web/WebView2-LICENSE.txt 提供，第三方说明追加到使用说明.txt。
 
 `Build-Setup.ps1 -CoreReleaseDirectory <发布目录>` 构建正式安装器；其 `-PublicKey` 仅用于明确选择信任公钥（测试用自己的 fixture 公钥）。无参数仍保留旧单 EXE 安装器验证兼容。安装器 `--verify-setup` 在系统临时目录创建隔离安装，核对 v2 版本/全部哈希并验证卸载保留未知个人文件。
+
+1.2.1正常启动安装器使用原生WinForms，不在安装前初始化WebView。默认优先安装包所在的非系统就绪固定盘，否则按空闲空间及稳定盘符次序推荐；没有时明确使用用户应用目录下Programs/OrangeLauncher。推荐与输入只读，既有路径采用有界未占用后缀；完整自定义路径仍经既有根目录/重解析/非空目录检查。服务直接调用原CoreDeployment事务，释放准备按实际解压字节、落盘核验按真实文件数报告，事务本身保持不定进度。安装记录认证和全部自有文件验证成功后才完成，打开按钮再次核对准确的已安装EXE。测试/截图从专用测试入口使用fixture后端；生产入口仅保留原`--verify-setup`，自动验证时由调用者把子进程TEMP/TMP限制在fixture内，不能创建真实推荐目录。
 
 ## 首次启动及更新集成
 

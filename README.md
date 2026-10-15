@@ -14,7 +14,9 @@
 
 ## 开发状态
 
-当前候选版本为1.2.0（2026-10-15）。首页选择完整游玩配置与当前实际设置分开；变化先预览、明确应用，再按普通／存档／服务器目标重新体检。便携 JSON 由原生导出和校验，导入仅新建；有界日志诊断保留脱敏原文证据和未核实时间，不自动修复或上传。六个一级分类保留全部原有路由，模组多选只编辑草稿；组件 ID 的批量资格由原生分类，不按作者名字或来源猜测。全局内存／光影／Viewpoint 设置不表示每个配置拥有隔离游戏或工坊版本。
+当前源码候选版本为1.2.1（2026-10-15），修复配置选择失败后成功重新读取仍残留阻断的问题（N1），并新增原生安装向导。默认优先安装包所在非系统固定盘，否则按可用空间选择；没有时明确使用用户应用目录下 Programs/OrangeLauncher。可直接编辑完整目录或选择父目录创建独立子目录，打开向导不创建目录，点安装才后台部署。进度来自真实解压字节/核验文件数，事务部署使用不定进度；全部核验成功后才提供显式“打开启动器”。[1.2.1 验证边界](docs/releases/1.2.1-installer-recovery.md)区分源码测试与后续正式产物。
+
+首页选择完整游玩配置与当前实际设置分开；变化先预览、明确应用，再按普通／存档／服务器目标重新体检。便携 JSON 由原生导出和校验，导入仅新建；有界日志诊断保留脱敏原文证据和未核实时间，不自动修复或上传。六个一级分类保留全部原有路由，模组多选只编辑草稿；组件 ID 的批量资格由原生分类，不按作者名字或来源猜测。全局内存／光影／Viewpoint 设置不表示每个配置拥有隔离游戏或工坊版本。
 
 已实现：核心 Viewpoint/中文与可选扩展、富模组目录、命名配置、独立存档清单和依赖排序预览、原版存档/角色截图、原版服务器收藏只读导入、公共大厅、Steam 搜索/订阅列表与确认下载、中文参数、可追踪任务/脱敏日志、独立游玩计时及休息提醒、两套主题及无注册表写入的安装卸载。原版收藏正在写入时拒绝读取/导入。Java 更新需逐文件重新授权；所有“已配置”与“本次已加载”严格区分。
 
@@ -27,13 +29,15 @@
 ./artifacts/regression.exe --self-test
 ./Build-Tests.ps1 -Entry PZ3D.SteamLauncherServicesTests -Output ./artifacts/steam-tests.exe
 ./artifacts/steam-tests.exe
+./Build-Tests.ps1 -Entry PZ3D.InstallerExperienceTests -Output ./artifacts/installer-tests.exe
+./artifacts/installer-tests.exe
 npm install
 npx playwright install chromium
 npm test
 ./Build-CoreRelease.ps1 -VersionOnly
 ./Test-CorePackageBuild.ps1
 # 使用明确的仓库外私钥路径和新的输出目录打包：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.0-experience-verified-final
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.1-installer-verified
 ```
 
 正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。

@@ -1,26 +1,15 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 namespace PZ3D {
  static class InstallerProgram {
   static bool IsCore {get{return typeof(InstallerProgram).Assembly.GetManifestResourceInfo("Setup.Core.zip")!=null;}}
-  internal static void Install(string root) {
-   if(!IsCore){PortableDeployment.Install(root,new Dictionary<string,byte[]>{{"橙子启动器.exe",PortableDeployment.Resource("Setup.Launcher.exe")},{"卸载橙子启动器.exe",PortableDeployment.Resource("Setup.Uninstall.exe")},{"使用说明.txt",PortableDeployment.Resource("Setup.Guide.md")}});return;}
-   var manifest=CoreReleaseProtocol.Verify(PortableDeployment.Resource("Setup.Manifest.json"),PortableDeployment.Resource("Setup.Manifest.sig"),CoreUpdateTrust.PublicKeyXml,"0.0.0");
-   var files=new Dictionary<string,byte[]>(StringComparer.OrdinalIgnoreCase);
-   using(var input=new MemoryStream(PortableDeployment.Resource("Setup.Core.zip")))using(var archive=new ZipArchive(input,ZipArchiveMode.Read)) {
-    if(archive.Entries.Count!=manifest.files.Count+2)throw new InvalidDataException("Unexpected installer entries.");
-    foreach(var entry in archive.Entries){if(entry.FullName==CoreDeployment.BootstrapManifest||entry.FullName==CoreDeployment.BootstrapSignature)continue;var file=manifest.files.SingleOrDefault(f=>f.path==entry.FullName);if(file==null||entry.Length!=file.length||files.ContainsKey(entry.FullName))throw new InvalidDataException("Unexpected installer file.");using(var stream=entry.Open())using(var bytes=new MemoryStream()){stream.CopyTo(bytes);files.Add(file.path,bytes.ToArray());}}
-   }
-   CoreDeployment.Install(root,manifest,files);
-  }
+  static InstallerInstallService Service(){return IsCore?new InstallerInstallService(PortableDeployment.Resource,CoreUpdateTrust.PublicKeyXml,AppVersion.Current):InstallerInstallService.Legacy(PortableDeployment.Resource,AppVersion.Current);}
+  internal static void Install(string root){Service().Install(root,null);}
   static int Verify(){try{string root=Path.Combine(Path.GetTempPath(),"orange-setup-"+Guid.NewGuid().ToString("N"));Install(root);if(IsCore){var record=CoreDeployment.Read(root);foreach(var file in record.files)CoreDeployment.RequireFile(root,file.path,file);if(record.schema!=2||record.version!=AppVersion.Current)throw new Exception("Installation version mismatch");}else if(DlssInstaller.HashFile(Path.Combine(root,"橙子启动器.exe"))!=DlssInstaller.Hash(PortableDeployment.Resource("Setup.Launcher.exe")))throw new Exception("Installed launcher differs");File.WriteAllText(Path.Combine(root,"personal.txt"),"keep");PortableDeployment.Uninstall(root);if(File.Exists(Path.Combine(root,"橙子启动器.exe"))||File.Exists(Path.Combine(root,"卸载橙子启动器.exe"))||File.ReadAllText(Path.Combine(root,"personal.txt"))!="keep")throw new Exception("Scoped uninstall incomplete");Console.WriteLine("PASS: packed installer exact extraction and owned uninstall; schema="+(IsCore?"2":"legacy"));return 0;}catch(Exception ex){Console.WriteLine(ex.Message);return 1;}}
-  [STAThread] public static int Main(string[] args){LauncherRuntime.Initialize();if(args.Length==1&&args[0]=="--verify-setup")return Verify();Application.EnableVisualStyles();try{using(var picker=new FolderBrowserDialog{Description="选择新的空文件夹安装橙子启动器（不写注册表）"}){if(picker.ShowDialog()!=DialogResult.OK)return 0;string root=PortableDeployment.ValidateRoot(picker.SelectedPath);if(MessageBox.Show("安装到："+root+"\n安装启动器核心文件；首次打开需要系统 WebView2 Runtime。是否继续？","安装橙子启动器",MessageBoxButtons.OKCancel,MessageBoxIcon.Question)!=DialogResult.OK)return 0;Install(root);MessageBox.Show("安装完成。\n"+root+"\n打开其中橙子启动器.exe 即可使用。","安装完成");return 0;}}catch(Exception ex){MessageBox.Show(ex.Message+"\n安装未完成，诊断记录会保留。请保留原目录供排查，并选择另一个新的空目录重试；不会自动清空原目录。","安装未完成",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
+  [STAThread] public static int Main(string[] args){LauncherRuntime.Initialize();if(args.Length==1&&args[0]=="--verify-setup")return Verify();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);try{var service=Service();var destination=InstallerDestinationPolicy.Recommend(InstallerPlatform.ReadDriveFacts(),Environment.GetFolderPath(Environment.SpecialFolder.Windows),Application.ExecutablePath,Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Programs"),InstallerPlatform.ProbeRecommendation);using(var form=new InstallerForm(destination,service.Install,result=>{using(var process=Process.Start(service.LauncherStartInfo(result))){} })){Application.Run(form);return form.ExitCode;}}catch(Exception ex){MessageBox.Show("安装器无法初始化："+ex.Message+"\n未开始安装，请保留原目录供排查。","安装未完成",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
  }
  static class UninstallerProgram {
   internal static string UninstallCore(string root,string self){CoreDeployment.AdoptPortable(root);string result=CoreDeployment.Uninstall(root,self);ScheduleCompletion(root,self);return result;}
