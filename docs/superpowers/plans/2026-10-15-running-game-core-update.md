@@ -32,7 +32,9 @@ Web task owns update-only code in `Web/app.js`, new `Web/core-update-ready-ui-te
 
 Integration task owns real lifecycle fixture extensions in `CoreUpdateNativeFixtureTests.cs` and `Test-CoreNativeUpdate.ps1`, plus tracked `Test-RunningGameCoreUpdate.ps1` to run the new focused suites. Production updater transaction/helper algorithms stay unchanged unless a demonstrated defect in this scope needs a reviewed fix.
 
-Coordinator owns VERSION/CHANGELOG/README/使用说明/docs releases, comprehensive regression wrappers, formal build/sign/package verification and public release. No parallel C# compilation/builds.
+Installer Task 4 is a separately approved follow-up (see desktop shortcut spec); it owns only desktop shortcut creation/ownership cleanup and installer UI integration. No parallel C# compilation/builds.
+
+Coordinator owns VERSION/CHANGELOG/README/使用说明/docs releases, comprehensive regression wrappers, formal build/sign/package verification and public release.
 
 ### Task 1: Safe native restart and authenticated monitor isolation
 
@@ -124,7 +126,38 @@ Test helpers live only in test files. Literal independent expected payloads, no 
 - [ ] **Step 3: Run all real lifecycle cases.** At least full healthy apply/reopen and full failed-health rollback/reopen must run, with monitor/game PID survival and exact executable hashes. Verify sample playtime store survives launcher restart and active LaunchProfiles journal blocks preflight without premature restore. No test-only calls may be added to production solely for assertions.
 - [ ] **Step 4: Add the reproducible gate script**, strictly scoped output directory checks, explicit `$LASTEXITCODE` checks, exact-PID cleanup and bounded waits. Run it and report each sub-suite result. Commit tracked fixture/gate files, not generated binaries/logs/private fixture keys.
 
-## Coordinator release sequence (after reviewed Tasks 1–3)
+### Task 4: Opt-out per-user desktop shortcut with owned cleanup
+
+**Files:**
+- Create: `Orange3DTool/InstallerShortcut.cs`, `Orange3DTool/InstallerShortcutTests.cs`
+- Modify: `Orange3DTool/InstallerForm.cs`, `Orange3DTool/InstallerProgram.cs`
+- Test/fixture adjustments: `Orange3DTool/InstallerExperienceTests.cs`, `Test-RunningGameCoreUpdate.ps1`
+- Approved additional spec: `docs/superpowers/specs/2026-10-15-desktop-shortcut-design.md` (user accepted recommended option on 2026-10-15).
+
+**Interfaces:**
+- Add a default-checked native control named `installer-desktop-shortcut`, labelled `创建桌面快捷方式（当前用户）`. Disable it with other install options during the worker. Capture its value at install click. Do not silently create shortcuts when merely opening the installer.
+- Preserve existing 3-argument `InstallerForm` constructor for isolated tests; add an internal overload accepting `Func<InstallerInstallResult,InstallerShortcutResult>` as a fourth dependency. Production `InstallerProgram.Main` must pass the actual creation function. Existing synthetic 3-argument test forms must not touch a real desktop.
+- `InstallerShortcutResult` contains read-only `Created`, `Path`, `Message`. A failure is not an installation failure; completion displays the independent shortcut outcome and appends it to copyable details/log evidence. Install/open/finish behavior stays unchanged.
+- `InstallerShortcut.Create(InstallerInstallResult result): InstallerShortcutResult` uses current-user known DesktopDirectory and authenticated installed EXE. Internal constructor/dependencies can inject fixture desktop/key/COM operations but are not exposed by CLI/Web payload. Use Windows IShellLink/IPersistFile or the installed Windows shell COM object; no registry writes or external PowerShell/scripts.
+- Persist a bounded owned shortcut receipt below the installation runtime, binding installationId, exact direct-child desktop path, exact target EXE/working directory/empty arguments/icon and file hash. Desktop may be a system-returned redirected/OneDrive location; validate the destination and link itself without following an attacker-controlled reparse link. Use bounded unique filename suffixes; never overwrite a pre-existing file.
+- `InstallerShortcut.RemoveOwned(string root): string` must authenticate installation before core uninstall deletes its record. Only delete when receipt/install identity, known current desktop direct-child path, exact file hash and parsed shell link target/workdir/args/icon all match; preserve modified/replaced/foreign files. Returned warning is appended to uninstall outcome and diagnostics. No recursive desktop operations, no COM resolve that launches targets, no extra owned update paths.
+- Keep `InstallerProgram.Install/--verify-setup`, portable ZIP startup and core updater free of implicit real desktop writes. Actual normal interactive installation passes Create; ordinary updater never does. Legacy interactive installer either verifies its own existing deployment identity equivalently or clearly reports unsupported shortcut creation; do not weaken official authentication to accommodate fixtures.
+
+- [ ] **Step 1: Behavioral RED.** Add a controlled installer UI test asserting default checked control exists, unchecked install never calls creation boundary, successful install invokes creation once with exact result, failed install never invokes it, and shortcut error still leaves installed/open usable with a visible warning. Run new entry `PZ3D.InstallerShortcutTests` via `Build-Tests.ps1`; capture missing capability failures, not compilation errors.
+- [ ] **Step 2: Implement the isolated shortcut service.** Create real .lnk files only inside test fixture desktop via Windows shell COM. Verify TargetPath, WorkingDirectory, IconLocation and empty arguments by parsing, not by launching. Validate installed EXE and identity first; create with collision-safe semantics; write receipt only for verified owned file. If any step fails, do not claim success or remove an external/changed file. An unwritable/redirected destination must result in an independent creation warning, not delete/reinstall the program.
+- [ ] **Step 3: Integrate interactive completion and scoped uninstall.** Run shortcut creation off the UI thread with suitable STA/COM handling, after successful install verification and before complete page shows outcome. Show actual path or warning. Uninstall cleanup happens only after normal core uninstall safety preflight allows removal, but before installation identity disappears; avoid deleting a working shortcut when uninstall preflight fails. Validate all action ordering with fixtures; no changes to updater transaction/owned-file trust.
+
+```powershell
+& ./Build-Tests.ps1 -Entry PZ3D.InstallerShortcutTests -Output artifacts/r123-shortcut.exe
+& ./artifacts/r123-shortcut.exe
+& ./Build-Tests.ps1 -Entry PZ3D.InstallerExperienceTests -Output artifacts/r123-installer.exe
+& ./artifacts/r123-installer.exe
+```
+
+- [ ] **Step 4: GREEN coverage.** Native default/unchecked/failure cases; real fixture .lnk parsing; same-name conflicts and bounded exhaustion; redirected desktop selection; source or receipt tamper; unknown/malformed receipt; reparse links; foreign replacement and user edits preserved; exact owned link removal; uninstall preflight failure retains link. Verify creation and cleanup do not write outside fixture desktop/installation or start launcher/game. Save normal/small/scaled UI screenshots.
+- [ ] **Step 5: Run existing installer/core deployment/package regressions and add shortcut suite to tracked integration gate.** Commit task-owned files, report commands/counts and any known desktop platform limits. Do not modify artwork or public release assets in this task.
+
+## Coordinator release sequence (after reviewed Tasks 1–4)
 
 - [ ] Bump VERSION to 1.2.3 and add precise Chinese change/release notes, including old 1.2.1/1.2.2 first-upgrade limitation; no successful player restart claim.
 - [ ] Run all fifteen native and thirteen existing browser gates plus new focused suites on final code; record logs. Run native and browser jobs separately; never compile native jobs concurrently.
