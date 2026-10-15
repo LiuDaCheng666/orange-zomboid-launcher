@@ -23,7 +23,7 @@ namespace PZ3D {
    // Removing the class must fail as an assertion, even before the API exists.
    Api=typeof(Engine).Assembly.GetType("PZ3D.SaveProfiles");Check(Api!=null,"save/catalog implementation exists");
    ComponentClassification();
-   string root=Path.Combine("E:/Projects/OrangeLauncher/artifacts/save-profile-fixtures","save-"+Guid.NewGuid().ToString("N"));
+   string root=Path.Combine(LauncherTestPaths.Root,"save-profile-"+Guid.NewGuid().ToString("N"));
    string game=Path.Combine(root,"steamapps/common/ProjectZomboid"),user=Path.Combine(root,"User");
    var e=new Engine(game,user,Path.Combine(root,"Data"),true);Put(e.Config,"{\"vmArgs\":[]}");
    Put(Path.Combine(game,"media/lua/shared/defines.lua"),"getCore():getVersionNumber() -- irrelevant");

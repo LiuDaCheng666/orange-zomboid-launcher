@@ -19,6 +19,7 @@ namespace PZ3D {
   readonly Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> fetch;
   readonly Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> networkFetch;
   readonly BuddyTakeoverEnvironment buddyEnvironment;
+  readonly Action<string> recycleSave;
   readonly SemaphoreSlim networkLane=new SemaphoreSlim(1,1);readonly List<CancellationTokenSource> networkRequests=new List<CancellationTokenSource>();CancellationTokenSource hallRequest;
   sealed class HallReceipt {public long Order;public string Id;}
   long hallOrder;string hallReceiptId="";
@@ -27,11 +28,12 @@ namespace PZ3D {
   public Action<string,object> Event;
   public bool Busy{get{lock(gate)return busy||networkRequests.Count>0;}}
   public bool NetworkBusy{get{lock(gate)return networkRequests.Count>0;}}
-  static ModernController(){NativeReads.Add("gameDiagnostics");}
+  static ModernController(){NativeReads.Add("gameDiagnostics");NativeReads.Add("saveDeletePreview");}
   public ModernController(string game,string user,string data,bool test=false):this(game,user,data,test,null){}
   internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download):this(game,user,data,test,download,null){}
   internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download,Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> network):this(game,user,data,test,download,network,null){}
-  internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download,Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> network,BuddyTakeoverEnvironment buddy){this.user=Path.GetFullPath(user);this.data=Path.GetFullPath(data);this.test=test;buddyEnvironment=buddy;journal=new LauncherJournal(this.data);fetch=download??Download;networkFetch=network??((e,a,p,progress,token,batch)=>a=="serverQuery"?servers.Query(Text(p,"id"),token):a=="updatesGet"?ComponentEvidence.CheckUpdates(e,token):SteamLauncherServices.Execute(e,a,p,progress,token,batch));SetEngine(game);}
+  internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download,Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> network,BuddyTakeoverEnvironment buddy):this(game,user,data,test,download,network,buddy,null){}
+  internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download,Func<Engine,string,Dictionary<string,object>,Action<int,string>,CancellationToken,Action<object>,object> network,BuddyTakeoverEnvironment buddy,Action<string> recycle){this.user=Path.GetFullPath(user);this.data=Path.GetFullPath(data);this.test=test;buddyEnvironment=buddy;recycleSave=recycle;journal=new LauncherJournal(this.data);fetch=download??Download;networkFetch=network??((e,a,p,progress,token,batch)=>a=="serverQuery"?servers.Query(Text(p,"id"),token):a=="updatesGet"?ComponentEvidence.CheckUpdates(e,token):SteamLauncherServices.Execute(e,a,p,progress,token,batch));SetEngine(game);}
   void SetEngine(string game){engine=new Engine(string.IsNullOrWhiteSpace(game)?Path.Combine(data,"unselected-game"):game,user,data,test);servers=new ServerProfiles(data);engine.Progress=(v,t)=>Report(v,t);ApplySources();playProfiles=new PlayProfiles(engine);playProfiles.CancelRequested=()=>cancel.IsCancellationRequested;settingSnapshots.Clear();shaderSnapshots.Clear();memorySnapshots.Clear();}
   void ApplySources(){engine.BuddySource=InstallWorkflow.Source(engine,3619862853);engine.ViewSource=InstallWorkflow.Source(engine,3809306528);engine.ModelsSource=InstallWorkflow.Source(engine,3810302175);}
   static string Text(Dictionary<string,object> p,string key){object v;if(!p.TryGetValue(key,out v)||!(v is string))throw new Exception("缺少有效参数："+key);return (string)v;}
@@ -58,6 +60,7 @@ namespace PZ3D {
    finally{if(acquired)networkLane.Release();lock(gate){networkRequests.Remove(tokenSource);if(hallRequest==tokenSource)hallRequest=null;}tokenSource.Dispose();}
   }
   public object Execute(string action,Dictionary<string,object> payload){
+   if(action=="saveDeletePreview"||action=="saveDelete")ModernHostPolicy.ValidateSaveDeletionPayload(action,payload??new Dictionary<string,object>());
    if(action=="gameDiagnostics"){GameDiagnostics.ValidatePayload(payload);lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");return GameDiagnostics.Read(engine);}}
    if(PlayProfiles.Action(action))PlayProfiles.ValidatePayload(action,payload??new Dictionary<string,object>());
    if(action=="launchPreflight"){string targetKind=ModernHostPolicy.ValidatePreflightPayload(payload??new Dictionary<string,object>());lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");return LaunchPreflight.Check(engine,busy||networkRequests.Count>0,Running(),targetKind);}}
@@ -111,6 +114,8 @@ namespace PZ3D {
    case "javaList":return JavaApprovals.List(engine);
    case "javaSave":Check();object decision;if(!p.TryGetValue("decision",out decision)||!(decision is bool))throw new Exception("必须明确选择允许或拒绝此文件。");return JavaApprovals.Save(engine,Text(p,"stamp"),Text(p,"hash"),(bool)decision);
    case "saveGet":return SaveProfiles.Read(engine,Text(p,"id"));
+   case "saveDeletePreview":return SaveDeletion.Preview(engine,Text(p,"id"));
+   case "saveDelete":Check();if(recycleSave==null)return SaveDeletion.Delete(engine,Text(p,"id"),Text(p,"stamp"),Flag(p,"confirmed"),cancel.Token);return SaveDeletion.Delete(engine,Text(p,"id"),Text(p,"stamp"),Flag(p,"confirmed"),recycleSave,Running,cancel.Token);
    case "saveSave":Check();object requested;if(!p.TryGetValue("mods",out requested)||requested is string||!(requested is System.Collections.IEnumerable))throw new Exception("模组清单必须为数组。");var ids=((System.Collections.IEnumerable)requested).Cast<object>().Select(x=>{if(!(x is string))throw new Exception("模组标识必须为文本。");return (string)x;}).ToArray();return SaveProfiles.Save(engine,Text(p,"id"),Text(p,"stamp"),ids,Flag(p,"confirmed"));
    case "serverList":return servers.List();
    case "serverUpsert":return servers.Upsert(p);

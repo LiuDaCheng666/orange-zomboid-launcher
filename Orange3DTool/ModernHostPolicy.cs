@@ -23,9 +23,11 @@ namespace PZ3D {
    if((string)action=="launchPreflight")ValidatePreflightPayload((Dictionary<string,object>)payload);
    if((string)action=="gameDiagnostics")GameDiagnostics.ValidatePayload((Dictionary<string,object>)payload);
    if(BuddyAction((string)action))ValidateBuddyPayload((string)action,(Dictionary<string,object>)payload);
+   if((string)action=="saveDeletePreview"||(string)action=="saveDelete")ValidateSaveDeletionPayload((string)action,(Dictionary<string,object>)payload);
    return request;
   }
-  static ModernHostPolicy(){Actions.Add("gameDiagnostics");}
+  static ModernHostPolicy(){Actions.Add("gameDiagnostics");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");}
+  internal static void ValidateSaveDeletionPayload(string action,Dictionary<string,object> p){object id,stamp,confirmed;bool preview=action=="saveDeletePreview";if(p.Count!=(preview?1:3)||!p.TryGetValue("id",out id)||!(id is string)||!SaveDeletion.ValidId((string)id))throw new InvalidOperationException("删除存档只接受本机存档标识，不能提供路径。");if(!preview&&(!p.TryGetValue("stamp",out stamp)||!(stamp is string)||!SaveDeletion.ValidStamp((string)stamp)||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed))throw new InvalidOperationException("删除存档需要有效预览凭据和明确确认。");}
   internal static bool BuddyAction(string action){return action=="buddyPreview"||action=="buddyTakeover"||action=="buddyRecover";}
   internal static string ValidatePreflightPayload(Dictionary<string,object> payload){object kind;if(payload.Count==0)return "normal";if(payload.Count==1&&payload.TryGetValue("targetKind",out kind)&&kind is string&&new[]{"normal","save","server"}.Contains((string)kind))return (string)kind;throw new Exception("启动预检只接受空对象或明确的 normal/save/server 类型，界面不能提供路径、凭据或授权决定。");}
   internal static void ValidateBuddyPayload(string action,Dictionary<string,object> p){

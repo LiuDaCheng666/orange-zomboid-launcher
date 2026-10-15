@@ -11,6 +11,12 @@ namespace PZ3D {
    var policy=typeof(Engine).Assembly.GetType("PZ3D.ModernHostPolicy");Check(policy!=null,"modern bridge origin and command policy exists");var accept=policy.GetMethod("Validate");
    Func<string,string,bool> valid=(source,json)=>{try{accept.Invoke(null,new object[]{source,json});return true;}catch{return false;}};
    Check(valid("https://orange.local/index.html","{\"id\":\"1\",\"action\":\"memoryGet\",\"payload\":{}}"),"local trusted memory read accepted");
+   string deletionStamp="saveDelete:"+new string('a',64);
+   foreach(string action in new[]{"saveDeletePreview","saveDelete"}){
+    string payload=action=="saveDeletePreview"?"{\"id\":\"Survivor/OnlyThis\"}":"{\"id\":\"Survivor/OnlyThis\",\"stamp\":\""+deletionStamp+"\",\"confirmed\":true}";
+    Check(valid("https://orange.local/index.html","{\"id\":\"d\",\"action\":\""+action+"\",\"payload\":"+payload+"}"),"guarded deletion payload accepted: "+action);
+    foreach(string bad in new[]{payload.Substring(0,payload.Length-1)+",\"path\":\"forged\"}","{}","{\"id\":42}","{\"id\":\"Survivor/OnlyThis/map\"}","{\"id\":\"Survivor/OnlyThis\",\"stamp\":\"opaque\",\"confirmed\":true}","{\"id\":\"Survivor/OnlyThis\",\"stamp\":\""+deletionStamp+"\",\"confirmed\":false}","{\"id\":\"Survivor/OnlyThis\",\"stamp\":\""+deletionStamp+"\",\"confirmed\":\"true\"}"})Check(!valid("https://orange.local/index.html","{\"id\":\"d\",\"action\":\""+action+"\",\"payload\":"+bad+"}"),"deletion rejects forged path, malformed ID/stamp or confirmation: "+action);
+   }
    foreach(string action in new[]{"buddyPreview","buddyTakeover","buddyRecover"}){
     string payload=action=="buddyPreview"?"{}":"{\"stamp\":\"opaque\",\"confirmed\":true,\"steamExitConfirmed\":false}";
     Check(valid("https://orange.local/index.html","{\"id\":\"b\",\"action\":\""+action+"\",\"payload\":"+payload+"}"),"safe Buddy action accepted: "+action);

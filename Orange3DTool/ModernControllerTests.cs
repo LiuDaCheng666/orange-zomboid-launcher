@@ -14,6 +14,7 @@ namespace PZ3D {
   static void Reject(Action work,string name){bool denied=false;try{work();}catch{denied=true;}Assert(denied,name);}
   public static int Main(string[] args){try{if(args.Length>=3&&args[0]=="--workshop-worker"){Console.SetError(new StreamWriter(Console.OpenStandardError(),new System.Text.UTF8Encoding(false)){AutoFlush=true});Console.SetOut(new StreamWriter(Console.OpenStandardOutput(),new System.Text.UTF8Encoding(false)){AutoFlush=true});return WorkshopWorker.Run(args[1],args[2],args.Contains("--force"));}if(args.Contains("--legacy-tail")){LauncherWorkshopRebuildTests.Run();LauncherUiTests.Run();ComponentBatchTests.Run();ReticleSettingsTests.Run();Test.Run();Test.Extras();Test.Audit();FeatureTests.Run();ChinesePatchTests.Run();UiUpdateTests.Run();PortableTests.Run();WorkshopSubscriptionTests.Run();StatusTests.Run();SettingsTests.Run();ShaderTests.Run();UpdateTests.Run();DiscoveryTests.Run();ShootClientTests.Run();PresentationBridgeTests.Run();return 0;}Run();return 0;}catch(Exception ex){Console.WriteLine("FAIL: "+ex.Message);return 1;}}
   public static void Run(){
+   SaveRecycling();
    BuddyWorkflow();
    ScopedLaunchStamp();
    Type type=typeof(Program).Assembly.GetType("PZ3D.ModernController");Assert(type!=null,"modern bridge exists");
@@ -36,6 +37,19 @@ namespace PZ3D {
    Extended(root);
    using(var selected=new ModernController("",user,Path.Combine(root,"SelectionData"),true)){selected.Execute("setGame",new Dictionary<string,object>{{"path",game}});Assert(File.ReadAllText(Path.Combine(root,"SelectionData","game-path.txt"))==game,"native selected game persists for next startup");}
    NetworkResponsiveness(game,user,Path.Combine(root,"NetworkData"));
+  }
+  static void SaveRecycling(){
+   // Break caught: preview becomes a mutation, delete skips journal outcomes, or controller bypasses strict payload validation.
+   string root=Path.Combine(LauncherTestPaths.Root,"controller-recycle-"+Guid.NewGuid().ToString("N")),game=Path.Combine(root,"Game"),user=Path.Combine(root,"User"),data=Path.Combine(root,"Data"),save=Path.Combine(user,"Saves","Multiplayer","OnlyThis"),trash=Path.Combine(root,"Trash");Directory.CreateDirectory(game);Directory.CreateDirectory(save);File.WriteAllText(Path.Combine(game,"ProjectZomboid64.json"),"{\"vmArgs\":[]}");File.WriteAllText(Path.Combine(save,"marker"),"local cache");
+   var ctor=typeof(ModernController).GetConstructors(BindingFlags.Instance|BindingFlags.NonPublic).SingleOrDefault(x=>x.GetParameters().Length==8);Assert(ctor!=null,"controller can inject only recycle operation for isolated integration");
+   bool fail=false,cancelled=false;Action<string> recycler=p=>{if(cancelled)throw new OperationCanceledException("cancelled");if(fail)throw new IOException("recycle unavailable");if(p!=save)throw new Exception("wrong save target");Directory.Move(p,trash);};
+   using(var c=(ModernController)ctor.Invoke(new object[]{game,user,data,true,null,null,null,recycler})){
+    var preview=D(Call(c,"saveDeletePreview",new Dictionary<string,object>{{"id","Multiplayer/OnlyThis"}}));Assert(!Directory.Exists(data)&&ModernController.NativeReads.Contains("saveDeletePreview"),"deletion preview remains read with no task history writes");
+    Reject(()=>Call(c,"saveDeletePreview",new Dictionary<string,object>{{"id","Multiplayer/OnlyThis"},{"path",save}}),"controller independently rejects page-supplied deletion path");
+    var payload=new Dictionary<string,object>{{"id","Multiplayer/OnlyThis"},{"stamp",preview["stamp"]},{"confirmed",true}};fail=true;Reject(()=>Call(c,"saveDelete",payload),"controller surfaces recycler failure");var history=((System.Collections.IEnumerable)D(Call(c,"taskGet"))["history"]).Cast<Dictionary<string,object>>().ToArray();Assert((string)history[0]["action"]=="saveDelete"&&(string)history[0]["status"]=="failed"&&File.ReadAllText(Path.Combine(save,"marker"))=="local cache","failed recycler is journalled without deleting source");
+    fail=false;cancelled=true;Reject(()=>Call(c,"saveDelete",payload),"controller surfaces recycler cancellation");history=((System.Collections.IEnumerable)D(Call(c,"taskGet"))["history"]).Cast<Dictionary<string,object>>().ToArray();Assert((string)history[0]["status"]=="cancelled"&&Directory.Exists(save),"recycle cancellation journal remains cancelled");
+    cancelled=false;var result=D(Call(c,"saveDelete",payload));history=((System.Collections.IEnumerable)D(Call(c,"taskGet"))["history"]).Cast<Dictionary<string,object>>().ToArray();Assert((string)result["status"]=="completed"&&(string)history[0]["status"]=="completed"&&!Directory.Exists(save)&&File.ReadAllText(Path.Combine(trash,"marker"))=="local cache","successful exact-cache recycling is journalled completed only after move");Assert(!new JavaScriptSerializer().Serialize(history).Contains("userPassword"),"deletion task history contains no server credential payload");
+   }
   }
   sealed class BuddyOS:BuddyTakeoverEnvironment {
    internal string Root;internal bool Running=true,Game,Timeout,ReopenFail;internal int Shutdowns,Writes;internal long Clock;internal Action OnWait;
