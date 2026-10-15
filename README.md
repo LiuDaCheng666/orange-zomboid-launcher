@@ -1,6 +1,6 @@
 # OZL / Orange zombiod launcher
 
-**1.2.5 已正式发布为 GitHub 最新稳定版，修复专用服务器被误认为游戏客户端的问题，支持程序内检查、下载和确认重启更新。** [正式发布记录](docs/releases/1.2.5-github-release.md)包含源码、交付哈希及旧版在线更新验证；[1.2.4 发布记录](docs/releases/1.2.4-github-release.md)和[历史本地候选说明](docs/releases/1.2.4-local-candidate.md)保留。
+**1.2.6 已正式发布为 GitHub 最新稳定版，修复专用服务器被误认为游戏客户端的问题，支持程序内检查、下载和确认重启更新。** [正式发布记录](docs/releases/1.2.6-github-release.md)包含源码、交付哈希及旧版在线更新验证；[1.2.5 发布记录](docs/releases/1.2.5-github-release.md)、[1.2.4 发布记录](docs/releases/1.2.4-github-release.md)和[历史本地候选说明](docs/releases/1.2.4-local-candidate.md)保留。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
@@ -16,19 +16,19 @@
 
 ## 下载和在线更新
 
-1.2.5 已正式发布为 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.5)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.5/orange-launcher-setup-v1.2.5.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.5/orange-launcher-v1.2.5-win-x64.zip)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
+1.2.6 已正式发布为 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.6)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.6/orange-launcher-setup-v1.2.6.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.6/orange-launcher-v1.2.6-win-x64.zip)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
 
 已安装可信核心版本的玩家，可点顶部“启动器更新”→检查→下载。运行1.2.3后，当前下载校验完成会弹出一次确认，同意后自动更新并重新打开启动器；选择稍后则保留“重启并更新”，不会反复弹窗。游戏运行本身不再一律拦截核心更新，但未保存编辑、文件修改、配置事务或待恢复会话仍须先处理。更新只下载变化的自有文件并校验签名及哈希；重启后完成界面健康检查，失败保留恢复资料并回退。更新启动器不等于更新或启用第三方模组，不要求退出 Steam，也不要求输入 Steam 密码。网络必须能访问 GitHub 及其官方资源下载域名。
 
 1.2.1 遇 GitHub API 403／429 时使用同仓库官方最新下载地址回退，信任校验不变。旧版本尚无这段回退代码时需等待限流恢复或手动安装完整新版。内置组件的版本、更新说明和物件贴图问题边界见[2026-10-15 组件核查](docs/releases/2026-10-15-component-compatibility-audit.md)；不把“文件已下载”当成“游戏内效果正常”。
 
-没有内置更新信任的早期单EXE，或缺少官方回退且受API限流影响的历史测试构建，可能需要手动安装一次完整新版。**1.2.1／1.2.2首次升级仍受旧版代码限制，可能需要退出游戏，再手动点“重启并更新”。**本次原始正式1.2.1经默认渠道查到1.2.5；原始1.2.4实际下载并校验4,995,910字节后达到Ready／Staged；新1.2.5返回Latest。均使用隔离目录，未改写旧版18个文件，不冒充玩家已完成重启。
+没有内置更新信任的早期单EXE，或缺少官方回退且受API限流影响的历史测试构建，可能需要手动安装一次完整新版。**1.2.1／1.2.2首次升级仍受旧版代码限制，可能需要退出游戏，再手动点“重启并更新”。**本次原始正式1.2.1经默认渠道查到1.2.6；原始1.2.5实际下载并校验5,000,481字节后达到Ready／Staged；新1.2.6返回Latest。均使用隔离目录，未改写旧版18个文件，不冒充玩家已完成重启。
 
 ## 开发状态
 
-1.2.5 已发布，正式标签、交付哈希和旧版在线升级验证边界见[GitHub 发布记录](docs/releases/1.2.5-github-release.md)；[1.2.4](docs/releases/1.2.4-github-release.md)、[1.2.3](docs/releases/1.2.3-github-release.md)、[1.2.2](docs/releases/1.2.2-github-release.md)和[1.2.1](docs/releases/1.2.1-github-release.md)发布记录作为历史保留。
+1.2.6 已发布，正式标签、交付哈希和旧版在线升级验证边界见[GitHub 发布记录](docs/releases/1.2.6-github-release.md)；[1.2.5](docs/releases/1.2.5-github-release.md)、[1.2.4](docs/releases/1.2.4-github-release.md)、[1.2.3](docs/releases/1.2.3-github-release.md)、[1.2.2](docs/releases/1.2.2-github-release.md)和[1.2.1](docs/releases/1.2.1-github-release.md)发布记录作为历史保留。
 
-1.2.5 仅按已核实的 Java 实际入口排除专用服务器：首页及普通启动不再把它当客户端，游玩计时不接受服务端或未知 Java。无法核实的进程仍保守阻止重复启动；同目录服务端占用时，配置修改、工坊维护、指定存档／服务器直达及恢复操作继续受文件保护，不宣称所有操作都能并行。
+1.2.6 补齐标准 `-Xlog`／`-Xlog:` 日志参数，并仅按已核实的 Java 实际入口排除专用服务器：首页及普通启动不再把它当客户端，游玩计时不接受服务端或未知 Java。无法核实的进程仍保守阻止重复启动；同目录服务端占用时，配置修改、工坊维护、指定存档／服务器直达及恢复操作继续受文件保护，不宣称所有操作都能并行。
 
 1.2.4 使用 OZL / Orange zombiod launcher 名称，[发布说明](docs/releases/1.2.4-release-notes.md)记录紧凑存档／服务器布局、单次恢复反馈、回收站删除和封面轮换；程序、窗口、安装器和新快捷方式沿用同一[原创几何橙子图标](docs/assets/icon-123/README.md)。首页为顶部导航、左侧启动区与右侧大幅封面，右下角显示只读实际状态。原封面保持第一张，三张既有场景每8秒轮换，可暂停固定；候选及来源说明见[封面候选](docs/assets/cover-candidates/README.md)。
 
@@ -55,12 +55,12 @@ npm test
 ./Build-CoreRelease.ps1 -VersionOnly
 ./Test-CorePackageBuild.ps1
 # 使用明确的仓库外私钥路径和新的输出目录打包：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.5-local-build
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.6-local-build
 ```
 
 正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。
 
-正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。1.2.5公开发布采用全新 `dist/1.2.5-github-release`；正式1.2.4／1.2.3／1.2.2／1.2.1、本地候选及更早历史产物保持原样。[1.2.0历史验证与已知限制](docs/releases/1.2.0-final-verification.md)只记录当时结果，不证明当前源码成品。线上更新读取本仓库最新稳定 Release 的签名清单与内容寻址资源；没有可用渠道或网络失败会明确报错，不伪装最新版。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
+正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。1.2.6公开发布采用全新 `dist/1.2.6-github-release`；正式1.2.5／1.2.4／1.2.3／1.2.2／1.2.1、本地候选及更早历史产物保持原样。[1.2.0历史验证与已知限制](docs/releases/1.2.0-final-verification.md)只记录当时结果，不证明当前源码成品。线上更新读取本仓库最新稳定 Release 的签名清单与内容寻址资源；没有可用渠道或网络失败会明确报错，不伪装最新版。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
 
 交互方法仅概念参考 [PCL](https://github.com/Meloong-Git/PCL)（[原项目许可](https://github.com/Meloong-Git/PCL/blob/main/LICENCE)），没有复制代码、图标或分发素材。
 
