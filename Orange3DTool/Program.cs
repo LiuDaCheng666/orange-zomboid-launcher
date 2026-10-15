@@ -70,8 +70,11 @@ if(args.Contains("--self-test")) { try { BuddyTakeoverTests.Run(); SteamLaunchOp
   public bool TestMode;
   public static readonly string[] ModIds={"ZombieBuddy","Viewpoint","PZVoxelStudioViewpoint"};
   readonly Func<SteamLaunchOptionsSnapshot> steamOptions;
+  internal readonly Func<string,Process[]> ProcessInventory;
   public Engine(string game,string user,string data,bool test=false):this(game,user,data,test,null){}
-  internal Engine(string game,string user,string data,bool test,Func<SteamLaunchOptionsSnapshot> options){Game=Path.GetFullPath(game);User=user;Data=data;TestMode=test;steamOptions=options??(test?(Func<SteamLaunchOptionsSnapshot>)SteamLaunchOptions.Unavailable:SteamLaunchOptions.Current);}
+  internal Engine(string game,string user,string data,bool test,Func<SteamLaunchOptionsSnapshot> options):this(game,user,data,test,options,null){}
+  internal Engine(string game,string user,string data,bool test,Func<SteamLaunchOptionsSnapshot> options,Func<string,Process[]> inventory){Game=Path.GetFullPath(game);User=user;Data=data;TestMode=test;steamOptions=options??(test?(Func<SteamLaunchOptionsSnapshot>)SteamLaunchOptions.Unavailable:SteamLaunchOptions.Current);ProcessInventory=inventory??Process.GetProcessesByName;}
+  internal bool RuntimeRunning(bool clientOnly=false){return clientOnly?GameProcessGuard.IsClientRunning(Game,ProcessInventory):GameProcessGuard.IsRunning(Game,ProcessInventory);}
   internal SteamLaunchOptionsSnapshot ReadSteamOptions(){return steamOptions();}
   public string Config {get{return Path.Combine(Game,"ProjectZomboid64.json");}}
   public string Mods {get{return Path.Combine(User,"mods","default.txt");}}
@@ -91,7 +94,7 @@ if(args.Contains("--self-test")) { try { BuddyTakeoverTests.Run(); SteamLaunchOp
    if(!ownProfileTransaction&&PlayProfileTransaction.Pending(this))throw new Exception(PlayProfileTransaction.PendingMessage);
    BuddyTakeover.Guard(this);
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
-   if(!TestMode && (launch?GameProcessGuard.IsClientRunning(Game):GameProcessGuard.IsRunning(Game)))throw new Exception(launch?"客户端或无法核实用途的游戏 Java 进程仍在运行，请退出后再启动。":"游戏客户端、同目录专用服务器或 Java 进程仍占用文件，请结束占用后再修改。");
+   if(!TestMode && RuntimeRunning(launch))throw new Exception(launch?"客户端或无法核实用途的游戏 Java 进程仍在运行，请退出后再启动。":"游戏客户端、同目录专用服务器或 Java 进程仍占用文件，请结束占用后再修改。");
    foreach(string name in new[]{"ProjectZomboid64.bat","ProjectZomboid32.bat"}){string bat=Path.Combine(Game,name);LauncherMaintenance.NoReparse(bat);if(File.Exists(bat)){if(new FileInfo(bat).Length>2097152)throw new Exception("备用启动 BAT 过大，无法核实。");var cleanup=BuddyLaunchArguments.CleanBat(File.ReadAllText(bat));if(!cleanup.Safe)throw new Exception("备用启动 BAT 参数不明确，请人工检查 Buddy 启动语法。");if(cleanup.Changed)throw new Exception("备用启动 BAT 有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
    var options=ReadSteamOptions();options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}
   }

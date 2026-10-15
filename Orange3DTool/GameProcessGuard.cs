@@ -61,13 +61,15 @@ namespace PZ3D {
     if(process.HasExited)return JavaProcessRole.Unknown;return role;
    }catch{return JavaProcessRole.Unknown;}
   }
-  public static bool IsClientRunning(string game){return Running(game,true);}
-  public static bool IsRunning(string game){
-   return Running(game,false);
+  public static bool IsClientRunning(string game,Func<string,Process[]> inventory=null){return Running(game,true,inventory??Process.GetProcessesByName);}
+  public static bool IsRunning(string game,Func<string,Process[]> inventory=null){
+   return Running(game,false,inventory??Process.GetProcessesByName);
   }
-  static bool Running(string game,bool clientOnly){
-   foreach(string name in new[]{"ProjectZomboid64","ProjectZomboid32"}){Process[] native=Process.GetProcessesByName(name);try{foreach(var process in native)if(!Exited(process))return true;}finally{foreach(var process in native)process.Dispose();}}
-   foreach(string name in new[]{"java","javaw"}){Process[] java=Process.GetProcessesByName(name);try{foreach(var process in java){if(Exited(process))continue;string image;try{var module=process.MainModule;image=module==null?null:module.FileName;}catch(Exception ex){if(Exited(process))continue;throw new Exception("无法核实运行中的 Java 进程路径；请停止客户端或服务端占用，或使用可读取该进程的权限后重试。未修改配置。",ex);}if(image==null){if(Exited(process))continue;throw new Exception("运行中的 Java 进程路径不可读取，暂不能安全确认占用已结束；未修改配置。");}if(MatchesJava(game,name,image)&&(!clientOnly||ReadJavaRole(game,name,image,process)!=JavaProcessRole.Server))return true;}}finally{foreach(var process in java)process.Dispose();}}
+  // The observation boundary changes which processes are visible, never their role policy.
+  // Default callers retain the complete OS inventory, including global native occupancy.
+  static bool Running(string game,bool clientOnly,Func<string,Process[]> inventory){
+   foreach(string name in new[]{"ProjectZomboid64","ProjectZomboid32"}){Process[] native=inventory(name);try{foreach(var process in native)if(!Exited(process))return true;}finally{foreach(var process in native)process.Dispose();}}
+   foreach(string name in new[]{"java","javaw"}){Process[] java=inventory(name);try{foreach(var process in java){if(Exited(process))continue;string image;try{var module=process.MainModule;image=module==null?null:module.FileName;}catch(Exception ex){if(Exited(process))continue;throw new Exception("无法核实运行中的 Java 进程路径；请停止客户端或服务端占用，或使用可读取该进程的权限后重试。未修改配置。",ex);}if(image==null){if(Exited(process))continue;throw new Exception("运行中的 Java 进程路径不可读取，暂不能安全确认占用已结束；未修改配置。");}if(MatchesJava(game,name,image)&&(!clientOnly||ReadJavaRole(game,name,image,process)!=JavaProcessRole.Server))return true;}}finally{foreach(var process in java)process.Dispose();}}
    return false;
   }
  }
