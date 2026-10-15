@@ -47,7 +47,7 @@ async function homePage(browser,theme){
       assert.ok(bounds.height>=(size.width===733?270:400),`dominant photo height: ${bounds.height}`);
       const launchBounds=await page.locator('.play-launch').boundingBox();
       assert.ok(bounds.width>launchBounds.width&&bounds.x>=launchBounds.x+launchBounds.width,'photo dominates the right side of launch');
-      assert.equal(await page.getByRole('button',{name:'启动游戏',exact:true}).count(),1,'homepage keeps a single launch button');
+      assert.equal(await page.getByRole('button',{name:'启动到主菜单',exact:true}).count(),1,'homepage keeps a single launch button');
       assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'main must have no horizontal overflow');
       await page.locator('#play-profile-select').scrollIntoViewIfNeeded();
       assert.equal(await page.locator('#play-profile-select').isVisible(),true,'configuration remains reachable');
@@ -64,7 +64,7 @@ async function homePage(browser,theme){
      await page.evaluate(()=>orange.acceptStatus({...orange.state.status,running:true}));
      await page.waitForFunction(()=>orange.state.status.running);
      assert.equal(await page.locator('#launch').isDisabled(),true,'existing launch control is disabled while running');
-     assert.equal(await page.getByRole('button',{name:'启动游戏',exact:true}).count(),1);
+     assert.equal(await page.getByRole('button',{name:'启动到主菜单',exact:true}).count(),1);
      assert.equal(await page.locator('#play-profile-select').isEnabled(),true);
      assert.equal(await page.locator('#launch-target-kind').isEnabled(),true);
      passed++;console.log('PASS homepage selection and running state '+theme);
