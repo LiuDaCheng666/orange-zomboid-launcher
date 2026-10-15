@@ -77,11 +77,17 @@ namespace PZ3D {
  internal static class CoreReleaseNetwork {
   const string Latest="https://api.github.com/repos/LiuDaCheng666/orange-zomboid-launcher/releases/latest";
   internal static bool Allowed(Uri uri){return uri.Scheme=="https"&&uri.IsDefaultPort&&uri.UserInfo==""&&uri.Fragment==""&&(uri.Host=="api.github.com"||uri.Host=="github.com"||uri.Host=="release-assets.githubusercontent.com"||uri.Host=="objects.githubusercontent.com");}
-  public static byte[][] Lookup(CancellationToken token){byte[] raw;try{using(var stream=Open(Latest,token))raw=ReadBounded(stream,CoreReleaseProtocol.MaxManifestBytes,token);}catch(WebException e){var response=e.Response as HttpWebResponse;if(response!=null&&response.StatusCode==HttpStatusCode.NotFound){response.Dispose();return null;}throw;}
+  public static byte[][] Lookup(CancellationToken token){return Lookup(token,Open);}
+  internal static byte[][] Lookup(CancellationToken token,Func<string,CancellationToken,Stream> open){byte[] raw;try{using(var stream=open(Latest,token))raw=ReadBounded(stream,CoreReleaseProtocol.MaxManifestBytes,token);}catch(WebException e){var response=e.Response as HttpWebResponse;if(response==null)throw;int code=(int)response.StatusCode;response.Dispose();if(code==404)return null;if(code!=403&&code!=429)throw;return LatestEnvelope(token,open);}
    var map=new JavaScriptSerializer{MaxJsonLength=CoreReleaseProtocol.MaxManifestBytes}.Deserialize<Dictionary<string,object>>(CoreDeployment.Utf8.GetString(raw));object draft,pre,tag;
    if(map==null||!map.TryGetValue("draft",out draft)||!(draft is bool)||(bool)draft||!map.TryGetValue("prerelease",out pre)||!(pre is bool)||(bool)pre||!map.TryGetValue("tag_name",out tag)||!(tag is string)||!((string)tag).StartsWith("v",StringComparison.Ordinal))throw new InvalidDataException("正式发布元数据无效。");
    string version=((string)tag).Substring(1);CoreReleaseProtocol.ParseVersion(version);string prefix=CoreReleaseProtocol.ReleaseBase+"v"+version+"/";
-   using(var manifest=Open(prefix+"update-manifest.json",token))using(var signature=Open(prefix+"update-manifest.sig",token))return new[]{ReadBounded(manifest,CoreReleaseProtocol.MaxManifestBytes,token),ReadBounded(signature,1024,token)};
+   using(var manifest=open(prefix+"update-manifest.json",token))using(var signature=open(prefix+"update-manifest.sig",token))return new[]{ReadBounded(manifest,CoreReleaseProtocol.MaxManifestBytes,token),ReadBounded(signature,1024,token)};
+  }
+  static byte[][] LatestEnvelope(CancellationToken token,Func<string,CancellationToken,Stream> open){
+   const string prefix="https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest/download/";
+   try{token.ThrowIfCancellationRequested();using(var manifest=open(prefix+"update-manifest.json",token)){token.ThrowIfCancellationRequested();using(var signature=open(prefix+"update-manifest.sig",token))return new[]{ReadBounded(manifest,CoreReleaseProtocol.MaxManifestBytes,token),ReadBounded(signature,1024,token)};}}
+   catch(WebException e){var response=e.Response as HttpWebResponse;if(response==null)throw;int code=(int)response.StatusCode;response.Dispose();if(code==404)return null;throw;}
   }
   static byte[] ReadBounded(Stream stream,int max,CancellationToken token){using(var bytes=new MemoryStream()){var buffer=new byte[16384];int n;while((n=stream.Read(buffer,0,buffer.Length))>0){token.ThrowIfCancellationRequested();if(bytes.Length+n>max)throw new InvalidDataException("发布响应过大。");bytes.Write(buffer,0,n);}return bytes.ToArray();}}
   public static Stream Open(string url,CancellationToken token){Uri uri=new Uri(url);for(int redirect=0;redirect<=3;redirect++){

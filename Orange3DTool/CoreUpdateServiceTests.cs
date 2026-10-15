@@ -9,7 +9,7 @@ using System.Diagnostics;
 using System.Web.Script.Serialization;
 namespace PZ3D {
  static class CoreUpdateServiceTests {
-  public static int Main(string[] args) {try {if(args.Length==2&&args[0]=="--lock"){try{using(CoreDeployment.Acquire(args[1]))return 4;}catch(IOException e){return e.Message.Contains("Another process owns")?0:5;}}CoreFixture.Initialize();Policy();Reservation();Service();Console.WriteLine("CORE SERVICE: "+CoreFixture.Passed+" PASS");return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
+  public static int Main(string[] args) {try {if(args.Length==2&&args[0]=="--lock"){try{using(CoreDeployment.Acquire(args[1]))return 4;}catch(IOException e){return e.Message.Contains("Another process owns")?0:5;}}CoreFixture.Initialize();CoreReleaseNetworkTests.Run();Policy();Reservation();Service();Console.WriteLine("CORE SERVICE: "+CoreFixture.Passed+" PASS");return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
   static object Invoke(object s,string name){try{return s.GetType().GetMethod(name).Invoke(s,null);}catch(TargetInvocationException e){throw e.InnerException;}}
   static Dictionary<string,object> Snapshot(object s){return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(new JavaScriptSerializer().Serialize(Invoke(s,"Status")));}
   static void Until(object s,string state){var end=DateTime.UtcNow.AddSeconds(10);while((string)Snapshot(s)["state"]!=state){if(DateTime.UtcNow>end)throw new Exception("FAIL: expected "+state+", got "+new JavaScriptSerializer().Serialize(Snapshot(s)));Thread.Sleep(10);}}
