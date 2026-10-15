@@ -10,7 +10,7 @@ New-Item -ItemType Directory -Path $FixtureRoot | Out-Null
 $results=New-Object 'System.Collections.Generic.List[object]'
 Push-Location $PSScriptRoot
 try{
- foreach($suite in @(@('PZ3D.CoreRestartPolicyTests','restart-policy'),@('PZ3D.ManagedBackgroundWorkerTests','background-workers'))){
+ foreach($suite in @(@('PZ3D.CoreRestartPolicyTests','restart-policy'),@('PZ3D.ManagedBackgroundWorkerTests','background-workers'),@('PZ3D.InstallerShortcutTests','installer-shortcuts'))){
   # These established tests locate the repository relative to artifacts/*.exe.
   # The configurable evidence/real-lifecycle roots always remain in TestFixtures.
   $image=Join-Path $PSScriptRoot ("artifacts\running-game-"+$suite[1]+'.exe')

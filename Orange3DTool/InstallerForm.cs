@@ -34,12 +34,15 @@ namespace PZ3D {
  internal sealed class InstallerForm:Form {
   readonly Func<string,Action<InstallerProgress>,InstallerInstallResult> install;
   readonly Action<InstallerInstallResult> openLauncher;
+  readonly Func<InstallerInstallResult,InstallerShortcutResult> createShortcut;
+  readonly CheckBox desktopShortcut;readonly Label shortcutOutcome;
   readonly TextBox destination,details;readonly Label reason,status,counts,installedPaths;
   readonly ProgressBar progress;readonly Button browse,installButton,openButton,finish,detailsToggle,copy;
   readonly TableLayoutPanel body;readonly Panel scroll;readonly LauncherTheme theme=LauncherTheme.Create(false);
   bool busy,terminal;InstallerInstallResult completed;internal int ExitCode;
-  internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open) {
-   install=backend;openLauncher=open;Text="安装橙子启动器 · "+AppVersion.Current;BackColor=theme.Background;ForeColor=theme.Text;Font=new Font("Microsoft YaHei UI",10);AutoScaleMode=AutoScaleMode.Font;StartPosition=FormStartPosition.CenterScreen;
+  internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open):this(recommendation,backend,open,null){}
+  internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open,Func<InstallerInstallResult,InstallerShortcutResult> shortcut) {
+   install=backend;openLauncher=open;createShortcut=shortcut;Text="安装橙子启动器 · "+AppVersion.Current;BackColor=theme.Background;ForeColor=theme.Text;Font=new Font("Microsoft YaHei UI",10);AutoScaleMode=AutoScaleMode.Font;StartPosition=FormStartPosition.CenterScreen;
    var area=Screen.PrimaryScreen.WorkingArea;Size=new Size(Math.Min(800,Math.Max(400,area.Width-40)),Math.Min(610,Math.Max(340,area.Height-60)));
    try{Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch{}
    var footer=new FlowLayoutPanel{Dock=DockStyle.Bottom,AutoSize=true,WrapContents=true,FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(16,8,16,12),BackColor=theme.Background};
@@ -58,10 +61,12 @@ namespace PZ3D {
    browse=MakeButton("installer-browse","更改位置…",false);browse.Width=132;browse.Click+=(s,e)=>Browse();pathRow.Controls.Add(destination,0,0);pathRow.Controls.Add(browse,1,0);Add(pathRow);
    reason=Label(recommendation.Reason??"可直接编辑完整安装路径。",9,theme.Muted);Add(reason);
    Add(Label("更改位置会选择存放父目录，并建议独立的 OrangeLauncher 子目录；也可在上方直接输入完整路径。",9,theme.Muted));
+   desktopShortcut=new CheckBox{Name="installer-desktop-shortcut",Text="创建桌面快捷方式（当前用户）",Checked=true,AutoSize=true,Dock=DockStyle.Top,Margin=new Padding(0,6,0,6),ForeColor=theme.Text};Add(desktopShortcut);
    status=Label("准备就绪 · 点击安装后才创建目录",11);status.Name="installer-status";Add(status);
    progress=new InstallerProgressBar{Name="installer-progress",Dock=DockStyle.Top,Height=12,Style=ProgressBarStyle.Continuous,Maximum=1000,Margin=new Padding(0,8,0,6)};Add(progress);
    counts=Label("",9,theme.Muted);Add(counts);
    installedPaths=Label("",9);installedPaths.Visible=false;Add(installedPaths);
+   shortcutOutcome=Label("",9);shortcutOutcome.Name="installer-shortcut-outcome";shortcutOutcome.Visible=false;Add(shortcutOutcome);
    var detailActions=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Top,WrapContents=true,Margin=new Padding(0,2,0,2)};
    detailsToggle=MakeButton("installer-details-toggle","查看详情",false);detailsToggle.Width=120;detailsToggle.Click+=(s,e)=>{details.Visible=!details.Visible;copy.Visible=details.Visible;detailsToggle.Text=details.Visible?"收起详情":"查看详情";};
    copy=MakeButton("installer-copy","复制详情",false);copy.Width=120;copy.Visible=false;copy.Click+=(s,e)=>{try{Clipboard.SetText(details.Text);}catch(Exception error){status.Text="无法复制详情："+error.Message;}};detailActions.Controls.Add(detailsToggle);detailActions.Controls.Add(copy);Add(detailActions);
@@ -82,14 +87,15 @@ namespace PZ3D {
   void StartInstall(){
    if(busy||terminal)return;string root;
    try{root=InstallerDestinationPolicy.ValidateInstallRoot(destination.Text);}catch(Exception error){ExitCode=1;status.Text="请更改安装位置："+error.Message;details.Text="安装位置校验失败（尚未创建目录）：\r\n"+error;details.Visible=true;copy.Visible=true;detailsToggle.Text="收起详情";WrapLabels();return;}
-   busy=true;ExitCode=0;destination.Enabled=false;browse.Enabled=false;installButton.Enabled=false;installButton.Text="正在安装…";status.Text="正在校验安装包";progress.Style=ProgressBarStyle.Marquee;progress.MarqueeAnimationSpeed=25;
-   Task.Run(()=>{try{var result=install(root,p=>Post(()=>{if(busy&&!terminal)ShowProgress(p);}));Post(()=>CompleteInstall(root,result));}catch(Exception error){Post(()=>{busy=false;ShowFailure(error);});}});
+   bool wantsShortcut=desktopShortcut.Checked;busy=true;ExitCode=0;destination.Enabled=false;browse.Enabled=false;desktopShortcut.Enabled=false;installButton.Enabled=false;installButton.Text="正在安装…";status.Text="正在校验安装包";progress.Style=ProgressBarStyle.Marquee;progress.MarqueeAnimationSpeed=25;
+   Task.Run(()=>{try{var result=install(root,p=>Post(()=>{if(busy&&!terminal)ShowProgress(p);}));if(result==null||!CoreDeployment.SamePath(root,result.Root))throw new InvalidOperationException("安装结果与所选目录不一致。");InstallerShortcutResult shortcutResult=null;if(wantsShortcut&&createShortcut!=null){try{shortcutResult=createShortcut(result);if(shortcutResult==null)throw new InvalidOperationException("未返回快捷方式结果。");}catch(Exception error){shortcutResult=new InstallerShortcutResult(false,"","桌面快捷方式未创建："+error.Message);}}Post(()=>CompleteInstall(root,result,shortcutResult,wantsShortcut));}catch(Exception error){Post(()=>{busy=false;ShowFailure(error);});}});
   }
-  void CompleteInstall(string root,InstallerInstallResult result){
+  void CompleteInstall(string root,InstallerInstallResult result,InstallerShortcutResult shortcutResult,bool wantsShortcut){
    try{
     if(result==null||!CoreDeployment.SamePath(root,result.Root))throw new InvalidOperationException("安装结果与所选目录不一致。");
     completed=result;terminal=true;busy=false;ExitCode=0;progress.Style=ProgressBarStyle.Continuous;progress.Value=progress.Maximum;status.Text="安装完成 · 已核验记录与自有文件";counts.Text="100%  /  仅在所有核验成功后完成";
     installedPaths.Text="安装位置："+result.Root+"\r\n卸载器："+result.UninstallerPath;installedPaths.Visible=true;details.Text+="\r\n安装完成："+result.Root+"\r\n诊断资料："+result.EvidenceDirectory;installButton.Visible=false;openButton.Visible=true;finish.Visible=true;WrapLabels();
+    shortcutOutcome.Text=shortcutResult==null?(wantsShortcut?"桌面快捷方式：本安装会话未启用创建服务。":"桌面快捷方式：已按选择跳过创建。"):shortcutResult.Message+(shortcutResult.Created&&!shortcutResult.Message.Contains(shortcutResult.Path)?"\r\n"+shortcutResult.Path:"");shortcutOutcome.Visible=true;details.AppendText("\r\n"+shortcutOutcome.Text);WrapLabels();
    }catch(Exception error){busy=false;ShowFailure(error);}
   }
   void ShowProgress(InstallerProgress value){
