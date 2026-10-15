@@ -1,0 +1,3 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+const {setup,chromium}=require('./experience-ui-tests.cjs');
+(async()=>{const browser=await chromium.launch({headless:true});try{const {page,errors}=await setup(browser,'dark');try{await page.goto('file:///'+path.join(__dirname,'index.html').replaceAll('\\','/'));await page.waitForFunction(()=>!!orange.state.status);assert.equal(await page.title(),'OZL');assert.equal(await page.locator('.brand span').textContent(),'OZLOrange zombiod launcher');assert.deepEqual(errors,[]);console.log('BRANDING UI: 3 PASS');}finally{await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

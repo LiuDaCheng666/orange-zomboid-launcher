@@ -38,7 +38,7 @@ static class LegacySetupBuildProbe {
    var recommendationType=assembly.GetType("PZ3D.InstallerDestination",true);
    object recommendation=Activator.CreateInstance(recommendationType,true);
    recommendationType.GetField("Root",InternalInstance).SetValue(recommendation,destination);
-   var constructor=assembly.GetType("PZ3D.InstallerForm",true).GetConstructors(InternalInstance).Single();
+   var constructor=assembly.GetType("PZ3D.InstallerForm",true).GetConstructors(InternalInstance).Single(c=>c.GetParameters().Length==3);
    Delegate backend=service==null?null:Delegate.CreateDelegate(constructor.GetParameters()[1].ParameterType,service,service.GetType().GetMethod("Install",InternalInstance));
    using(var form=(Form)constructor.Invoke(new object[]{recommendation,backend,null})){
     Check(form.Text.Contains(version),"actual legacy installer form shows canonical version="+version);

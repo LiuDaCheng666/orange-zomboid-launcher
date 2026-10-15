@@ -37,7 +37,7 @@ namespace PZ3D {
      string directory=Desktop();using(var lease=new DirectoryLease(directory)){
       var link=Expected(root);string path=null,writtenHash=null;
       for(int n=1;n<=100;n++){
-       string candidate=Child(directory,n==1?"橙子启动器.lnk":"橙子启动器 ("+n+").lnk");
+       string candidate=Child(directory,n==1?"OZL.lnk":"OZL ("+n+").lnk");
        if(File.Exists(candidate)||Directory.Exists(candidate))continue;
        try{writtenHash=write(candidate,link);path=candidate;break;}catch(IOException error){int code=error.HResult&65535;if((code==80||code==183)&&(File.Exists(candidate)||Directory.Exists(candidate)))continue;throw;}
       }
@@ -88,7 +88,7 @@ namespace PZ3D {
   static void RequireLink(InstallerShortcutLink actual,InstallerShortcutLink expected){if(actual==null||actual.Target!=expected.Target||actual.WorkingDirectory!=expected.WorkingDirectory||actual.Arguments!=expected.Arguments||actual.Icon!=expected.Icon)throw new InvalidDataException("快捷方式目标、工作目录、参数或图标不匹配。");}
   string Desktop(){string value=desktop();if(string.IsNullOrWhiteSpace(value)||!Path.IsPathRooted(value)||Path.GetFullPath(value).TrimEnd('\\','/')!=value.TrimEnd('\\','/'))throw new IOException("当前用户桌面目录无效。");value=Path.GetFullPath(value).TrimEnd('\\','/');if(!Directory.Exists(value))throw new IOException("当前用户桌面目录不可用。");return value;}
   static string Child(string directory,string name){if(string.IsNullOrEmpty(name)||Path.GetFileName(name)!=name||name.IndexOfAny(new[]{'/', '\\',':','\0'})>=0)throw new IOException("快捷方式必须是桌面直接子文件。");string result=Path.Combine(directory,name);if(Path.GetDirectoryName(result)!=directory)throw new IOException("快捷方式路径越界。");return result;}
-  static bool OwnedName(string name){if(name=="橙子启动器.lnk")return true;for(int n=2;n<=100;n++)if(name=="橙子启动器 ("+n+").lnk")return true;return false;}
+  static bool OwnedName(string name){foreach(string display in new[]{"OZL","橙子启动器"}){if(name==display+".lnk")return true;for(int n=2;n<=100;n++)if(name==display+" ("+n+").lnk")return true;}return false;}
   internal sealed class ShortcutReceipt {public int schema;public string installationId,path,target,workingDirectory,arguments,icon,sha256;}
 
   // Opening reparse points themselves (rather than their targets) also catches a

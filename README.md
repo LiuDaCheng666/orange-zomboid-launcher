@@ -1,4 +1,6 @@
-# 橙子启动器 / Orange Zomboid Launcher
+# OZL / Orange zombiod launcher
+
+当前源码为 1.2.4 本地候选，尚未发布；正式线上版本仍为 1.2.3。[本地候选说明](docs/releases/1.2.4-local-candidate.md)记录验证及交付边界。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
@@ -26,7 +28,7 @@
 
 1.2.3 已发布，正式标签、交付哈希、真实更新／回退和1.2.2在线升级验证边界见[GitHub 发布记录](docs/releases/1.2.3-github-release.md)；[1.2.2发布记录](docs/releases/1.2.2-github-release.md)和[1.2.1发布记录](docs/releases/1.2.1-github-release.md)作为历史保留。
 
-当前源码版本1.2.3已正式上线，[发布说明](docs/releases/1.2.3-release-notes.md)记录更新确认、监控隔离和桌面快捷方式变化；程序、窗口、安装器和新快捷方式使用同一[原创几何橙子图标](docs/assets/icon-123/README.md)。首页仍为顶部导航、左侧启动区与右侧大幅封面，右下角显示只读实际状态；本次不重新排列页面。按用户选择保留原默认封面，三张原创场景插画候选及来源说明见[封面候选](docs/assets/cover-candidates/README.md)。
+1.2.3 已正式上线；当前源码 1.2.4 为本地候选，[发布说明](docs/releases/1.2.3-release-notes.md)记录更新确认、监控隔离和桌面快捷方式变化；程序、窗口、安装器和新快捷方式使用同一[原创几何橙子图标](docs/assets/icon-123/README.md)。首页仍为顶部导航、左侧启动区与右侧大幅封面，右下角显示只读实际状态；本次不重新排列页面。按用户选择保留原默认封面，三张原创场景插画候选及来源说明见[封面候选](docs/assets/cover-candidates/README.md)。
 
 此前1.2.1（2026-10-15）修复配置选择失败后成功重新读取仍残留阻断的问题（N1），并新增原生安装向导。默认优先安装包所在非系统固定盘，否则按可用空间选择；没有时明确使用用户应用目录下 Programs/OrangeLauncher。可直接编辑完整目录或选择父目录创建独立子目录，打开向导不创建目录，点安装才后台部署。进度来自真实解压字节/核验文件数，事务部署使用不定进度；全部核验成功后才提供显式“打开启动器”。[1.2.1 本机验证记录](docs/releases/1.2.1-final-verification.md)保留初次本地候选的准确边界；公开发布使用独立构建目录，不覆盖历史产物。
 

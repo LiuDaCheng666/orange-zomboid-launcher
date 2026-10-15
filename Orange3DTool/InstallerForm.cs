@@ -55,7 +55,7 @@ namespace PZ3D {
   bool busy,terminal;InstallerInstallResult completed;internal int ExitCode;
   internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open):this(recommendation,backend,open,null){}
   internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open,Func<InstallerInstallResult,InstallerShortcutResult> shortcut) {
-   install=backend;openLauncher=open;createShortcut=shortcut;Text="安装橙子启动器 · "+AppVersion.Current;BackColor=theme.Background;ForeColor=theme.Text;Font=new Font("Microsoft YaHei UI",10);AutoScaleMode=AutoScaleMode.Font;StartPosition=FormStartPosition.CenterScreen;
+   install=backend;openLauncher=open;createShortcut=shortcut;Text="安装 OZL · "+AppVersion.Current;BackColor=theme.Background;ForeColor=theme.Text;Font=new Font("Microsoft YaHei UI",10);AutoScaleMode=AutoScaleMode.Font;StartPosition=FormStartPosition.CenterScreen;
    var area=Screen.PrimaryScreen.WorkingArea;Size=new Size(Math.Min(800,Math.Max(400,area.Width-40)),Math.Min(610,Math.Max(340,area.Height-60)));
    try{Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch{}
    var footer=new FlowLayoutPanel{Dock=DockStyle.Bottom,AutoSize=true,WrapContents=true,FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(16,8,16,12),BackColor=theme.Background};
@@ -65,7 +65,7 @@ namespace PZ3D {
    footer.Controls.Add(finish);footer.Controls.Add(openButton);footer.Controls.Add(installButton);
    scroll=new Panel{Dock=DockStyle.Fill,AutoScroll=true,Padding=new Padding(24,18,24,4),BackColor=theme.Background};
    body=new TableLayoutPanel{Dock=DockStyle.Top,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=1,Padding=new Padding(0,0,0,12),BackColor=theme.Background};body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-   var title=Label("橙子启动器",22);title.Font=new Font(Font.FontFamily,22,FontStyle.Bold);Add(title);
+   var title=Label("OZL",22);title.Font=new Font(Font.FontFamily,22,FontStyle.Bold);Add(title);
    Add(Label("原生安装向导  /  版本 "+AppVersion.Current,10,theme.Accent));
    Add(Label("安装独立的启动器工具。首次打开启动器需要系统 WebView2 Runtime。",10));
    Add(Label("安装位置",11));

@@ -8,6 +8,6 @@ foreach($component in $releaseVersion.Split('.')) {
 $generatedDirectory = Join-Path $PSScriptRoot 'artifacts'
 New-Item -ItemType Directory -Path $generatedDirectory -Force | Out-Null
 $generatedPath = Join-Path $generatedDirectory 'Launcher.Version.g.cs'
-$attributes = "// Generated from VERSION by Build-Version.ps1; do not edit.`r`nusing System.Reflection;`r`n[assembly: AssemblyVersion(`"$releaseVersion.0`")]`r`n[assembly: AssemblyFileVersion(`"$releaseVersion.0`")]`r`n[assembly: AssemblyInformationalVersion(`"$releaseVersion`")]`r`n"
+$attributes = "// Generated from VERSION by Build-Version.ps1; do not edit.`r`nusing System.Reflection;`r`n[assembly: AssemblyTitle(`"OZL`")]`r`n[assembly: AssemblyProduct(`"Orange zombiod launcher`")]`r`n[assembly: AssemblyVersion(`"$releaseVersion.0`")]`r`n[assembly: AssemblyFileVersion(`"$releaseVersion.0`")]`r`n[assembly: AssemblyInformationalVersion(`"$releaseVersion`")]`r`n"
 [IO.File]::WriteAllText($generatedPath, $attributes, [Text.UTF8Encoding]::new($false))
 return $generatedPath
