@@ -1,8 +1,8 @@
 # 核心发布与签名
 
-**1.2.3 已正式发布为 GitHub latest。** 源码标签、公开下载哈希、全部门禁与1.2.2在线升级边界见[正式发布记录](releases/1.2.3-github-release.md)。[1.2.2记录](releases/1.2.2-github-release.md)、[1.2.1记录](releases/1.2.1-github-release.md)及以下历史验收说明保留。
+**1.2.4 已正式发布为 GitHub latest。** 源码标签、公开下载哈希和1.2.1／1.2.3默认在线更新验证见[正式发布记录](releases/1.2.4-github-release.md)。[1.2.3](releases/1.2.3-github-release.md)、[1.2.2](releases/1.2.2-github-release.md)、[1.2.1](releases/1.2.1-github-release.md)记录及以下历史验收说明保留。
 
-正式版本来自根目录 VERSION（当前源码 1.2.3）。1.2.3 公开发布工作采用全新 `dist/1.2.3-github-release/`，正式1.2.2／1.2.1、本地 UI 候选均保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
+正式版本来自根目录 VERSION（当前源码 1.2.4）。1.2.4 公开发布工作采用全新 `dist/1.2.4-github-release/`，正式1.2.3／1.2.2／1.2.1、本地 UI 候选均保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
@@ -10,7 +10,7 @@
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
 # 使用已有保护私钥：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.3-local-build
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.4-local-build
 ```
 
 私钥位于仓库外，由当前 Windows 用户独占 ACL 保护。不可打印、上传、嵌入二进制或提交私钥。正式公钥为仓库根目录 release-public-key.xml，嵌入所有正式可执行文件的资源名为 `Launcher.UpdatePublicKey.xml`。磁盘中的公钥只供审计，绝不作为运行时信任根。签名私钥与该公钥不匹配时构建失败。
@@ -66,7 +66,7 @@ ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntim
 
 ## 发布前
 
-发布前再次核对 CHANGELOG、版本、完整文件哈希和公钥身份，由维护者明确决定发布。本次用户已授权推送和发布 1.2.3，沿用先上传完整草稿、核对全部资源，再切为正式 latest 的流程；本次22项资源、匿名下载和原始1.2.2默认查询／真实staging均已验证，边界见对应发布记录。未完成线上验证前不得宣称已发布或可用。官方 latest 渠道没有发布时显示不可用，绝不冒充最新版。
+每次用户确认正式发布时，必须同步源码与注释版本标签、安装EXE、完整ZIP、签名清单／签名和全部内容寻址资源。先上传草稿并核对资源完整性／服务器哈希，再切换正式 latest，随后验证匿名公开下载及旧版默认更新渠道并记录结果。只改本地版本号、只推源码或只传安装器不算完成发布。1.2.4已按该流程验证22项资源，原始1.2.1查到Available、1.2.3下载校验后Ready／Staged、新1.2.4返回Latest；准确边界见正式发布记录。旧版本和候选产物不覆盖，未完成的验证不得声称通过。
 
 更新查询首选 GitHub latest API。仅其 HTTP 403／429 时读取同仓库 `releases/latest/download/update-manifest.json` 与 `.sig`；原有签名、路径、下载域名、取消、超时和响应大小限制保持。旧客户端没有新回退代码时仍可能受匿名额度限制，需等待或手动安装完整新版；不能通过新服务器资源让旧代码凭空获得回退逻辑。
 
