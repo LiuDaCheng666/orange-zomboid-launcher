@@ -111,7 +111,7 @@ namespace PZ3D {
    IntPtr buffer=Marshal.AllocHGlobal(4096);try{Marshal.WriteByte(buffer,0);ulong size;uint stamp;bool found=Function<InstallInfo>("SteamAPI_ISteamUGC_GetItemInstallInfo")(ugc,id,out size,buffer,4096,out stamp);var bytes=new byte[4096];Marshal.Copy(buffer,bytes,0,bytes.Length);folder=found?SteamLauncherServices.Utf8(bytes,0,bytes.Length):"";string expected=Path.GetFullPath(Path.Combine(game,"..","..","workshop","content","108600",id.ToString(CultureInfo.InvariantCulture)));return found&&Directory.Exists(folder)&&string.Equals(Path.GetFullPath(folder).TrimEnd('\\'),expected.TrimEnd('\\'),StringComparison.OrdinalIgnoreCase);}finally{Marshal.FreeHGlobal(buffer);}
   }
   string Mutate(ulong id,Action<int,string> progress){
-   RequireOnline();if(GameProcessGuard.IsRunning(game))throw new Exception("请退出游戏后订阅或下载工坊模组。");var state=Function<ItemState>("SteamAPI_ISteamUGC_GetItemState");selectedDownloads.Add(id);
+   RequireOnline();if(GameProcessGuard.IsRunning(game))throw new Exception("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后订阅或下载工坊模组。");var state=Function<ItemState>("SteamAPI_ISteamUGC_GetItemState");selectedDownloads.Add(id);
    SteamWorkshop.EnsureSubscribed(id,item=>state(ugc,item),item=>{if(progress!=null)progress(-1,"正在确认所选条目的 Steam 订阅");byte[] subscribed=WaitCall(Function<Subscribe>("SteamAPI_ISteamUGC_SubscribeItem")(ugc,item),16,1313,30);SteamWorkshop.ValidateSubscription(BitConverter.ToUInt32(subscribed,0),BitConverter.ToUInt64(subscribed,8),item);},Pump,cancel,progress);
    bool received=SteamWorkshop.DownloadCompleted(downloads,id);
    string folder;if(!received&&SteamWorkshop.CanReuse(state(ugc,id))&&Installed(id,out folder)){string message="使用已存在的本地文件 · 已确认所选条目的订阅与安装目录。";if(progress!=null)progress(100,message);return message;}

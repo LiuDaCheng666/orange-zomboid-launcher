@@ -17,7 +17,7 @@ namespace PZ3D {
   static void Guard(Engine e,Func<bool> running){
    string launchJournal=Path.Combine(e.Data,"launch-sessions",LaunchProfiles.Key(e)+".json"),workshopJournal=Path.Combine(e.Data,"workshop-rebuild.pending");
    foreach(string p in new[]{e.Game,e.Config,e.User,e.Mods,e.Data,launchJournal,workshopJournal})LauncherMaintenance.NoReparse(p);
-   e.Guard();if(running())throw new InvalidOperationException("请完全退出游戏后删除存档。");
+   e.Guard();if(running())throw new InvalidOperationException("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后删除存档。");
    if(LaunchProfiles.Pending(e)||Directory.Exists(launchJournal))throw new InvalidOperationException("启动会话尚未恢复，请先恢复后再删除存档。");
    if(File.Exists(workshopJournal)||Directory.Exists(workshopJournal))throw new InvalidOperationException("工坊维护尚未恢复，请先完成恢复。");
   }
