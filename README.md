@@ -12,9 +12,17 @@
 - 不请求 Steam 密码；使用玩家已登录的 Steam 客户端。Java 文件授权逐哈希确认，不自动信任作者。
 - 指定存档/服务器直达功能为实验：不绕过游戏授权、存档转换、服务器规则或角色验证。
 
+## 下载和在线更新
+
+1.2.1 发布文件位于 [GitHub Releases](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.1)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.1/orange-launcher-setup-v1.2.1.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.1/orange-launcher-v1.2.1-win-x64.zip)。安装版选择新的独立目录；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。
+
+已安装可信核心版本的玩家，可点顶部“启动器更新”→检查→下载，保存未完成编辑、退出游戏后确认重启。更新只下载变化的自有文件并校验签名及哈希；重启后完成界面健康检查，失败保留恢复资料并回退。旧单 EXE 若提示“没有内置更新信任”，需先手动安装一次完整签名版。更新启动器不等于更新或启用第三方模组，不要求退出 Steam，也不要求输入 Steam 密码。网络必须能访问 GitHub 及其官方资源下载域名。
+
+1.2.1 遇 GitHub API 403／429 时使用同仓库官方最新下载地址回退，信任校验不变。旧版本尚无这段回退代码时需等待限流恢复或手动安装完整新版。内置组件的版本、更新说明和物件贴图问题边界见[2026-10-15 组件核查](docs/releases/2026-10-15-component-compatibility-audit.md)；不把“文件已下载”当成“游戏内效果正常”。
+
 ## 开发状态
 
-当前源码候选版本为1.2.1（2026-10-15），修复配置选择失败后成功重新读取仍残留阻断的问题（N1），并新增原生安装向导。默认优先安装包所在非系统固定盘，否则按可用空间选择；没有时明确使用用户应用目录下 Programs/OrangeLauncher。可直接编辑完整目录或选择父目录创建独立子目录，打开向导不创建目录，点安装才后台部署。进度来自真实解压字节/核验文件数，事务部署使用不定进度；全部核验成功后才提供显式“打开启动器”。[1.2.1 验证边界](docs/releases/1.2.1-installer-recovery.md)区分源码测试与后续正式产物。
+当前源码版本为1.2.1（2026-10-15），修复配置选择失败后成功重新读取仍残留阻断的问题（N1），并新增原生安装向导。默认优先安装包所在非系统固定盘，否则按可用空间选择；没有时明确使用用户应用目录下 Programs/OrangeLauncher。可直接编辑完整目录或选择父目录创建独立子目录，打开向导不创建目录，点安装才后台部署。进度来自真实解压字节/核验文件数，事务部署使用不定进度；全部核验成功后才提供显式“打开启动器”。[1.2.1 本机验证记录](docs/releases/1.2.1-final-verification.md)保留初次本地候选的准确边界；公开发布使用独立构建目录，不覆盖历史产物。
 
 首页选择完整游玩配置与当前实际设置分开；变化先预览、明确应用，再按普通／存档／服务器目标重新体检。便携 JSON 由原生导出和校验，导入仅新建；有界日志诊断保留脱敏原文证据和未核实时间，不自动修复或上传。六个一级分类保留全部原有路由，模组多选只编辑草稿；组件 ID 的批量资格由原生分类，不按作者名字或来源猜测。全局内存／光影／Viewpoint 设置不表示每个配置拥有隔离游戏或工坊版本。
 
@@ -42,7 +50,7 @@ npm test
 
 正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。
 
-正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。1.2.0最终本机候选已构建到全新目录 `dist/1.2.0-experience-verified-final`，完成独立源码回归、签名/逐字节验证、隔离原生更新回退及UI验收；[最终验证与已知限制](docs/releases/1.2.0-final-verification.md)记录准确范围。r4只保留为历史证据，不证明当前源码成品。保留已验收1.1.1及历史记录，线上更新渠道尚未发布。完整 ZIP 解压到独立可写目录后运行“橙子启动器.exe”；不要只复制 EXE。顶部“启动器更新”手动检查并验证签名；下载完成后保存编辑、退出游戏，再确认重启。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
+正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。1.2.1公开发布采用全新 `dist/1.2.1-github-release`；已验收1.2.1本地候选、1.2.0及1.1.1保持原样。[1.2.0历史验证与已知限制](docs/releases/1.2.0-final-verification.md)只记录当时结果，不证明当前源码成品。线上更新读取本仓库最新稳定 Release 的签名清单与内容寻址资源；没有可用渠道或网络失败会明确报错，不伪装最新版。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
 
 交互方法仅概念参考 [PCL](https://github.com/Meloong-Git/PCL)（[原项目许可](https://github.com/Meloong-Git/PCL/blob/main/LICENCE)），没有复制代码、图标或分发素材。
 
