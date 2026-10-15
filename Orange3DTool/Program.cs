@@ -98,9 +98,10 @@ if(args.Contains("--self-test")) { try { BuddyTakeoverTests.Run(); SteamLaunchOp
   public static string DetectGame(){
    return GameDiscovery.Find(GameDiscovery.SteamRoots());
   }
+  internal void ValidateSwitchJson(){if(!BuddyLaunchArguments.CleanJson(File.ReadAllText(Config)).Safe)throw new Exception("启动 JSON 含不明确的 Buddy 参数，未作修改，请人工检查。");}
   public string Switch(bool on,bool models){
    Step(0,"检查游戏进程与启动配置");
-   Guard();if(!BuddyLaunchArguments.CleanJson(File.ReadAllText(Config)).Safe)throw new Exception("启动 JSON 含不明确的 Buddy 参数，未作修改，请人工检查。");if(!on)new PresentationBridge().Disable(this);if(!on)new DlssInstaller(Game,Data,TestMode).Disable();var cfg=ReadConfig();
+   Guard();ValidateSwitchJson();if(!on)new PresentationBridge().Disable(this);if(!on)new DlssInstaller(Game,Data,TestMode).Disable();var cfg=ReadConfig();
    Step(10,"检查已下载模组与光影预设");
    if(on && (!HasView || !File.Exists(Path.Combine(BuddyLib,"ZombieBuddy.jar")) || !File.Exists(Path.Combine(BuddyLib,"zbNative.dll"))))throw new Exception("尚未下载完整依赖。请在“更新与下载”订阅 ZombieBuddy 和 Viewpoint，等待 Steam 完成下载后重试。");
    if(on && models && !HasModels)throw new Exception("可选 3D 物件包尚未下载，请先订阅或取消勾选。");
