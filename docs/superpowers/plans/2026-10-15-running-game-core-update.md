@@ -181,7 +181,7 @@ Copy-Item -LiteralPath Orange3DTool/Assets/orange-app.ico -Destination Orange3DT
 - [ ] **Step 3: Validate actual artifacts.** Decode ICO header and every PNG frame, verify 16/32/48/64/128/256 sizes and alpha; ensure both ICO hashes match. Browser renders the actual ICO on dark/light backgrounds at 16/32/48/256; save screenshots in own fixture directory and inspect them. Original home.png hash remains `82FCDE2FDAF188629D9ED9903CEEB21FD9C1C99EA16CCFFB123E9A51FA529D01`. Final coordinator package validation checks actual EXE/setup icon and frame extraction from the built binaries.
 - [ ] **Step 4: Write provenance via apply_patch.** Record exact selected source, generation/cleanup prompts from the coordinator's prompt artifact, built-in imagegen mode, sourcePNG/ICO SHA256 and dimensions, original design copyright scope and PCL conceptual reference only. No PCL assets/code copied. Commit own asset/docs files, not screenshots or generated binaries. Report exact checks and screenshot paths.
 
-## Coordinator release sequence (after reviewed Tasks 1–5)
+### Task 6: Coordinator release (after reviewed Tasks 1–5)
 
 - [ ] Bump VERSION to 1.2.3 and add precise Chinese change/release notes, including old 1.2.1/1.2.2 first-upgrade limitation; no successful player restart claim.
 - [ ] Run all fifteen native and thirteen existing browser gates plus new focused suites on final code; record logs. Run native and browser jobs separately; never compile native jobs concurrently.
@@ -193,4 +193,4 @@ Copy-Item -LiteralPath Orange3DTool/Assets/orange-app.ico -Destination Orange3DT
 
 ## Self-review
 
-Spec coverage: native policy/worker trust and failure paths in Task 1; all Ready-generation/modal/draft/consent requirements in Task 2; real replacement/health/rollback and monitor lifetime in Task 3; immutable public release/default-feed verification in coordinator sequence. Global game-mutation guards unchanged. Interface/payload/version names cross-checked. No new trust or owned paths; no unrelated UI changes.
+Spec coverage: native policy/worker trust and failure paths in Task 1; all Ready-generation/modal/draft/consent requirements in Task 2; real replacement/health/rollback and monitor lifetime in Task 3; approved desktop shortcut addition in Task 4 and approved icon asset integration in Task 5; immutable public release/default-feed verification in coordinator Task 6. Global game-mutation guards unchanged. Interface/payload/version names cross-checked. No new trust or owned core paths; no unrelated UI layout changes. User approved replacing the assumed old file-lock failure with actual observed Windows behavior and the proven old running-game refusal.
