@@ -7,6 +7,7 @@ namespace PZ3D {
   public bool TryReserveRestart(){lock(gate){if(restarting||mutations!=0)return false;restarting=true;return true;}}
   public void ReleaseRestart(){lock(gate)restarting=false;}
   public bool RestartReserved{get{lock(gate)return restarting;}}
+  public bool CanRestart{get{lock(gate)return !restarting&&mutations==0;}}
   public async Task Drain(){var end=DateTime.UtcNow.AddSeconds(12);while(true){lock(gate)if(operations==0)return;if(DateTime.UtcNow>end)throw new InvalidOperationException("本机读取尚未结束，请稍后重试。");await Task.Delay(25);}}
   public async Task<object> ExecuteSnapshot(Func<object> action){lock(gate)operations++;try{return await Task.Run(action);}finally{lock(gate)operations--;}}
   public async Task<object> Execute(Func<object> action,bool bypass=false){lock(gate)operations++;try{if(bypass){Interlocked.Increment(ref generation);return await Task.Run(action);}await queue.WaitAsync();try{return await Task.Run(action);}finally{queue.Release();}}finally{lock(gate)operations--;}}

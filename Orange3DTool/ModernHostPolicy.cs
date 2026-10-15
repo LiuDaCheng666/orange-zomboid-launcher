@@ -32,6 +32,11 @@ namespace PZ3D {
    if(action=="buddyPreview"){if(p.Count!=0)throw new Exception("扫描旧启动参数不接受页面目标参数。");return;}
    object stamp,confirmed,exit;if(p.Count!=3||!p.TryGetValue("stamp",out stamp)||!(stamp is string)||string.IsNullOrWhiteSpace((string)stamp)||((string)stamp).Length>512||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed||!p.TryGetValue("steamExitConfirmed",out exit)||!(exit is bool))throw new Exception("接管或恢复只接受有效预览凭据和两项明确确认；请重新扫描。");
   }
-  internal static bool CoreAction(string action){return action=="coreUpdateStatus"||action=="coreUpdateCheck"||action=="coreUpdateDownload"||action=="coreUpdateCancel"||action=="coreUpdateApply";}
+  internal static object CorePreflight(ModernController controller,ModernDispatchQueue queue,bool capture){
+   if(capture)throw new InvalidOperationException("截图模式不执行更新操作。");
+   try{if(!queue.CanRestart)throw new InvalidOperationException("存在排队或执行中的修改，请完成后重试。");controller.AssertCanRestart();return new{protocol=1,allowed=true,message=""};}
+   catch(InvalidOperationException e){return new{protocol=1,allowed=false,message=e.Message};}
+  }
+  internal static bool CoreAction(string action){return action=="coreUpdateStatus"||action=="coreUpdatePreflight"||action=="coreUpdateCheck"||action=="coreUpdateDownload"||action=="coreUpdateCancel"||action=="coreUpdateApply";}
  }
 }
