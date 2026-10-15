@@ -1,6 +1,6 @@
 # 核心发布与签名
 
-**1.2.1 已正式发布为 GitHub latest。** 源码标签、公开下载哈希、全部门禁与旧客户端迁移边界见[正式发布记录](releases/1.2.1-github-release.md)。以下保留构建合同和历史验收说明。
+**1.2.2 已正式发布为 GitHub latest。** 源码标签、公开下载哈希、全部门禁与1.2.1在线升级边界见[正式发布记录](releases/1.2.2-github-release.md)。[1.2.1记录](releases/1.2.1-github-release.md)及以下历史验收说明保留。
 
 正式版本来自根目录 VERSION（当前源码 1.2.2）。1.2.2 公开发布工作采用全新 `dist/1.2.2-github-release/`，本地 UI 候选与正式1.2.1目录均保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
 
