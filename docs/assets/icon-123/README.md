@@ -4,7 +4,7 @@ The source artwork is the user-selected cleaned preview, copied byte-for-byte on
 
 `C:/Users/MC233/.codex/generated_images/01a036c9-80e6-7cd3-ac51-35d8c78e44c5/exec-88b6fc89-9031-470b-b581-881644f79db2.png`
 
-The generated source remains at that original path. The selected PNG is 1280 × 1280 pixels. Its SHA-256 is `602D843B5D7FBDAB9B37695B2D2FDABD5B0ADC1E4B26ECB1FD6DB69E75CCBF3D`.
+The generated source remains at that original path. The selected PNG is 1254 × 1254 pixels. Its SHA-256 is `602D843B5D7FBDAB9B37695B2D2FDABD5B0ADC1E4B26ECB1FD6DB69E75CCBF3D`.
 
 The artwork was made with the built-in `image_gen` tool, with `transparent_background: true`; the user selected the cleaned preview on 2026-10-15. The existing `Orange3DTool/Build-Icon.ps1` converted the PNG into PNG-backed 16, 32, 48, 64, 128, and 256 pixel ICO frames. No other drawing or image editing was performed. Both `Orange3DTool/Assets/orange-app.ico` and `Orange3DTool/Web/orange-app.ico` have SHA-256 `78D9EB39880C023E9C37E367CCED77FB401B03CF67BB61B0720CC9CFB1A1E180` and are byte-identical.
 
