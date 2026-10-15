@@ -66,3 +66,7 @@ catch (WebException e) {
 - [ ] Use actual signed 1.2.1 default network lookup to verify live fallback when quota is still exhausted. Verify older signed client check/download when API permits; explicitly report if the old client itself still requires quota reset/manual installation.
 - [ ] Keep live network check/staging evidence separate from isolated native restart/rollback health evidence; do not claim real game testing.
 - [ ] Save source/tag/asset hashes and verification boundaries in the release record, push documentation closeout without moving the release tag, then provide public download links.
+
+## 执行收尾
+
+Task 1 已实现、RED/GREEN 验证并通过独立任务／最终发布合同复核；Task 2 已发布稳定 latest。14 原生／11 浏览器门禁、打包入口、五例原生重启生命周期、正式签名和全部远端资源核验完成。旧 API 默认客户端仍受限的情况按规格披露，不伪装其成功。实际提交、产物哈希、异常保留与验证边界见 `docs/releases/1.2.1-github-release.md`。

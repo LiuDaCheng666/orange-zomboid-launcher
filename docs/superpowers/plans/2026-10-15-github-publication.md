@@ -40,3 +40,7 @@
 - [ ] Verify anonymous public latest API reports stable v1.2.1. Run actual old-version check/download/stage probe and current-version Latest probe through the production transport. Download public installer/ZIP and compare exact hashes with the frozen public candidate.
 - [ ] Recheck source remote/tag identities and public assets, preserve logs/fixtures. Record source commit, GitHub URL, hashes, timestamps and precise network-versus-native-test boundaries in docs/releases/1.2.1-github-release.md; push documentation-only closeout without moving v1.2.1 tag or rebuilding published bytes.
 - [ ] Tell players to use 顶部“启动器更新”→检查→下载→保存编辑并退出游戏→确认重启. Legacy builds without an embedded trust root need one manual install; do not promise unsupported legacy self-update.
+
+## 执行收尾
+
+已完成正式发布；准确记录见 `docs/releases/1.2.1-github-release.md`。本计划最初要求的旧版默认查询被真实 HTTP403 阻断，随后用户批准另行实施官方回退规格。新版默认查询在真实 API403 下成功；旧版默认失败被保留，并以明确替换查询输入的公开清单集成测试验证了旧下载／staging，不把它冒称为旧默认成功。全部正式打包、原生生命周期、签名和 22 项远端资源门禁已完成；未更改历史产物或真实游戏。
