@@ -3,7 +3,8 @@ from pathlib import Path
 base=Path(__file__).resolve().parent
 for theme in ('dark','light'):
     files=sorted((base/'visual').glob(theme+'-*.png'))
-    canvas=Image.new('RGB',(1500,5*330),'#dddddd')
+    rows=(len(files)+2)//3
+    canvas=Image.new('RGB',(1500,rows*330),'#dddddd')
     draw=ImageDraw.Draw(canvas)
     for n,p in enumerate(files):
         im=Image.open(p).convert('RGB'); im.thumbnail((490,300))
