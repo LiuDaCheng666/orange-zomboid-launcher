@@ -10,6 +10,8 @@ New-Item -ItemType Directory -Path $FixtureRoot | Out-Null
 $results=New-Object 'System.Collections.Generic.List[object]'
 Push-Location $PSScriptRoot
 try{
+ & (Join-Path $PSScriptRoot 'Test-CoreNativeFixturePath.ps1') 2>&1 | Tee-Object -FilePath (Join-Path $FixtureRoot 'fixture-path.log')
+ $results.Add([pscustomobject]@{Suite='Test-CoreNativeFixturePath.ps1';ExitCode=0})
  foreach($suite in @(@('PZ3D.CoreRestartPolicyTests','restart-policy'),@('PZ3D.ManagedBackgroundWorkerTests','background-workers'),@('PZ3D.InstallerShortcutTests','installer-shortcuts'))){
   # These established tests locate the repository relative to artifacts/*.exe.
   # The configurable evidence/real-lifecycle roots always remain in TestFixtures.

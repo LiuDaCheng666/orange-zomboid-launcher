@@ -1,7 +1,9 @@
 param([string]$FixtureRoot='',[switch]$RecoveryOnly,[switch]$IncludeRootMonitorComparison)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'CoreNativeFixturePath.TestHelper.ps1')
 if(-not $FixtureRoot){$FixtureRoot=Join-Path $PSScriptRoot ('artifacts\TestFixtures\native-update-'+[Guid]::NewGuid().ToString('N').Substring(0,8))}
-$FixtureRoot=[IO.Path]::GetFullPath($FixtureRoot)
+$fixtureDescendantPrefix=Get-CoreNativeFixtureDescendantPrefix $FixtureRoot
+$FixtureRoot=$fixtureDescendantPrefix.TrimEnd('\')
 $allowed=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'artifacts\TestFixtures')).TrimEnd('\')+'\'
 if(-not $FixtureRoot.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)){throw 'FixtureRoot must be a new child of repository artifacts/TestFixtures'}
 for($ancestor=$FixtureRoot;$ancestor;$ancestor=Split-Path -Parent $ancestor){if((Test-Path -LiteralPath $ancestor) -and ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw "Fixture path has a reparse ancestor: $ancestor"}}
@@ -205,6 +207,6 @@ Write-Output "NATIVE UPDATE FIXTURES: $FixtureRoot"
 }finally{
  # Child helper/reopened launchers are discovered only inside this newly-created
  # fixture tree, then retained and stopped by exact PID + birth + image identity.
- foreach($p in Get-Process){try{$image=$p.MainModule.FileName;if($image.StartsWith($FixtureRoot+'\',[StringComparison]::OrdinalIgnoreCase) -and ([IO.Path]::GetFileName($image) -in @('橙子启动器.exe','卸载橙子启动器.exe','helper.exe','recovery-helper.exe','interrupt-fixture.exe','ProjectZomboid64.exe'))){$null=Register-OwnedProcess $p}}catch{}}
+ foreach($p in Get-Process){try{$image=$p.MainModule.FileName;if($image.StartsWith($fixtureDescendantPrefix,[StringComparison]::OrdinalIgnoreCase) -and ([IO.Path]::GetFileName($image) -in @('橙子启动器.exe','卸载橙子启动器.exe','helper.exe','recovery-helper.exe','interrupt-fixture.exe','ProjectZomboid64.exe'))){$null=Register-OwnedProcess $p}}catch{}}
  foreach($identity in $owned){Stop-OwnedProcess $identity}
 }

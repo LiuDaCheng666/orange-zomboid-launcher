@@ -31,6 +31,19 @@ namespace PZ3D {
    if(Focused&&Enabled)ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(7,7,Width-14,Height-14),ForeColor,BackColor);
   }
  }
+ // Keep CheckBox's native input, state and accessibility. Only repaint the disabled
+ // label: the system disabled text color is unreadable on the installer's dark panel.
+ internal sealed class InstallerCheckBox:CheckBox {
+  internal Color DisabledForeColor;
+  protected override void OnPaint(PaintEventArgs e){
+   base.OnPaint(e);if(Enabled)return;
+   var state=Checked?System.Windows.Forms.VisualStyles.CheckBoxState.CheckedDisabled:System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedDisabled;
+   int textLeft=CheckBoxRenderer.GetGlyphSize(e.Graphics,state).Width+3;
+   var label=new Rectangle(textLeft,0,Math.Max(0,Width-textLeft),Height);
+   using(var brush=new SolidBrush(BackColor))e.Graphics.FillRectangle(brush,label);
+   TextRenderer.DrawText(e.Graphics,Text,Font,label,DisabledForeColor,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPrefix);
+  }
+ }
  internal sealed class InstallerForm:Form {
   readonly Func<string,Action<InstallerProgress>,InstallerInstallResult> install;
   readonly Action<InstallerInstallResult> openLauncher;
@@ -61,7 +74,7 @@ namespace PZ3D {
    browse=MakeButton("installer-browse","更改位置…",false);browse.Width=132;browse.Click+=(s,e)=>Browse();pathRow.Controls.Add(destination,0,0);pathRow.Controls.Add(browse,1,0);Add(pathRow);
    reason=Label(recommendation.Reason??"可直接编辑完整安装路径。",9,theme.Muted);Add(reason);
    Add(Label("更改位置会选择存放父目录，并建议独立的 OrangeLauncher 子目录；也可在上方直接输入完整路径。",9,theme.Muted));
-   desktopShortcut=new CheckBox{Name="installer-desktop-shortcut",Text="创建桌面快捷方式（当前用户）",Checked=true,AutoSize=true,Dock=DockStyle.Top,Margin=new Padding(0,6,0,6),ForeColor=theme.Text};Add(desktopShortcut);
+   desktopShortcut=new InstallerCheckBox{Name="installer-desktop-shortcut",Text="创建桌面快捷方式（当前用户）",Checked=true,AutoSize=true,Dock=DockStyle.Top,Margin=new Padding(0,6,0,6),ForeColor=theme.Text,DisabledForeColor=theme.Muted};Add(desktopShortcut);
    status=Label("准备就绪 · 点击安装后才创建目录",11);status.Name="installer-status";Add(status);
    progress=new InstallerProgressBar{Name="installer-progress",Dock=DockStyle.Top,Height=12,Style=ProgressBarStyle.Continuous,Maximum=1000,Margin=new Padding(0,8,0,6)};Add(progress);
    counts=Label("",9,theme.Muted);Add(counts);

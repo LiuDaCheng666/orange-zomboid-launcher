@@ -49,7 +49,13 @@ async function manual(page){await page.getByRole('button',{name:'重启并更新
  assert.match(await running.locator('#core-update-panel').innerText(),/下载完成，等待重启安装/);
  assert.match(await running.locator('#confirm-body').innerText(),/只重启启动器/);assert.match(await running.locator('#confirm-body').innerText(),/游戏可以继续/);
  const shots=path.resolve(__dirname,'../../artifacts/TestFixtures/core-update-ready-shots');fs.mkdirSync(shots,{recursive:true});
- for(const theme of ['dark','light']){await running.evaluate(theme=>document.documentElement.classList.toggle('light',theme==='light'),theme);assert.equal(await running.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await running.screenshot({path:path.join(shots,theme+'-820x600.png'),fullPage:true});}
+ for(const theme of ['dark','light']){
+  await running.evaluate(theme=>document.documentElement.classList.toggle('light',theme==='light'),theme);
+  assert.equal(await running.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await running.locator('#confirm').evaluate(async dialog=>{await Promise.all(dialog.getAnimations({subtree:true}).map(animation=>animation.finished));});
+  assert.equal(await running.locator('#confirm').evaluate(dialog=>dialog.getAnimations({subtree:true}).filter(animation=>animation.playState==='running').length),0,theme+' confirmation transitions settled before evidence capture');
+  await running.screenshot({path:path.join(shots,theme+'-820x600.png'),fullPage:true});
+ }
  await running.evaluate(()=>{document.querySelector('[data-core-apply]').click();document.querySelector('#confirm-yes').click();document.querySelector('#confirm-yes').click();});
  await running.waitForFunction(()=>sent.some(m=>m.action==='coreUpdateApply'));assert.equal(await count(running,'coreUpdateApply'),1,'automatic/manual overlap and double consent apply once');
  assert.deepEqual(await running.evaluate(()=>sent.filter(m=>m.action==='coreUpdatePreflight').map(m=>m.payload)),[{protocol:1}]);await running.close();
