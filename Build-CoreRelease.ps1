@@ -30,6 +30,7 @@ if(-not $CoreDirectory){
  }
  New-Item -ItemType Directory -Path (Join-Path $CoreDirectory 'Web'),(Join-Path $CoreDirectory 'Assets') | Out-Null
  foreach($name in @('index.html','app.js','app.css','home.png','orange-app.ico','WebView2-LICENSE.txt')){Copy-Item -LiteralPath (Join-Path $project "Web\$name") -Destination (Join-Path $CoreDirectory "Web\$name")}
+ & (Join-Path $PSScriptRoot 'Build-CoverGallery.ps1') -OutputHtml (Join-Path $CoreDirectory 'Web\index.html')
  foreach($name in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll')){Copy-Item -LiteralPath (Join-Path $sdk "lib\net462\$name") -Destination (Join-Path $CoreDirectory "Web\$name")}
  Copy-Item -LiteralPath (Join-Path $sdk 'runtimes\win-x64\native\WebView2Loader.dll') -Destination (Join-Path $CoreDirectory 'Web\WebView2Loader.dll')
  foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua')){Copy-Item -LiteralPath (Join-Path $project "Assets\$name") -Destination (Join-Path $CoreDirectory "Assets\$name")}

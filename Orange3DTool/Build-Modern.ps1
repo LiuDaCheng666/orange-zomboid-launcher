@@ -12,7 +12,11 @@ $sources=(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.cs').FullName
 $sources+=& (Join-Path $PSScriptRoot '..\Build-Version.ps1')
 $sources+="/resource:$PSScriptRoot\..\VERSION,Launcher.Version.txt"
 $webBundle=Join-Path $PSScriptRoot 'Modern.Web.zip'
-$webFiles=@('index.html','app.js','app.css','home.png','orange-app.ico','WebView2-LICENSE.txt') | ForEach-Object {Join-Path $PSScriptRoot ('Web\'+$_)}
+$webStage=Join-Path $PSScriptRoot ('..\artifacts\modern-web-'+[Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $webStage | Out-Null
+$galleryHtml=Join-Path $webStage 'index.html'
+& (Join-Path $PSScriptRoot '..\Build-CoverGallery.ps1') -OutputHtml $galleryHtml
+$webFiles=@($galleryHtml)+@('app.js','app.css','home.png','orange-app.ico','WebView2-LICENSE.txt' | ForEach-Object {Join-Path $PSScriptRoot ('Web\'+$_)})
 if($PrivatePresets -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'Web\author-covers'))){$webFiles+=Join-Path $PSScriptRoot 'Web\author-covers'}
 Compress-Archive -LiteralPath $webFiles -DestinationPath $webBundle -Force
 $bundleName=if($PrivatePresets){'Orange3D.PrivateBundle.zip'}else{'Orange3D.Bundle.zip'}
