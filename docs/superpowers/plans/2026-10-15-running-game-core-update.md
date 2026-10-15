@@ -157,7 +157,31 @@ Test helpers live only in test files. Literal independent expected payloads, no 
 - [ ] **Step 4: GREEN coverage.** Native default/unchecked/failure cases; real fixture .lnk parsing; same-name conflicts and bounded exhaustion; redirected desktop selection; source or receipt tamper; unknown/malformed receipt; reparse links; foreign replacement and user edits preserved; exact owned link removal; uninstall preflight failure retains link. Verify creation and cleanup do not write outside fixture desktop/installation or start launcher/game. Save normal/small/scaled UI screenshots.
 - [ ] **Step 5: Run existing installer/core deployment/package regressions and add shortcut suite to tracked integration gate.** Commit task-owned files, report commands/counts and any known desktop platform limits. Do not modify artwork or public release assets in this task.
 
-## Coordinator release sequence (after reviewed Tasks 1–4)
+### Task 5: Approved original geometric icon integration
+
+**Files:**
+- Replace approved own artwork: `Orange3DTool/Assets/orange-app.png`, `Orange3DTool/Assets/orange-app.ico`, `Orange3DTool/Web/orange-app.ico`
+- Create provenance: `docs/assets/icon-123/README.md`
+- Existing converter: `Orange3DTool/Build-Icon.ps1` (reuse, no editing needed)
+- Approved spec: `docs/superpowers/specs/2026-10-15-geometric-orange-icon-design.md`.
+
+**Interfaces:**
+- User selected the cleaned generated preview at `C:/Users/MC233/.codex/generated_images/01a036c9-80e6-7cd3-ac51-35d8c78e44c5/exec-88b6fc89-9031-470b-b581-881644f79db2.png`. Copy this exact image to Assets/orange-app.png; preserve the original generated file. Do not redraw, recolor, crop or use a different variant.
+- Existing build scripts embed Assets/orange-app.ico in all core EXEs and setup; Web/index.html reads Web/orange-app.ico. Existing window icon extraction and Task 4 shortcut EXE icon location must keep this single identity. No new owned core paths or page layout changes.
+
+- [ ] **Step 1: Inspect inputs and current build wiring.** Read selected PNG with view_image if not already visible; check converter and build win32icon paths, both source ICO files and header image reference. This task is generated-artwork/format conversion, not a runtime code behavior change; no production test seam or new feature code is needed.
+- [ ] **Step 2: Copy selected artwork and run existing multi-size converter.** Use native file copy for image assets, not shell text writes or image redraw scripts.
+
+```powershell
+Copy-Item -LiteralPath 'C:/Users/MC233/.codex/generated_images/01a036c9-80e6-7cd3-ac51-35d8c78e44c5/exec-88b6fc89-9031-470b-b581-881644f79db2.png' -Destination Orange3DTool/Assets/orange-app.png
+& ./Orange3DTool/Build-Icon.ps1
+Copy-Item -LiteralPath Orange3DTool/Assets/orange-app.ico -Destination Orange3DTool/Web/orange-app.ico
+```
+
+- [ ] **Step 3: Validate actual artifacts.** Decode ICO header and every PNG frame, verify 16/32/48/64/128/256 sizes and alpha; ensure both ICO hashes match. Browser renders the actual ICO on dark/light backgrounds at 16/32/48/256; save screenshots in own fixture directory and inspect them. Original home.png hash remains `82FCDE2FDAF188629D9ED9903CEEB21FD9C1C99EA16CCFFB123E9A51FA529D01`. Final coordinator package validation checks actual EXE/setup icon and frame extraction from the built binaries.
+- [ ] **Step 4: Write provenance via apply_patch.** Record exact selected source, generation/cleanup prompts from the coordinator's prompt artifact, built-in imagegen mode, sourcePNG/ICO SHA256 and dimensions, original design copyright scope and PCL conceptual reference only. No PCL assets/code copied. Commit own asset/docs files, not screenshots or generated binaries. Report exact checks and screenshot paths.
+
+## Coordinator release sequence (after reviewed Tasks 1–5)
 
 - [ ] Bump VERSION to 1.2.3 and add precise Chinese change/release notes, including old 1.2.1/1.2.2 first-upgrade limitation; no successful player restart claim.
 - [ ] Run all fifteen native and thirteen existing browser gates plus new focused suites on final code; record logs. Run native and browser jobs separately; never compile native jobs concurrently.
