@@ -14,7 +14,7 @@ namespace PZ3D {
    using(var compiler=System.CodeDom.Compiler.CodeDomProvider.CreateProvider("CSharp")){var options=new System.CodeDom.Compiler.CompilerParameters(new[]{"System.dll"},exe){GenerateExecutable=true,CompilerOptions="/nologo",TempFiles=new System.CodeDom.Compiler.TempFileCollection(root,false)};var built=compiler.CompileAssemblyFromSource(options,"using System; using System.Threading.Tasks; class Fixture { static void Main(){Console.WriteLine(\"ready\");Task.Factory.StartNew(()=>Console.In.ReadLine()).Wait(45000);} }");Check(!built.Errors.HasErrors,"independent owned Java-image helper compiles under any aggregate entry");}
    var e=new Engine(game,Path.Combine(root,"user"),Path.Combine(root,"data"),false,SteamLaunchOptions.Unavailable);Directory.CreateDirectory(Path.GetDirectoryName(e.Mods));File.WriteAllText(e.Config,"{\"vmArgs\":[\"-Xmx2g\"]}");File.WriteAllText(Path.Combine(game,"ProjectZomboid64.exe"),"fixture-never-executed");File.WriteAllText(e.Mods,"VERSION = 1,\nmods\n{\n}\nmaps\n{\n}\n");
    foreach(string role in new[]{"zombie.network.GameServer","zombie.gameStates.MainScreenState","UnknownMain"}){
-    var start=new ProcessStartInfo(exe,"-Dozl.fixture=true -Dnote=zombie.network.GameServer -cp fixture.jar "+role){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true};
+    var start=new ProcessStartInfo(exe,"-Dozl.fixture=true -Dnote=zombie.network.GameServer -Xlog:gc*=debug -Xlog:safepoint=off -cp fixture.jar "+role){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true};
     using(var child=Process.Start(start)){try{
      Check(child.StandardOutput.ReadLine()=="ready","owned process fixture ready");
      Check(GameProcessGuard.ReadJavaRole(game,"java",exe,child).ToString()==(role=="zombie.network.GameServer"?"Server":role=="zombie.gameStates.MainScreenState"?"Client":"Unknown"),"PID-specific fixture role confirms actual entry: "+role);
@@ -64,6 +64,11 @@ namespace PZ3D {
    Check(classify!=null,"actual Java entry classifier exists");
    string[,] cases={
     {"java.exe -cp projectzomboid.jar zombie.network.GameServer","Server"},
+    {"java.exe -Xlog:gc*=debug -Xlog:safepoint=off -cp pz.jar zombie.network.GameServer","Server"},
+    {"java.exe -Xlog -cp pz.jar zombie.network.GameServer","Server"},
+    {"java.exe -Xlog:gc:file=\"zombie.network.GameServer log.txt\" -cp pz.jar zombie.gameStates.MainScreenState","Client"},
+    {"java.exe -Xlog:gc*=debug -Xlog:safepoint=off -cp pz.jar OtherMain","Unknown"},
+    {"java.exe -Xlogger -cp pz.jar zombie.network.GameServer","Unknown"},
     {"java.exe -Dnote=zombie.network.GameServer -cp projectzomboid.jar zombie.gameStates.MainScreenState","Client"},
     {"java.exe -cp zombie.network.GameServer zombie.gameStates.MainScreenState","Client"},
     {"\"E:\\Game Dir\\jre64\\bin\\java.exe\" -Xmx4g -XX:+UseZGC -Dname=\"a b\" -classpath \"a b.jar;zombie.gameStates.MainScreenState\" zombie.network.GameServer -password private-fixture","Server"},
@@ -81,7 +86,7 @@ namespace PZ3D {
     {"java.exe --module-path zombie.network.GameServer -m example/main","Unknown"},
     {"java.exe -Dquoted=\"decoy \\\"zombie.network.GameServer\\\"\" -cp pz.jar zombie.gameStates.MainScreenState","Client"}
    };
-   for(int i=0;i<cases.GetLength(0);i++)Check(classify.Invoke(null,new object[]{cases[i,0]}).ToString()==cases[i,1],"Java role literal case "+i+" => "+cases[i,1]);
+   for(int i=0;i<cases.GetLength(0);i++){string actual=classify.Invoke(null,new object[]{cases[i,0]}).ToString();Check(actual==cases[i,1],"Java role literal case "+i+" expected "+cases[i,1]+", actual "+actual);}
   }
   public static void Run(){
    Type type=typeof(Engine).Assembly.GetType("PZ3D.GameProcessGuard");Check(type!=null,"shared selected-game process guard exists");
