@@ -43,7 +43,7 @@ namespace PZ3D {
    // Metadata is explicit trust evidence, even if malformed. Never downgrade a
    // damaged managed installation to the legacy single-image launch path.
    string ownSource=CoreDeployment.Safe(root,Path.GetFileName(source));
-   bool evidence=File.Exists(CoreDeployment.Safe(root,CoreDeployment.RecordName))||Directory.Exists(CoreDeployment.Safe(root,CoreDeployment.RecordName))||File.Exists(CoreDeployment.Safe(root,CoreDeployment.Owner))||Directory.Exists(CoreDeployment.Safe(root,CoreDeployment.Runtime+"/CoreBootstrap"));
+   bool evidence=File.Exists(CoreDeployment.Safe(root,CoreDeployment.RecordName))||Directory.Exists(CoreDeployment.Safe(root,CoreDeployment.RecordName))||File.Exists(CoreDeployment.Safe(root,CoreDeployment.Owner))||Directory.Exists(CoreDeployment.Safe(root,CoreDeployment.Owner))||File.Exists(CoreDeployment.Safe(root,CoreDeployment.Runtime+"/CoreBootstrap"))||Directory.Exists(CoreDeployment.Safe(root,CoreDeployment.Runtime+"/CoreBootstrap"));
    if(key==null){if(evidence)throw new IOException("受管安装缺少可信更新密钥；后台监控未启动。");return ownSource;}
    if(Path.GetFileName(source)!=Launcher)throw new IOException("后台监控源不是自有启动器程序。");
    CoreDeployment.AdoptPortable(root,key);
