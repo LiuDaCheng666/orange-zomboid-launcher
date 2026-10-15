@@ -1,0 +1,74 @@
+/* Production DOM and CSS; synthetic native boundary never touches a real game. */
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {setup:targetSetup,route,chromium}=require('./experience-ui-tests.cjs');
+const tests=[],test=(name,run)=>tests.push({name,run});
+const shots=path.resolve(process.env.ORANGE_PCL_EVIDENCE_DIR||path.resolve(__dirname,'../../artifacts/pcl-layout-production'));
+async function setup(b,theme){const f=await targetSetup(b,theme);if(process.env.ORANGE_PCL_PAGE_URL){await f.page.goto(process.env.ORANGE_PCL_PAGE_URL);await f.page.waitForFunction(()=>!!orange.state.status);}await f.page.locator('[data-home-manage],[data-home-details]').evaluateAll(es=>es.forEach(e=>e.open=false));return f;}
+const settled=p=>p.waitForFunction(()=>!Object.keys(orange.state.experienceReads).length);
+async function status(p,extra={}){await p.evaluate(extra=>orange.acceptStatus({...orange.state.status,...extra}),extra);}
+const mutations=p=>p.evaluate(()=>sent.filter(m=>['componentsAction','javaSave','steamDownload','playProfileApply','launch'].includes(m.action)));
+test('top navigation and dominant right photo retain one visible launch in both themes and all sizes',async b=>{
+ for(const theme of ['dark','light']){const{page,errors}=await setup(b,theme);await settled(page);
+  for(const size of [{width:1366,height:768},{width:1920,height:1080},{width:733,height:507}]){
+   await page.setViewportSize(size);await page.locator('main').evaluate(e=>e.scrollTop=0);
+   if(size.width>1100)assert.equal(await page.locator('#theme').isVisible(),true,'desktop tools stay visible');
+   const nav=await page.locator('header nav[aria-label="主导航"]').boundingBox();assert.ok(nav,'six primary routes belong across the top');
+   assert.equal(await page.locator('header nav>button').count(),6);
+   const launch=await page.locator('.play-launch').boundingBox(),cover=await page.locator('[data-home-cover]').boundingBox(),overlay=await page.locator('[data-home-actual]').boundingBox();
+   assert.ok(cover.x>launch.x+launch.width-1,'photo sits to the right of launch');assert.ok(cover.width>launch.width,'photo dominates launch column');
+   assert.ok(cover.height>=(size.width===733?270:400),`photo height ${cover.height}`);
+   assert.ok(overlay.x>=cover.x&&overlay.y>=cover.y&&overlay.x+overlay.width<=cover.x+cover.width+1&&overlay.y+overlay.height<=cover.y+cover.height+1,'actual state is inside photo');
+   const title=await page.locator('#home-cover-title').boundingBox();assert.ok(title.y+title.height<=overlay.y||title.x+title.width<=overlay.x,'title never collides with actual state');
+   assert.equal(await page.locator('#launch').count(),1);assert.equal(await page.locator('#launch').evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true,'launch stays visible');
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('main').scrollWidth<=document.querySelector('main').clientWidth),true);
+   fs.mkdirSync(shots,{recursive:true});await page.screenshot({path:path.join(shots,`${theme}-home-${size.width}.png`)});
+  }assert.deepEqual(errors,[]);await page.close();
+ }
+});
+test('narrow tools menu remains open through a status rerender',async b=>{const{page}=await setup(b);await settled(page);await page.setViewportSize({width:733,height:507});await page.locator('.header-menu>summary').click();assert.equal(await page.locator('#theme').isVisible(),true);await status(page,{launch:{stage:'waiting'}});assert.equal(await page.locator('.header-menu').evaluate(e=>e.open),true);await page.close();});
+test('reminder settings and explicit Java navigation reveal their moved disclosures',async b=>{
+ const{page}=await setup(b);await settled(page);await page.evaluate(()=>document.querySelector('#playtime-reminder').showModal());await page.locator('[data-reminder-modal-settings]').click();assert.equal(await page.locator('[data-home-details]').evaluate(e=>e.open),true);assert.equal(await page.locator('#reminder-minutes').isVisible(),true);
+ await route(page,'help');await page.locator('[data-java-open]').click();assert.equal(await page.locator('#java-help').evaluate(e=>e.open),true);await page.close();
+});
+test('blocking preflight remains visible above the large scene with an actionable repair',async b=>{
+ const{page}=await setup(b);await settled(page);await page.evaluate(()=>fx.preflight='blocked');await page.locator('#launch').click();await page.waitForFunction(()=>!orange.state.launchAttempt&&!!orange.state.preflight);const bounds=await page.locator('.preflight-panel').boundingBox();assert.ok(bounds.y>=0&&bounds.y<768,'blocking preflight must be in the viewport');assert.equal(await page.locator('[data-preflight-repair="components"]').isVisible(),true);assert.equal(await page.evaluate(()=>sent.some(m=>m.action==='launch')),false);await page.close();
+});
+test('known pending Java decisions remain visibly actionable while management details are closed',async b=>{
+ const{page}=await setup(b);await settled(page);await page.evaluate(()=>{orange.state.java={supported:true,stamp:'synthetic-java',jars:[{id:'fixture',name:'Synthetic pending Java',sha256:'f'.repeat(64),decision:null}],warnings:[]};orange.acceptStatus({...orange.state.status,launch:{stage:'waiting'}});});assert.equal(await page.locator('[data-home-manage]').evaluate(e=>e.open),false);const alert=page.locator('[data-home-java-pending]');assert.match(await alert.innerText(),/1.*未决定/);assert.ok((await alert.boundingBox()).y<768);await alert.locator('[data-java-open]').click();assert.equal(await page.locator('#java-help').evaluate(e=>e.open),true);assert.equal(await page.evaluate(()=>sent.some(m=>m.action==='javaSave')),false);await page.close();
+});
+test('overlay reads actual state, escapes component names and drops invalidated memory without polling on render',async b=>{
+ const{page}=await setup(b);await settled(page);await status(page,{gameVersion:{value:'42.21.0',state:'known',source:'fixture'},components:[{id:'base',title:'<img src=x onerror=alert(1)>',configured:true}]});
+ assert.match(await page.locator('[data-home-actual]').innerText(),/42.21.0[\s\S]*6 GiB[\s\S]*1 项/);assert.equal(await page.locator('[data-home-actual] img').count(),0);assert.match(await page.locator('[data-home-actual]').innerText(),/本次游戏加载待验证/);
+ await page.evaluate(()=>{window.readCount=sent.filter(m=>m.action==='status').length;orange.acceptStatus({...orange.state.status,launch:{stage:'waiting'}});orange.acceptStatus({...orange.state.status,launch:{stage:'launched'}});});assert.equal(await page.evaluate(()=>sent.filter(m=>m.action==='status').length===readCount),true);
+ await page.evaluate(()=>fx.hold='memoryGet');await status(page,{configStamp:'changed',gameVersion:{value:'',state:'unknown',warning:'版本读取失败'}});assert.doesNotMatch(await page.locator('[data-home-actual]').innerText(),/6 GiB/);assert.match(await page.locator('[data-home-actual]').innerText(),/待读取|未知/);
+ await page.evaluate(()=>{fx.hold='';held.splice(0).forEach(replyNative);});await settled(page);await page.close();
+});
+test('disclosures, target selection, focus and draft survive asynchronous rerenders and routes',async b=>{
+ const{page}=await setup(b);await settled(page);const manage=page.locator('[data-home-manage]');await manage.evaluate(e=>e.open=true);await page.locator('#play-profile-select').focus();await status(page,{launch:{stage:'waiting'}});assert.equal(await manage.evaluate(e=>e.open),true);assert.equal(await page.locator('#play-profile-select').evaluate(e=>e===document.activeElement),true);
+ await manage.locator('>summary').focus();await status(page,{launch:{stage:'starting'}});assert.equal(await manage.locator('>summary').evaluate(e=>e===document.activeElement),true,'management summary keeps keyboard focus after an async render');
+ await page.locator('[data-play-capture]').click();await page.locator('#play-profile-name').fill('Keep my draft');await page.locator('#play-profile-name').evaluate(e=>e.setSelectionRange(3,6));await status(page,{launch:{stage:'launched'}});assert.equal(await page.locator('#play-profile-name').inputValue(),'Keep my draft');assert.deepEqual(await page.locator('#play-profile-name').evaluate(e=>[e.selectionStart,e.selectionEnd]),[3,6]);await page.locator('[data-play-close]').click();await page.locator('#confirm-yes').click();
+ await route(page,'components');await route(page,'home');assert.equal(await manage.evaluate(e=>e.open),true);await page.close();
+});
+test('restore cancellation is inert and confirmation sends one uninstall with preservation scope',async b=>{
+ const{page}=await setup(b);await settled(page);await route(page,'components');await page.locator('[data-components-restore]').click();assert.match(await page.locator('#confirm-body').innerText(),/下载[\s\S]*订阅[\s\S]*光影[\s\S]*个人[\s\S]*存档[\s\S]*Java[\s\S]*不自动/);await page.locator('#confirm-no').click();assert.equal((await mutations(page)).length,0);
+ await page.locator('[data-components-restore]').click();await page.locator('#confirm-yes').click();await page.waitForFunction(()=>!orange.state.busy);const sent=await mutations(page);assert.deepEqual(sent.map(m=>[m.action,m.payload]),[['componentsAction',{component:'all',operation:'uninstall',confirmed:true}]]);assert.equal(await page.locator('#confirm').evaluate(e=>e.open),false);await page.close();
+});
+test('roof acknowledgement is conditional and running, recovery and task locks refuse synthetic clicks',async b=>{
+ const{page}=await setup(b);await settled(page);await route(page,'components');await status(page,{components:[{id:'roofs',title:'Complete Roofs',configured:true,warning:'先清理存档中的屋顶标记'}]});await page.locator('[data-components-restore]').click();assert.match(await page.locator('#confirm-body').innerText(),/先清理存档中的屋顶标记/);await page.locator('#confirm-yes').click();await page.waitForFunction(()=>!orange.state.busy);assert.equal((await mutations(page))[0].payload.roofRemovalAcknowledged,true);
+ for(const patch of [{running:true},{running:false,buddyRecovery:{pending:true}},{running:false,buddyRecovery:{pending:false},task:{active:true,text:'native work'}}]){await status(page,patch);assert.equal(await page.locator('[data-components-restore]').isDisabled(),true);await page.locator('[data-components-restore]').evaluate(e=>{e.disabled=false;e.click();});assert.equal(await page.locator('#confirm').evaluate(e=>e.open),false);assert.equal((await mutations(page)).length,1);}
+ await page.close();
+});
+test('restore rechecks locks after confirmation, refreshes partial results and exposes logs without reinstall',async b=>{
+ const{page}=await setup(b);await settled(page);await route(page,'components');await page.locator('[data-components-restore]').click();await status(page,{running:true});await page.locator('#confirm-yes').click();assert.equal((await mutations(page)).length,0);
+ await status(page,{running:false});await page.evaluate(()=>fx.hold='componentsAction');await page.locator('[data-components-restore]').click();await page.locator('#confirm-yes').click();await page.waitForFunction(()=>held.length===1);await page.evaluate(()=>{const m=held.shift();fx.hold='';emitNative({id:m.id,ok:true,data:{message:'部分完成\n[完成] base\n[失败] roofs: locked fixture file'}});});await page.waitForFunction(()=>!orange.state.busy);assert.match(await page.locator('[data-restore-result]').innerText(),/部分[\s\S]*locked fixture file/);assert.ok(await page.locator('[data-restore-result] [data-page="maintenance"]').isVisible());assert.ok(await page.evaluate(()=>sent.filter(m=>m.action==='status').length>=2));assert.equal((await mutations(page)).length,1);
+ await page.locator('[data-components-restore]').click();await page.evaluate(()=>fx.failure='componentsAction');await page.locator('#confirm-yes').click();await page.waitForFunction(()=>!orange.state.busy);assert.match(await page.locator('[data-restore-result]').innerText(),/未完成/);assert.equal((await mutations(page)).length,2);await page.close();
+});
+test('all routes and secondary pages remain reachable in both themes at desktop and 733px',async b=>{
+ for(const theme of ['dark','light']){const{page,errors}=await setup(b,theme);await settled(page);
+  await route(page,'components');assert.ok((await page.locator('[data-card="base"]').boundingBox()).width<750,'a lone compact card must not stretch across the desktop');
+  await page.evaluate(()=>{fx.components=[['base','基础 3D + Buddy','3809306528',true],['chinese','游戏内中文','3810637496',true],['models','6244 3D 物件模型','3810302175',true],['shoot','第一人称枪械瞄准','3813032735',false],['door','Door Fix','3812151347',true],['surface','Surface Fix','3814398576',false],['roofs','Complete Roofs','3814178814',false],['fishing','Viewpoint Fishing','3814560827',false]].map(([id,title,item,configured])=>({id,title,item,configured,downloaded:configured,optional:!['base','chinese'].includes(id),version:'合成状态 · 待游戏内验证',sourceState:configured?'same':'unrecorded',runtimeState:'本次游戏加载待验证',needsReapply:id==='door',description:'合成桥接状态用于检查生产组件排列。',warning:id==='roofs'?'移除前需要按作者说明清理存档标记':''}));orange.acceptStatus({...orange.state.status,components:fx.components});});
+  for(const width of [1366,733]){await page.setViewportSize({width,height:width===733?507:768});for(const name of ['components','mods','workshop','saves','servers','settings','shaders','memory','help','maintenance']){await route(page,name);await page.waitForTimeout(40);assert.equal(await page.locator('#page').getAttribute('data-route'),name);assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,`${name} overflow at ${width}`);await page.screenshot({path:path.join(shots,`${theme}-${name}-${width}.png`)});}}
+  assert.deepEqual(errors,[]);await page.close();
+ }
+});
+(async()=>{const browser=await chromium.launch({channel:process.env.ORANGE_BROWSER_CHANNEL||'msedge',headless:true});let failed=0;try{for(const t of tests){try{await t.run(browser);console.log('PASS '+t.name);}catch(e){failed++;console.error('FAIL '+t.name+'\n'+e.stack);}}}finally{await browser.close();}console.log(`${tests.length-failed}/${tests.length} PCL UI groups passed`);if(failed)process.exitCode=1;})().catch(e=>{console.error(e);process.exitCode=1;});

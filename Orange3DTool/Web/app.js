@@ -1,6 +1,7 @@
 (()=>{'use strict';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const preview=new URLSearchParams(location.search).get('preview')==='1',host=window.chrome?.webview,pending=new Map();let seq=0;
+const desktopTools=matchMedia('(min-width:1101px)');$('.header-menu').open=desktopTools.matches;desktopTools.addEventListener('change',e=>{$('.header-menu').open=e.matches;});
 if(preview)document.documentElement.classList.toggle('light',new URLSearchParams(location.search).get('theme')==='light');
 const state={route:'home',status:null,busy:false,notice:'',memory:null,memoryDirty:false,memoryEdit:null,memoryConflict:false,settings:null,settingsDirty:false,settingEdits:{},settingsConflict:false,shaders:null,reticle:null,drawer:false,logs:null,help:null,errors:{},loading:{},saves:null,modCatalog:null,saveDetail:null,saveMods:[],saveDirty:false,saveSearch:'',servers:null,serverQueries:{},saveReadSequence:0,java:null};
 Object.assign(state,{modProfiles:null,modProfile:null,modProfileName:'',modProfileMods:[],modProfileDirty:false,modProfileReadSequence:0,profileSearch:'',modSelection:{save:'',profile:''},sortPreview:null,serverTab:'personal',serverFavorites:null,serverHall:null,hallQuery:'',hallRequestId:'',hallSort:'players',hallHideEmpty:false,hallHidePassword:false,hallMinPlayers:0,hallMaxPing:'',javaPending:new Set(),steamConnection:null,steamSubscriptions:null,steamSearch:null,steamDetails:null,workshopTab:'connection',workshopQuery:'',workshopB42:false,workshopPage:1,workshopReadSequence:0,tasks:null,playtime:null,reminderDismissed:false});
@@ -112,7 +113,7 @@ function touchCover(token,cover){coverCache.delete(token);coverCache.set(token,c
 function applyCover(token,cover){if(!['saves','mods','workshop','components'].includes(state.route))return;for(const el of document.querySelectorAll('[data-cover-token]'))if(el.dataset.coverToken===token){el.innerHTML=localCover(cover);coverObserver?.unobserve(el);}}
 async function pumpCovers(){if(!['saves','mods','workshop','components'].includes(state.route)){coverQueue.clear();return;}while(coverInflight.size<2&&coverQueue.size){const token=coverQueue.values().next().value;coverQueue.delete(token);if(coverInflight.has(token))continue;coverInflight.add(token);request('modCover',{token}).then(data=>{const cover=data.token===token&&typeof data.cover==='string'&&data.cover.length<710000&&localCover(data.cover).startsWith('<img')?data.cover:'';touchCover(token,cover);applyCover(token,cover);}).catch(()=>{touchCover(token,'');applyCover(token,'');}).finally(()=>{coverInflight.delete(token);pumpCovers();});}}
 function observeCovers(){coverObserver?.disconnect();coverQueue.clear();if(!['saves','mods','workshop','components'].includes(state.route))return;coverObserver=new IntersectionObserver(entries=>{for(const entry of entries){const token=entry.target.dataset.coverToken;if(!entry.isIntersecting){coverQueue.delete(token);continue;}if(coverCache.has(token)){const cover=coverCache.get(token);touchCover(token,cover);applyCover(token,cover);}else if(!coverInflight.has(token))coverQueue.add(token);}pumpCovers();},{root:document.querySelector('main'),rootMargin:'0px',threshold:0.01});document.querySelectorAll('[data-cover-token]').forEach(el=>coverObserver.observe(el));}
-function scrollMainTo(selector){window.scrollTo(0,0);const main=document.querySelector('main'),target=document.querySelector(selector);if(main&&target)main.scrollTo({top:main.scrollTop+target.getBoundingClientRect().top-main.getBoundingClientRect().top-12,left:0,behavior:'auto'});window.scrollTo(0,0);}
+function scrollMainTo(selector){window.scrollTo(0,0);const main=document.querySelector('main'),target=document.querySelector(selector);if(main&&target){for(let el=target;el&&el!==main;el=el.parentElement)if(el.matches('details'))el.open=true;main.scrollTo({top:main.scrollTop+target.getBoundingClientRect().top-main.getBoundingClientRect().top-12,left:0,behavior:'auto'});}window.scrollTo(0,0);}
 function shortDate(value){const date=new Date(typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<1e12?value*1000:value);return value&&!Number.isNaN(date.valueOf())?new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(date):value||'修改时间未知';}
 const warnings=data=>(data?.warnings||[]).map(w=>`<div class="notice">${esc(w)}</div>`).join('');
 function localCover(value){return typeof value==='string'&&value.length<1500000&&/^data:image\/(png|jpeg|jpg|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(value)?`<img src="${esc(value)}" alt="原作者本地封面">`:'<span class="muted small">本地封面不可用</span>';}
@@ -231,16 +232,63 @@ hasUnsavedDrafts=()=>previousDraftCheck()||state.playDirty||!!state.playImportDr
 const previousNotify=notify;
 notify=function(text,origin=state.route){state.noticeRoute=origin;previousNotify(text);$('#notice').hidden=!text||origin!==state.route;};
 const baseRender=render;let renderedRoute='';
+const disclosureStates=new Map();
+function disclosureKey(el){return el.dataset.disclosure||[el.closest('[data-card]')?.dataset.card||'',el.id,el.querySelector('summary')?.textContent].join('|');}
+function rememberDisclosures(){if(!renderedRoute)return;disclosureStates.set(renderedRoute,[...document.querySelectorAll('#page details')].map(el=>({key:disclosureKey(el),open:el.open})));}
+function restoreDisclosures(){const saved=disclosureStates.get(state.route)||[];for(const el of document.querySelectorAll('#page details')){const entry=saved.find(s=>s.key===disclosureKey(el));if(entry)el.open=entry.open;}}
+function actualCover(){
+ const version=state.status?.gameVersion,components=state.status?.components,configured=(components||[]).filter(c=>c.configured),heap=state.actual.memory?.currentGiB;
+ return `<aside class="scene-status" data-home-actual aria-label="当前实际配置摘要"><h3>当前实际配置</h3><dl><dt>游戏版本</dt><dd>${esc(version?.value||'未知 / 待读取')}</dd><dt>启动内存</dt><dd>${heap!=null?esc(heap)+' GiB':'待读取'}</dd><dt>下次启动已配置组件</dt><dd>${components?configured.length+' 项':'待读取'}</dd></dl><p class="configured-names">${components?configured.map(c=>esc(c.title||c.id)).join(' · ')||'没有已配置组件':'组件状态待读取'}</p><small>已配置不等于本次已加载 · 本次游戏加载待验证</small>${version?.warning?`<p class="status-warning">${esc(version.warning)} <button data-refresh>重新核对</button></p>`:''}</aside>`;
+}
+function arrangeHome(){
+ const page=$('#page'),launch=$('#page .play-launch'),cover=$('[data-home-cover]');if(!launch||!cover)return;
+ const layout=document.createElement('div');layout.className='home-layout';launch.before(layout);layout.append(launch,cover);
+ const copy=document.createElement('div');copy.className='scene-copy';while(cover.firstChild)copy.append(cover.firstChild);cover.append(copy);cover.insertAdjacentHTML('beforeend',actualCover());
+ const config=$('#page .current-config'),actions=launch.querySelector('.launch-config .actions'),manage=document.createElement('details');manage.className='home-manage';manage.dataset.homeManage='';manage.dataset.disclosure='home-manage';manage.innerHTML='<summary id="home-manage-summary">管理配置、Java 授权与详情</summary>';manage.append(actions);config.querySelector('h2').textContent='当前配置摘要';launch.querySelector('.launch-target').before(config,manage);
+ const evidence=config.querySelector('details');if(evidence)manage.append(evidence);
+ const java=$('#page .java-entry');if(java){java.classList.add('compact-java');manage.append(java);}
+ const details=document.createElement('details');details.className='home-details';details.dataset.homeDetails='';details.dataset.disclosure='home-details';details.innerHTML='<summary id="home-details-summary">游玩计时、最近存档、服务器与硬件详情</summary>';layout.after(details);
+ for(const selector of ['.home-targets','.playtime-panel','.hardware-summary']){const el=page.querySelector(selector);if(el)details.append(el);}
+ const warning=details.querySelector('.hardware-warning');if(warning){warning.classList.add('notice');details.after(warning);}
+ // Action results must remain visible when the scene occupies the first viewport.
+ const preflightNeedsAction=state.preflight&&(!state.preflight.canLaunch||(state.preflight.items||[]).some(i=>i.status!=='ok'));
+ const launchNeedsAction=state.status?.launch&&(state.status.launch.pending||state.status.launch.warning||['failed','conflict','timeout'].includes(state.status.launch.stage));
+ for(const el of [...page.children])if(el.matches('.local-feedback,.status-warning,.hardware-warning')||preflightNeedsAction&&el.matches('.preflight-panel')||launchNeedsAction&&el.matches('.launch-status')||el.querySelector('.change-preview'))layout.before(el);
+ const pendingJava=(state.java?.jars||[]).filter(j=>j.decision==null);if(pendingJava.length)layout.insertAdjacentHTML('beforebegin',`<div class="notice row" data-home-java-pending><span>${pendingJava.length} 个 Java 文件未决定 · 请逐个核对来源与完整哈希</span><button data-java-open>查看 Java 授权</button></div>`);
+}
+function restoreBlocked(){return state.status?.running?'游戏正在运行，请完全退出游戏后恢复。':state.busy||state.coreApplying||state.restoreConfirming?'另一个任务正在执行，请等待完成。':state.status?.buddyRecovery?.pending||state.status?.launch?.pending||state.playProfiles?.pendingRecovery?.pending?'存在待恢复操作，请先到维护与恢复核对。':'';}
+function restoreResult(){const r=state.restoreResult;if(!r)return '';return `<section class="notice" data-restore-result role="status"><strong>${r.failed?'恢复未完成，请核对各项结果':'组件恢复结果'}</strong><p class="full-text">${esc(r.message)}</p><button data-page="maintenance">查看恢复与日志</button></section>`;}
+const baseDisableLayout=disable;
+disable=function(){baseDisableLayout();const restore=$('[data-components-restore]');if(restore){restore.disabled=!!restoreBlocked();restore.title=restoreBlocked();}};
+document.addEventListener('click',async e=>{
+ const b=e.target.closest('[data-components-restore]');if(!b)return;
+ const blocked=restoreBlocked();if(blocked){notify(blocked);disable();return;}
+ const identity=JSON.stringify({game:state.status?.gamePath,stamp:state.status?.configStamp,components:state.status?.components}),roof=state.status?.components?.find(c=>c.id==='roofs'&&c.configured),roofText=roof?(roof.warning||'完整屋顶可能留下已保存标记，请先按作者说明清理存档中的屋顶标记。'):'';
+ state.restoreConfirming=true;disable();
+ const agreed=await confirm('恢复全部组件？','将停用启动器管理的全部视角、Buddy、模型、射击、汉化和可选扩展，并撤销可识别的安装改动。\n保留已下载工坊文件、订阅、光影、个人设置和存档；不重置 Java 授权，不自动重新安装或下载。'+(roofText?'\n\n完整屋顶移除要求：'+roofText+'\n确认继续即表示已阅读并完成作者要求的清理。':'')+'\n游戏运行中或存在待恢复操作时不能执行。');
+ state.restoreConfirming=false;disable();if(!agreed)return;
+ const conflict=restoreBlocked();if(conflict){notify(conflict);return;}
+ if(identity!==JSON.stringify({game:state.status?.gamePath,stamp:state.status?.configStamp,components:state.status?.components})){notify('实际组件或游戏目录已变化，请重新核对后恢复。');return;}
+ const payload={component:'all',operation:'uninstall',confirmed:true};if(roofText)payload.roofRemovalAcknowledged=true;
+ const result=await run('componentsAction',payload);invalidateActual(actualGlobals);
+ const message=result?.message||state.notice||'原生宿主没有返回恢复结果，请查看日志。';state.restoreResult={message,failed:!result||result.status==='partial'||result.status==='failed'||message.includes('[失败]')};render();
+});
 render=function(){
+ rememberDisclosures();
  const same=renderedRoute===state.route,active=document.activeElement,focus=same&&active?.closest('#page')?{id:active.id,attrs:[...active.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value]),start:active.selectionStart,end:active.selectionEnd}:null;
- const scroll=same?[...document.querySelectorAll('main,.mod-list,.mod-detail,.enabled-mods')].map(el=>({key:el.matches('main')?'main':el.classList.contains('mod-list')?'.mod-list':el.classList.contains('mod-detail')?'.mod-detail':'.enabled-mods',top:el.scrollTop})):[];
+ const scroll=same?[...document.querySelectorAll('main,.mod-list,.mod-detail,.enabled-mods,.play-launch')].map(el=>({key:el.matches('main')?'main':el.classList.contains('mod-list')?'.mod-list':el.classList.contains('mod-detail')?'.mod-detail':el.classList.contains('play-launch')?'.play-launch':'.enabled-mods',top:el.scrollTop})):[];
  const noticeNode=$('#notice'),taskNode=$('#task');$('#page').before(noticeNode,taskNode);
  baseRender();renderedRoute=state.route;const headingNode=$('#page .heading');if(headingNode)headingNode.after(noticeNode,taskNode);else $('#page').prepend(noticeNode,taskNode);noticeNode.hidden=!state.notice||state.noticeRoute!==state.route;
  const group=Object.keys(experienceGroups).find(k=>experienceGroups[k].includes(state.route))||'home',tabs=experienceGroups[group];
  $('#secondary-navigation').innerHTML=tabs.length>1?`<div class="secondary-tabs">${tabs.map(n=>`<button data-page="${n}" ${n===state.route?'aria-current="page"':''}>${esc(titles[n])}</button>`).join('')}</div>`:'';
  document.querySelectorAll('nav[aria-label="主导航"]>button').forEach(b=>{b.classList.toggle('active',b.dataset.page===group);if(b.dataset.page===group)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
  if(['maintenance','help'].includes(state.route))$('#page').insertAdjacentHTML(state.route==='maintenance'?'afterbegin':'beforeend',diagnosticsPanel());
- if(state.route==='home'&&$('#page .java-entry'))$('#page .current-config')?.after($('#page .java-entry'));
+ if(state.route==='home')arrangeHome();
+ if(state.route==='components'){
+  $('#page .heading .actions')?.insertAdjacentHTML('beforeend',`<button data-components-restore class="danger" ${restoreBlocked()?'disabled':''}>恢复全部组件</button>`);
+  const heading=$('#page .heading');if(heading)heading.insertAdjacentHTML('afterend',restoreResult());
+ }
+ restoreDisclosures();
  if(focus){let el=focus.id?document.getElementById(focus.id):focus.attrs.length?document.querySelector(focus.attrs.map(([k,v])=>`[${k}="${CSS.escape(v)}"]`).join('')):null;if(el&&!el.disabled){el.focus({preventScroll:true});if(focus.start!=null&&el.setSelectionRange)try{el.setSelectionRange(focus.start,focus.end);}catch{}}}
  for(const s of scroll){const el=$(s.key);if(el)el.scrollTop=s.top;}
  if(state.route==='home'&&state.status)ensureExperience();
@@ -251,7 +299,7 @@ const baseAcceptStatus=acceptStatus;
 const actualGlobals=['memory','shaders','settings','mods'];
 function invalidateActual(keys){for(const key of keys){delete state.actual[key];delete state.experienceErrors[key];delete state.experienceReads[key];}}
 function actualWritten(action,data){const keys=({memorySave:['memory'],settingsSave:['settings'],shaderSelect:['shaders','settings'],importShader:['shaders','settings'],modProfileActivate:['mods'],saveSave:['saves'],serverUpsert:['servers'],serverDelete:['servers'],favoriteImport:['servers'],reticleSave:['settings'],dlss:['settings'],profileRecover:['mods','saves'],profileLaunch:['mods','saves'],componentsAction:actualGlobals,maintenance:actualGlobals,buddyTakeover:actualGlobals,buddyRecover:actualGlobals,playProfileApply:[...actualGlobals,'saves'],playProfileRecover:[...actualGlobals,'saves']})[action];if(!keys||data.cancelled||data.status&&!['completed','unchanged','recovered'].includes(data.status))return;invalidateActual(keys);if(state.route==='home')render();}
-acceptStatus=function(data){const changed=state.status&&state.status.gamePath!==data.gamePath,stampChanged=state.status&&state.status.configStamp!==data.configStamp;if(changed){state.playProfiles=null;state.actual={};state.playPreview=null;state.preflight=null;state.diagnostics=null;state.launchFeedback='游戏目录已变化，请重新核对配置。';state.experienceEpoch=(state.experienceEpoch||0)+1;state.experienceReads={};state.experienceErrors={};}else if(stampChanged)invalidateActual(actualGlobals);baseAcceptStatus(data);if((changed||stampChanged)&&state.route==='home')render();};
+acceptStatus=function(data){const changed=state.status&&state.status.gamePath!==data.gamePath,stampChanged=state.status&&state.status.configStamp!==data.configStamp,versionChanged=JSON.stringify(state.status?.gameVersion)!==JSON.stringify(data.gameVersion);if(changed){state.playProfiles=null;state.actual={};state.playPreview=null;state.preflight=null;state.diagnostics=null;state.restoreResult=null;state.launchFeedback='游戏目录已变化，请重新核对配置。';state.experienceEpoch=(state.experienceEpoch||0)+1;state.experienceReads={};state.experienceErrors={};}else if(stampChanged)invalidateActual(actualGlobals);baseAcceptStatus(data);if((changed||stampChanged||versionChanged)&&state.route==='home')render();};
 function reconcilePlayProfiles(value){
  if(!value||!Array.isArray(value.profiles)||typeof value.stamp!=='string'||!value.stamp||typeof value.selectedId!=='string'||value.profiles.some(p=>!p||typeof p.id!=='string'))throw new Error('游玩配置格式不可用，请重新读取。');
  const p=value.selectedProfile,rows=value.profiles.filter(p=>p.id===value.selectedId);

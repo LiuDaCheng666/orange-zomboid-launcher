@@ -44,8 +44,9 @@ async function homePage(browser,theme){
       assert.equal(path.basename(new URL(image.url).pathname),'home.png');
       assert.ok(image.width>0&&image.height>0,'local artwork must decode successfully');
       const bounds=await cover.boundingBox();
-      assert.ok(bounds.height>=100&&bounds.height<=240,`compact banner height: ${bounds.height}`);
-      assert.equal(await cover.evaluate(e=>!!(e.compareDocumentPosition(document.querySelector('.play-launch'))&Node.DOCUMENT_POSITION_FOLLOWING)),true,'banner precedes configuration');
+      assert.ok(bounds.height>=(size.width===733?270:400),`dominant photo height: ${bounds.height}`);
+      const launchBounds=await page.locator('.play-launch').boundingBox();
+      assert.ok(bounds.width>launchBounds.width&&bounds.x>=launchBounds.x+launchBounds.width,'photo dominates the right side of launch');
       assert.equal(await page.getByRole('button',{name:'启动游戏',exact:true}).count(),1,'homepage keeps a single launch button');
       assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'main must have no horizontal overflow');
       await page.locator('#play-profile-select').scrollIntoViewIfNeeded();

@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
  const page=await browser.newPage({viewport:{width:820,height:600}});
  await page.addInitScript(()=>{window.sent=[];window.reply=null;window.revision=1;window.chrome={webview:{addEventListener:(e,f)=>reply=f,postMessage:m=>{sent.push(m);let data;if(m.action==='status')data={validGame:true,theme:'dark',components:[],task:{active:true,text:'Blocked tool operation',value:0}};else if(m.action==='coreUpdateStatus')data={protocol:1,revision:1,state:'Idle',currentVersion:'1.1.0'};else if(m.action==='coreUpdateCheck')data={protocol:1,revision:++revision,state:'Available',currentVersion:'1.1.0',latestVersion:'1.1.1',notes:'Verified notes <script>bad</script>',checkedUtc:'2026-10-13T10:00:00Z'};else if(m.action==='coreUpdateDownload')data={protocol:1,revision:++revision,state:'Downloading',currentVersion:'1.1.0',latestVersion:'1.1.1',receivedBytes:3,totalBytes:6,currentFile:'Web/app.js',speedBytes:2};else data={};queueMicrotask(()=>reply({data:{id:m.id,ok:true,data}}));}}};});
  await page.goto('file:///'+path.resolve(__dirname,'index.html').replaceAll('\\','/'));
- await page.getByRole('button',{name:'启动器更新',exact:true}).click();
+ await page.locator('.header-menu>summary').click();await page.getByRole('button',{name:'启动器更新',exact:true}).click();await page.locator('.header-menu>summary').click();
  await page.getByRole('button',{name:'检查启动器更新',exact:true}).click();
  await page.getByText('可更新至 1.1.1',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'下载启动器更新',exact:true}).isEnabled(),true,'blocked controller leaves update lane available');
