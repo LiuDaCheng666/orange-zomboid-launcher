@@ -2,7 +2,7 @@
 
 **1.2.1 已正式发布为 GitHub latest。** 源码标签、公开下载哈希、全部门禁与旧客户端迁移边界见[正式发布记录](releases/1.2.1-github-release.md)。以下保留构建合同和历史验收说明。
 
-正式版本来自根目录 VERSION（当前源码 1.2.1）。当前公开发布工作采用全新 `dist/1.2.1-github-release/`，新增 GitHub API 限流时的同仓库官方回退；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
+正式版本来自根目录 VERSION（当前源码 1.2.2）。1.2.2 公开发布工作采用全新 `dist/1.2.2-github-release/`，本地 UI 候选与正式1.2.1目录均保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
@@ -10,7 +10,7 @@
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
 # 使用已有保护私钥：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.1-github-release
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.2-github-release
 ```
 
 私钥位于仓库外，由当前 Windows 用户独占 ACL 保护。不可打印、上传、嵌入二进制或提交私钥。正式公钥为仓库根目录 release-public-key.xml，嵌入所有正式可执行文件的资源名为 `Launcher.UpdatePublicKey.xml`。磁盘中的公钥只供审计，绝不作为运行时信任根。签名私钥与该公钥不匹配时构建失败。
@@ -62,7 +62,7 @@ ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntim
 
 ## 发布前
 
-发布前再次核对 CHANGELOG、版本、完整文件哈希和公钥身份，由维护者明确决定发布。本次用户已授权推送和发布 1.2.1，按发布计划先上传完整草稿、核对全部资源，再切为正式 latest。未完成线上验证前不得宣称已发布或可用。官方 latest 渠道没有发布时显示不可用，绝不冒充最新版。
+发布前再次核对 CHANGELOG、版本、完整文件哈希和公钥身份，由维护者明确决定发布。本次用户已授权推送和发布 1.2.2，沿用先上传完整草稿、核对全部资源，再切为正式 latest 的流程。未完成线上验证前不得宣称已发布或可用。官方 latest 渠道没有发布时显示不可用，绝不冒充最新版。
 
 更新查询首选 GitHub latest API。仅其 HTTP 403／429 时读取同仓库 `releases/latest/download/update-manifest.json` 与 `.sig`；原有签名、路径、下载域名、取消、超时和响应大小限制保持。旧客户端没有新回退代码时仍可能受匿名额度限制，需等待或手动安装完整新版；不能通过新服务器资源让旧代码凭空获得回退逻辑。
 
