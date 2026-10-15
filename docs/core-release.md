@@ -1,8 +1,8 @@
 # 核心发布与签名
 
-**1.2.2 已正式发布为 GitHub latest。** 源码标签、公开下载哈希、全部门禁与1.2.1在线升级边界见[正式发布记录](releases/1.2.2-github-release.md)。[1.2.1记录](releases/1.2.1-github-release.md)及以下历史验收说明保留。
+**1.2.3 已正式发布为 GitHub latest。** 源码标签、公开下载哈希、全部门禁与1.2.2在线升级边界见[正式发布记录](releases/1.2.3-github-release.md)。[1.2.2记录](releases/1.2.2-github-release.md)、[1.2.1记录](releases/1.2.1-github-release.md)及以下历史验收说明保留。
 
-正式版本来自根目录 VERSION（当前源码 1.2.2）。1.2.2 公开发布工作采用全新 `dist/1.2.2-github-release/`，本地 UI 候选与正式1.2.1目录均保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
+正式版本来自根目录 VERSION（当前源码 1.2.3）。1.2.3 公开发布工作采用全新 `dist/1.2.3-github-release/`，正式1.2.2／1.2.1、本地 UI 候选均保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
@@ -10,7 +10,7 @@
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
 # 使用已有保护私钥：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.2-github-release
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.3-local-build
 ```
 
 私钥位于仓库外，由当前 Windows 用户独占 ACL 保护。不可打印、上传、嵌入二进制或提交私钥。正式公钥为仓库根目录 release-public-key.xml，嵌入所有正式可执行文件的资源名为 `Launcher.UpdatePublicKey.xml`。磁盘中的公钥只供审计，绝不作为运行时信任根。签名私钥与该公钥不匹配时构建失败。
@@ -44,11 +44,15 @@
 
 1.2.1正常启动安装器使用原生WinForms，不在安装前初始化WebView。默认优先安装包所在的非系统就绪固定盘，否则按空闲空间及稳定盘符次序推荐；没有时明确使用用户应用目录下Programs/OrangeLauncher。推荐与输入只读，既有路径采用有界未占用后缀；完整自定义路径仍经既有根目录/重解析/非空目录检查。服务直接调用原CoreDeployment事务，释放准备按实际解压字节、落盘核验按真实文件数报告，事务本身保持不定进度。安装记录认证和全部自有文件验证成功后才完成，打开按钮再次核对准确的已安装EXE。测试/截图从专用测试入口使用fixture后端；生产入口仅保留原`--verify-setup`，自动验证时由调用者把子进程TEMP/TMP限制在fixture内，不能创建真实推荐目录。
 
+1.2.3交互安装默认勾选当前用户桌面快捷方式，可取消。只在安装认证与全部文件核验后调用，使用系统已知桌面，不写注册表、不覆盖同名文件；创建失败独立告警，不改变安装成功结果。runtime记录installationId、准确路径、link哈希及目标字段；卸载先通过核心预检，之后只删除仍匹配的自有link。相同installationId的正常签名升级不会失去清理资格；玩家修改或外部替换时保留。ZIP、普通在线更新及`--verify-setup`不静默创建真实桌面入口。
+
 ## 首次启动及更新集成
 
 ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntime/CoreBootstrap/manifest.json` 和 `manifest.sig` 经嵌入公钥验证后，`CoreDeployment.AdoptPortable(root)` 校验所有现有核心文件，原位创建 installationId、owner marker 与 schema 2 安装记录。失败不会把修改的文件认领为自有文件；安装器原有“空目录”要求不受影响。
 
 正常启动顺序是 `AdoptPortable(root)` → `CoreUpdateTransaction.Recover(root)` → `ModernAssets.Prepare()` → 初始化界面。已有记录时 AdoptPortable 验证当前记录匹配有效签名清单并幂等返回，不预检磁盘 sidecar 字节，所以 Recover 可以先恢复中断更新造成的损坏。该认证从 bootstrap 或现存更新任务目录查找匹配的签名清单，绝不信任磁盘公钥或仅凭未签名记录。完全丢失/破坏签名资料则失败关闭。
+
+1.2.3将两个既有受管监控角色放到已认证EXE哈希标识的`OrangeLauncherRuntime/BackgroundWorkers/<sha256>/`副本运行，保留原计时／会话算法。核心重启仅取消“游戏运行本身”这一项拒绝；未保存编辑、写队列、配置事务和恢复会话仍阻挡，普通游戏文件操作保护不放宽。当前主动下载完整校验后最多弹一次确认，明确同意后原生重检并自动更新／重开；历史Ready或取消不自动重试。旧1.2.1／1.2.2首次迁移仍可能要求退出游戏并手动确认，发布新资源不能改变已运行旧代码。
 
 健康检查启动分支必须在普通恢复分支前处理，不能调用 Recover；由原生宿主和助手校验任务、候选进程 PID/启动时间/路径与 nonce，真实加载 UI/bridge 后确认健康。已有记录的 AdoptPortable 是无写入、无互斥锁的认证读取，因此候选进程可在更新助手持有事务锁期间初始化。`ModernAssets.Prepare()` 内部也执行幂等 AdoptPortable，再通过 `PrepareOwned` 验证全部 Web sidecar。工具桥接读取 `BundledAssets.ReadOwnAsset`；其正式分支读取已认证安装记录并核对 Assets 字节，旧测试/截图构建无嵌入公钥时才回退内嵌资源。
 
@@ -62,7 +66,7 @@ ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntim
 
 ## 发布前
 
-发布前再次核对 CHANGELOG、版本、完整文件哈希和公钥身份，由维护者明确决定发布。本次用户已授权推送和发布 1.2.2，沿用先上传完整草稿、核对全部资源，再切为正式 latest 的流程。未完成线上验证前不得宣称已发布或可用。官方 latest 渠道没有发布时显示不可用，绝不冒充最新版。
+发布前再次核对 CHANGELOG、版本、完整文件哈希和公钥身份，由维护者明确决定发布。本次用户已授权推送和发布 1.2.3，沿用先上传完整草稿、核对全部资源，再切为正式 latest 的流程；本次22项资源、匿名下载和原始1.2.2默认查询／真实staging均已验证，边界见对应发布记录。未完成线上验证前不得宣称已发布或可用。官方 latest 渠道没有发布时显示不可用，绝不冒充最新版。
 
 更新查询首选 GitHub latest API。仅其 HTTP 403／429 时读取同仓库 `releases/latest/download/update-manifest.json` 与 `.sig`；原有签名、路径、下载域名、取消、超时和响应大小限制保持。旧客户端没有新回退代码时仍可能受匿名额度限制，需等待或手动安装完整新版；不能通过新服务器资源让旧代码凭空获得回退逻辑。
 
