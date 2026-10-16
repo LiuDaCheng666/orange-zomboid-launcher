@@ -42,4 +42,10 @@
 - [x] Review each task diff and integrate the declared native contract.
 - [x] Run focused tests, the full regression suites in proportion to touched paths, and a built native smoke test with fixture paths.
 - [x] Record exact changes and verification in the changelog. Build an explicitly versioned candidate; never label an untested build as published or replace a live executable while the user has an unsaved draft.
-- [ ] After release verification, publish the source and signed update artifacts to the existing GitHub repository under the user's standing release request. Do not disclose or print signing-key contents.
+- [x] After release verification, publish the source and signed update artifacts to the existing GitHub repository under the user's standing release request. Do not disclose or print signing-key contents.
+
+## Final evidence — 2026-10-16
+
+Final coordinator regression: native self-test 1,523 PASS lines, PlayProfiles 759 assertions, owned-process checks 87 PASS lines, dependency-order suite 45 assertions / 9 cases, lifecycle suite 39 assertions; all exit 0. Focused browser suites: configuration/order 15/15, library 14/14, full 21/21, experience 73/73, compact 19/19; Java and update-ready suites pass. Independent scoped final review has zero outstanding findings.
+
+Signed 1.2.7 package verifies 18 owned files, 22 release assets, installer/portable equality, isolated installer/uninstaller and two native preview themes. Published as latest Release ID 414552549. Anonymous official downloads match local hashes; the original 1.2.6 default update service reaches Ready for 1.2.7 with 5,390,138 verified bytes and all 18 original files unchanged. New 1.2.7 returns Latest. No live installation or game/server process was changed. Full publication record: `docs/releases/1.2.7-github-release.md`.
