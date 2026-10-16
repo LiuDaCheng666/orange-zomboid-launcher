@@ -6,6 +6,8 @@ using System.Text;
 namespace PZ3D {
  sealed class LaunchPreflightItem {
   public string id,status,title,message,route;
+  public string[] details;
+  public bool canAutoSort;
  }
  sealed class LaunchPreflightReport {
   public bool canLaunch;
@@ -23,7 +25,7 @@ namespace PZ3D {
   internal byte[] Read(string path,int maximum){try{LauncherMaintenance.NoReparse(path);if(!File.Exists(path))return null;using(var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)){Charge(input.Length,maximum);var bytes=new byte[(int)input.Length];int offset=0,count;while(offset<bytes.Length&&(count=input.Read(bytes,offset,bytes.Length-offset))>0)offset+=count;if(offset!=bytes.Length)throw new IOException("预检文件读取未完成。");return bytes;}}catch{Incomplete=true;throw;}}
  }
  static class LaunchPreflight {
-  static LaunchPreflightItem Item(string id,string status,string title,string message,string route){return new LaunchPreflightItem{id=id,status=status,title=title,message=message,route=route};}
+  static LaunchPreflightItem Item(string id,string status,string title,string message,string route,string[] details=null,bool canAutoSort=false){return new LaunchPreflightItem{id=id,status=status,title=title,message=message,route=route,details=(details??new string[0]).Select(s=>s.Length<=512?s:s.Substring(0,512)).Distinct(StringComparer.Ordinal).Take(100).ToArray(),canAutoSort=canAutoSort};}
   public static LaunchPreflightReport Check(Engine e,bool busy,bool running){return Check(e,busy,running,"normal");}
   public static LaunchPreflightReport Check(Engine e,bool busy,bool running,string targetKind){
    if(targetKind!="normal"&&targetKind!="save"&&targetKind!="server")throw new ArgumentException("未知启动预检类型。");
@@ -37,10 +39,17 @@ namespace PZ3D {
    if(safe){try{if(File.Exists(e.Config)&&new FileInfo(e.Config).Length<=2097152){string text=File.ReadAllText(e.Config);var cleanup=BuddyLaunchArguments.CleanJson(text);if(!cleanup.Safe||cleanup.Changed)reason="启动 JSON 存在不明确或重复的 Buddy 参数，请在组件或维护页核对。";else reason=LauncherLaunch.Reason(e,false,false);}else reason="游戏启动配置缺失或超出安全读取上限，请核对游戏目录。";config=reason=="";}catch{reason="游戏启动配置无法安全读取，请核对游戏目录与 JSON。";}}
    else reason="检查路径不安全，未读取启动配置。";
    items.Add(Item("launch-config",config?"ok":"error","游戏与启动配置",config?"游戏启动文件和参数通过本次静态检查；加载效果仍由游戏确认。":reason,"components"));
-   bool guarded=false;if(safe&&config&&!pending){try{if(targetKind=="normal")e.GuardLaunch();else e.Guard();guarded=true;}catch{}}
+   bool guarded=false;if(safe&&config&&!pending){try{e.GuardLaunch();guarded=true;}catch{}}
    items.Add(Item("launch-guard",guarded?"ok":safe&&config&&pending?"warning":"error","旧启动参数与 Steam 检查",guarded?"现有 Buddy、备用 BAT 和 Steam 启动项安全检查通过。":pending?"请完成待恢复会话后重新检查启动参数。":"启动参数安全检查未通过，请在维护页核对旧 Buddy、备用 BAT 与 Steam 状态。","maintenance"));
    bool modsChecked=false;
-   if(safe){try{var budget=new LaunchReadBudget(16777216);byte[] bytes=SaveProfiles.DefaultBytes(e);string[] mods=ModConfigurations.ValidatePreflightMods(SaveProfiles.DefaultMods(bytes));byte[] parsed=SaveProfiles.ReplaceDefaultMods(bytes,mods);if(targetKind=="server"){string[] retained=LaunchProfiles.Retained(e,budget);LaunchProfiles.BuildDefault(new UTF8Encoding(false,true).GetString(bytes??parsed).TrimStart('\uFEFF'),"server",retained);mods=mods.Where(retained.Contains).ToArray();}var sorted=ModConfigurations.SortForPreflight(e,mods,budget);bool invalid=sorted.errors.Length>0||sorted.changed;items.Add(Item("mods",invalid?"error":sorted.warnings.Length>0?"warning":"ok",targetKind=="server"?"服务器保留模组依赖与顺序":"默认模组依赖与顺序",invalid?"本次启动模组存在缺失、依赖、冲突或加载顺序问题，请在模组配置页检查并明确保存。":sorted.warnings.Length>0?"部分模组来源或元数据未核实，请在模组配置页核对；未断言这些文件缺失。":targetKind=="server"?"服务器启动保留的已知客户端模组通过；普通本地模组会排除，服务器新增模组仍由游戏处理。":"已知本地来源的默认模组依赖与加载顺序通过。","mods"));modsChecked=true;}catch{}}
+   if(safe){try{
+    var budget=new LaunchReadBudget(16777216);byte[] bytes=SaveProfiles.DefaultBytes(e);string[] mods=ModConfigurations.ValidatePreflightMods(SaveProfiles.DefaultMods(bytes)),defaultMods=mods;byte[] parsed=SaveProfiles.ReplaceDefaultMods(bytes,mods);
+    if(targetKind=="server"){string[] retained=LaunchProfiles.Retained(e,budget);LaunchProfiles.BuildDefault(new UTF8Encoding(false,true).GetString(bytes??parsed).TrimStart('\uFEFF'),"server",retained);mods=mods.Where(retained.Contains).ToArray();}
+    var sorted=ModConfigurations.SortForPreflight(e,mods,budget);bool invalid=sorted.errors.Length>0||sorted.changed,canAutoSort=sorted.errors.Length==0&&sorted.changed;
+    if(canAutoSort&&targetKind=="server"){var defaults=ModConfigurations.SortForPreflight(e,defaultMods);canAutoSort=defaults.errors.Length==0&&defaults.changed;}
+    string message=sorted.errors.Length>0?"本次启动模组存在缺失、依赖或冲突问题，请按下列详情核对。":sorted.changed?"本次启动模组加载顺序与作者声明不一致，请按下列详情排序后继续启动。":sorted.warnings.Length>0?"部分模组来源或元数据未核实，请在模组配置页核对；未断言这些文件缺失。":targetKind=="server"?"服务器启动保留的已知客户端模组通过；普通本地模组会排除，服务器新增模组仍由游戏处理。":"已知本地来源的默认模组依赖与加载顺序通过。";
+    items.Add(Item("mods",invalid?"error":sorted.warnings.Length>0?"warning":"ok",targetKind=="server"?"服务器保留模组依赖与顺序":"默认模组依赖与顺序",message,"mods",sorted.errors.Concat(sorted.violations).Concat(sorted.warnings).ToArray(),canAutoSort));modsChecked=true;
+   }catch(Exception ex){items.Add(Item("mods","error","默认模组依赖与顺序","默认模组清单或已知来源无法安全读取，请在模组配置页核对。","mods",new[]{ex.Message}));modsChecked=true;}}
    if(!modsChecked)items.Add(Item("mods","error","默认模组依赖与顺序","默认模组清单或已知来源无法安全读取，请在模组配置页核对。","mods"));
    var approvals=safe&&config&&guarded&&!pending&&modsChecked?JavaApprovals.CheckForPreflight(e):null;
    items.Add(Item("java-approvals",approvals!=null&&approvals.supported&&approvals.pending==0&&approvals.denied==0?"ok":"warning","当前 Java 文件授权",approvals==null||!approvals.supported?"当前 Java 授权状态未核实；请打开 Java 授权逐项核对。新存档或服务器文件仍由游戏询问。":approvals.pending>0?"当前已知 Java 文件有待明确授权的项目，请逐项核对；工具不会自动允许。":approvals.denied>0?"当前 Java 文件有明确拒绝的项目，相关模组可能不加载；请在授权页核对。":"当前已知文件没有待决定项目；新文件和服务器授权仍由游戏处理。","java"));

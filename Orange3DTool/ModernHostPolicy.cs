@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 namespace PZ3D {
  static class ModernHostPolicy {
-  static readonly HashSet<string> Actions=new HashSet<string>{"launchPreflight","status","componentsAction","memoryGet","memorySave","settingsGet","settingsSave","shadersGet","shaderSelect","importShader","maintenance","launch","chooseGame","cancel","help","theme","logs","reticleGet","reticleSave","open","openOfficial","dlss","savesList","modCatalog","saveGet","saveSave","serverList","serverUpsert","serverDelete","serverQuery","profileLaunch","profileRecover","modCover","javaList","javaSave","updatesGet","modProfiles","modProfileGet","modSort","saveThumb","serverThumb","taskGet","playtimeGet","serverFavorites","steamConnection","steamSubscriptions","steamSearch","steamDetails","serverHall","modProfileSave","modProfileDelete","modProfileActivate","steamDownload","favoriteImport","playtimeSettings"};
+  static readonly HashSet<string> Actions=new HashSet<string>{"launchPreflight","status","componentsAction","memoryGet","memorySave","settingsGet","settingsSave","shadersGet","shaderSelect","importShader","maintenance","launch","chooseGame","cancel","help","theme","logs","reticleGet","reticleSave","open","openOfficial","dlss","savesList","modCatalog","saveGet","saveSave","serverList","serverUpsert","serverDelete","serverQuery","profileLaunch","profileRecover","modCover","javaList","javaSave","updatesGet","modProfiles","modProfileGet","modSort","saveThumb","serverThumb","taskGet","playtimeGet","serverFavorites","steamConnection","steamSubscriptions","steamSearch","steamDetails","serverHall","modAutoSort","modProfileSave","modProfileDelete","modProfileActivate","steamDownload","favoriteImport","playtimeSettings"};
   public static Dictionary<string,object> Validate(string source,string text){
    Uri uri;if(!Uri.TryCreate(source,UriKind.Absolute,out uri)||uri.Scheme!="https"||uri.Host!="orange.local"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.AbsolutePath!="/index.html")throw new Exception("拒绝非本地受信界面的请求。");
    if(text==null||text.Length>262144)throw new Exception("界面请求过大或为空。");
@@ -20,7 +20,7 @@ namespace PZ3D {
     if(apply&&(!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed||!p.TryGetValue("drafts",out drafts)||!(drafts is bool)||(bool)drafts))throw new Exception("请先保存编辑，并确认重启启动器。");
    }
    if(((string)action=="chooseGame"||(string)action=="importShader")&&((Dictionary<string,object>)payload).Count>0)throw new Exception("文件与目录必须由本机选择窗口确认，界面不能提供路径。");
-   if((string)action=="launchPreflight")ValidatePreflightPayload((Dictionary<string,object>)payload);
+   if((string)action=="launchPreflight")ValidatePreflightPayload((Dictionary<string,object>)payload);if((string)action=="modAutoSort")ValidateAutoSortPayload((Dictionary<string,object>)payload);
    if((string)action=="gameDiagnostics")GameDiagnostics.ValidatePayload((Dictionary<string,object>)payload);
    if(BuddyAction((string)action))ValidateBuddyPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="saveDeletePreview"||(string)action=="saveDelete")ValidateSaveDeletionPayload((string)action,(Dictionary<string,object>)payload);
@@ -29,6 +29,7 @@ namespace PZ3D {
   static ModernHostPolicy(){Actions.Add("gameDiagnostics");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");}
   internal static void ValidateSaveDeletionPayload(string action,Dictionary<string,object> p){object id,stamp,confirmed;bool preview=action=="saveDeletePreview";if(p.Count!=(preview?1:3)||!p.TryGetValue("id",out id)||!(id is string)||!SaveDeletion.ValidId((string)id))throw new InvalidOperationException("删除存档只接受本机存档标识，不能提供路径。");if(!preview&&(!p.TryGetValue("stamp",out stamp)||!(stamp is string)||!SaveDeletion.ValidStamp((string)stamp)||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed))throw new InvalidOperationException("删除存档需要有效预览凭据和明确确认。");}
   internal static bool BuddyAction(string action){return action=="buddyPreview"||action=="buddyTakeover"||action=="buddyRecover";}
+  internal static void ValidateAutoSortPayload(Dictionary<string,object> p){object confirmed;if(p.Count!=1||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed)throw new Exception("自动排序需要明确确认，且只调整当前默认清单的顺序。");}
   internal static string ValidatePreflightPayload(Dictionary<string,object> payload){object kind;if(payload.Count==0)return "normal";if(payload.Count==1&&payload.TryGetValue("targetKind",out kind)&&kind is string&&new[]{"normal","save","server"}.Contains((string)kind))return (string)kind;throw new Exception("启动预检只接受空对象或明确的 normal/save/server 类型，界面不能提供路径、凭据或授权决定。");}
   internal static void ValidateBuddyPayload(string action,Dictionary<string,object> p){
    if(action=="buddyPreview"){if(p.Count!=0)throw new Exception("扫描旧启动参数不接受页面目标参数。");return;}

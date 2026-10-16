@@ -11,6 +11,8 @@ namespace PZ3D {
    var policy=typeof(Engine).Assembly.GetType("PZ3D.ModernHostPolicy");Check(policy!=null,"modern bridge origin and command policy exists");var accept=policy.GetMethod("Validate");
    Func<string,string,bool> valid=(source,json)=>{try{accept.Invoke(null,new object[]{source,json});return true;}catch{return false;}};
    Check(valid("https://orange.local/index.html","{\"id\":\"1\",\"action\":\"memoryGet\",\"payload\":{}}"),"local trusted memory read accepted");
+   Check(valid("https://orange.local/index.html","{\"id\":\"sort\",\"action\":\"modAutoSort\",\"payload\":{\"confirmed\":true}}"),"explicit default mod reorder accepted");
+   foreach(string payload in new[]{"{}","{\"confirmed\":false}","{\"confirmed\":\"true\"}","{\"confirmed\":true,\"mods\":[\"forged\"]}"})Check(!valid("https://orange.local/index.html","{\"id\":\"sort\",\"action\":\"modAutoSort\",\"payload\":"+payload+"}"),"automatic sort requires only explicit confirmation");
    string deletionStamp="saveDelete:"+new string('a',64);
    foreach(string action in new[]{"saveDeletePreview","saveDelete"}){
     string payload=action=="saveDeletePreview"?"{\"id\":\"Survivor/OnlyThis\"}":"{\"id\":\"Survivor/OnlyThis\",\"stamp\":\""+deletionStamp+"\",\"confirmed\":true}";

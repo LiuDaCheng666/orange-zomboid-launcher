@@ -58,7 +58,7 @@ namespace PZ3D {
   }
   static bool Number(string value){return Regex.IsMatch(value,@"^-?(0|[1-9][0-9]*)$");}
   internal static string[] ChunkTargets(Engine e){string mp=Path.Combine(e.User,"Saves","Multiplayer");NoReparse(mp);var files=new List<string>();if(!Directory.Exists(mp))return files.ToArray();foreach(string server in Directory.GetDirectories(mp)){NoReparse(server);string map=Path.Combine(server,"map");NoReparse(map);if(!Directory.Exists(map))continue;foreach(string x in Directory.GetDirectories(map)){NoReparse(x);if(!Number(Path.GetFileName(x)))continue;foreach(string f in Directory.GetFiles(x)){NoReparse(f);if(Path.GetExtension(f)==".bin"&&Number(Path.GetFileNameWithoutExtension(f)))files.Add(f);}}}return files.ToArray();}
-  public static string ClearMultiplayerCache(Engine e){e.Guard();string[] files=ChunkTargets(e);int count=0;foreach(string f in files){e.Guard();NoReparse(f);File.Delete(f);count++;if(e.Progress!=null)e.Progress(count*100/files.Length,"清理联机区块缓存 "+count+" / "+files.Length);}return "已清理 "+count+" 个已核实的联机地图区块缓存。保留角色、车辆数据库、地图标记、其他存档和本地模组；重连时由服务器重新发送区块。";}
-  public static string RebuildWorkshop(Engine e,Action<int,string> progress,CancellationToken cancel){e.Guard();cancel.ThrowIfCancellationRequested();return LauncherWorkshopRebuild.Start(e,progress,cancel);}
+  public static string ClearMultiplayerCache(Engine e){e.GuardMaintenance();string[] files=ChunkTargets(e);int count=0;foreach(string f in files){e.GuardMaintenance();NoReparse(f);File.Delete(f);count++;if(e.Progress!=null)e.Progress(count*100/files.Length,"清理联机区块缓存 "+count+" / "+files.Length);}return "已清理 "+count+" 个已核实的联机地图区块缓存。保留角色、车辆数据库、地图标记、其他存档和本地模组；重连时由服务器重新发送区块。";}
+  public static string RebuildWorkshop(Engine e,Action<int,string> progress,CancellationToken cancel){e.GuardMaintenance();cancel.ThrowIfCancellationRequested();return LauncherWorkshopRebuild.Start(e,progress,cancel);}
  }
 }

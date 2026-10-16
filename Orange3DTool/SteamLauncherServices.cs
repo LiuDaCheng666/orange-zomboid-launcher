@@ -71,7 +71,7 @@ namespace PZ3D {
   }
   public static object Execute(Engine engine,string action,Dictionary<string,object> payload,Action<int,string> progress,CancellationToken cancel,Action<object> hallBatch=null){
    var args=Normalize(action,payload);cancel.ThrowIfCancellationRequested();if(engine==null)throw new Exception("没有选择游戏安装。");
-   if(action=="download"){engine.Guard();if(!engine.TestMode&&GameProcessGuard.IsRunning(engine.Game))throw new Exception("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后下载工坊模组。");}
+   if(action=="download"){engine.Guard();}
    string basePath=Path.Combine(Path.GetFullPath(engine.Data),"steam-services");
    return Transport(basePath,engine.Game,new Dictionary<string,object>{{"action",action},{"args",args}},Process.GetCurrentProcess().MainModule.FileName,action=="download"?510000:90000,progress,cancel,hallBatch);
   }
