@@ -1,8 +1,8 @@
 # 核心发布与签名
 
-**1.2.7 已正式发布为 GitHub latest。** 源码标签、公开下载哈希和原始1.2.6默认在线更新至Ready的验证见[正式发布记录](releases/1.2.7-github-release.md)。[1.2.6](releases/1.2.6-github-release.md)、[1.2.5](releases/1.2.5-github-release.md)、[1.2.4](releases/1.2.4-github-release.md)、[1.2.3](releases/1.2.3-github-release.md)、[1.2.2](releases/1.2.2-github-release.md)、[1.2.1](releases/1.2.1-github-release.md)记录及以下历史验收说明保留。
+**1.2.8 已正式发布为 GitHub latest。** 源码标签、公开下载哈希和原始1.2.7默认在线更新至Ready的验证见[正式发布记录](releases/1.2.8-github-release.md)。[1.2.7](releases/1.2.7-github-release.md)、[1.2.6](releases/1.2.6-github-release.md)、[1.2.5](releases/1.2.5-github-release.md)、[1.2.4](releases/1.2.4-github-release.md)、[1.2.3](releases/1.2.3-github-release.md)、[1.2.2](releases/1.2.2-github-release.md)、[1.2.1](releases/1.2.1-github-release.md)记录及以下历史验收说明保留。
 
-正式版本来自根目录 VERSION（当前源码 1.2.7）。1.2.7 公开发布工作采用全新 `dist/1.2.7-github-release/`，正式1.2.6及更早历史包保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
+正式版本来自根目录 VERSION（当前源码 1.2.8）。1.2.8 公开发布工作采用全新 `dist/1.2.8-github-release/`，正式1.2.7及更早历史包保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
@@ -10,7 +10,7 @@
 ./artifacts/core-package-tests.exe
 ./Test-CorePackageBuild.ps1
 # 使用已有保护私钥：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.7-local-build
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.8-local-build
 ```
 
 私钥位于仓库外，由当前 Windows 用户独占 ACL 保护。不可打印、上传、嵌入二进制或提交私钥。正式公钥为仓库根目录 release-public-key.xml，嵌入所有正式可执行文件的资源名为 `Launcher.UpdatePublicKey.xml`。磁盘中的公钥只供审计，绝不作为运行时信任根。签名私钥与该公钥不匹配时构建失败。

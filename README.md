@@ -1,6 +1,6 @@
 # OZL / Orange zombiod launcher
 
-**1.2.7 已正式发布为 GitHub 最新稳定版：配置／组件编辑不再因游戏或服务器运行而拦截，补上具体依赖报错和一键自动排序。** [正式发布记录](docs/releases/1.2.7-github-release.md)包含源码、交付哈希及旧版在线更新验证；[1.2.6](docs/releases/1.2.6-github-release.md)、[1.2.5](docs/releases/1.2.5-github-release.md)、[1.2.4](docs/releases/1.2.4-github-release.md)和[历史本地候选说明](docs/releases/1.2.4-local-candidate.md)保留。
+**1.2.8 已正式发布为 GitHub 最新稳定版：启动不再为普通提醒反复确认，存档删除不再检查游戏／服务器运行状态。** [正式发布记录](docs/releases/1.2.8-github-release.md)包含源码、交付哈希及旧版在线更新验证；[1.2.7](docs/releases/1.2.7-github-release.md)、[1.2.6](docs/releases/1.2.6-github-release.md)、[1.2.5](docs/releases/1.2.5-github-release.md)、[1.2.4](docs/releases/1.2.4-github-release.md)和[历史本地候选说明](docs/releases/1.2.4-local-candidate.md)保留。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
@@ -16,17 +16,19 @@
 
 ## 下载和在线更新
 
-1.2.7 已正式发布为 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.7)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.7/orange-launcher-setup-v1.2.7.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.7/orange-launcher-v1.2.7-win-x64.zip)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
+1.2.8 已正式发布为 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.8)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.8/orange-launcher-setup-v1.2.8.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.8/orange-launcher-v1.2.8-win-x64.zip)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
 
 已安装可信核心版本的玩家，可点顶部“启动器更新”→检查→下载。运行1.2.3后，当前下载校验完成会弹出一次确认，同意后自动更新并重新打开启动器；选择稍后则保留“重启并更新”，不会反复弹窗。游戏运行本身不再一律拦截核心更新，但未保存编辑、文件修改、配置事务或待恢复会话仍须先处理。更新只下载变化的自有文件并校验签名及哈希；重启后完成界面健康检查，失败保留恢复资料并回退。更新启动器不等于更新或启用第三方模组，不要求退出 Steam，也不要求输入 Steam 密码。网络必须能访问 GitHub 及其官方资源下载域名。
 
 1.2.1 遇 GitHub API 403／429 时使用同仓库官方最新下载地址回退，信任校验不变。旧版本尚无这段回退代码时需等待限流恢复或手动安装完整新版。内置组件的版本、更新说明和物件贴图问题边界见[2026-10-15 组件核查](docs/releases/2026-10-15-component-compatibility-audit.md)；不把“文件已下载”当成“游戏内效果正常”。
 
-没有内置更新信任的早期单EXE，或缺少官方回退且受API限流影响的历史测试构建，可能需要手动安装一次完整新版。**1.2.1／1.2.2首次升级仍受旧版代码限制，可能需要退出游戏，再手动点“重启并更新”。**本次原始正式1.2.6通过默认渠道查到1.2.7，实际下载并校验5,390,138字节后达到Ready；新1.2.7返回Latest。均使用隔离目录，未改写原18个文件，不冒充玩家已完成重启。早期版本升级验证作为各版本历史记录保留。
+没有内置更新信任的早期单EXE，或缺少官方回退且受API限流影响的历史测试构建，可能需要手动安装一次完整新版。**1.2.1／1.2.2首次升级仍受旧版代码限制，可能需要退出游戏，再手动点“重启并更新”。**本次原始正式1.2.7通过默认渠道查到1.2.8，实际下载并校验5,393,323字节后达到Ready；新1.2.8返回Latest。均使用隔离目录，未改写原18个文件，不冒充玩家已完成重启。早期版本升级验证作为各版本历史记录保留。
 
 ## 开发状态
 
-1.2.7 已发布，正式标签、交付哈希和旧版在线升级验证边界见[GitHub 发布记录](docs/releases/1.2.7-github-release.md)；[1.2.6](docs/releases/1.2.6-github-release.md)、[1.2.5](docs/releases/1.2.5-github-release.md)、[1.2.4](docs/releases/1.2.4-github-release.md)、[1.2.3](docs/releases/1.2.3-github-release.md)、[1.2.2](docs/releases/1.2.2-github-release.md)和[1.2.1](docs/releases/1.2.1-github-release.md)发布记录作为历史保留。
+1.2.8 已发布，正式标签、交付哈希和旧版在线升级验证边界见[GitHub 发布记录](docs/releases/1.2.8-github-release.md)；[1.2.7](docs/releases/1.2.7-github-release.md)、[1.2.6](docs/releases/1.2.6-github-release.md)、[1.2.5](docs/releases/1.2.5-github-release.md)、[1.2.4](docs/releases/1.2.4-github-release.md)、[1.2.3](docs/releases/1.2.3-github-release.md)、[1.2.2](docs/releases/1.2.2-github-release.md)和[1.2.1](docs/releases/1.2.1-github-release.md)发布记录作为历史保留。
+
+1.2.8 检查通过就直接启动，普通提醒不再二次确认；通过记录默认折叠在封面下方，阻断才展开。确认删除本地存档时不再检查进程或直达会话，仍仅回收准确目标并返回实际文件错误，不自动允许Java、不停止进程、不修改远程服务器。
 
 1.2.7 的配置与组件操作不以游戏／服务器／Java运行状态为前提，也不因直达启动会话而禁止编辑。保存失败就地报错并保留草稿；具体依赖与顺序错误可见，仅顺序问题可直接“自动排序并继续启动”。会话清理保留期间编辑，共享写入锁避免相互覆盖，不将临时桥接存入复用配置。仍沿用1.2.6的精确客户端／服务端识别，防止重复启动；删除存档、清理缓存和整个工坊重建是独立的破坏性操作，不属于配置编辑。
 
@@ -55,7 +57,7 @@ npm test
 ./Build-CoreRelease.ps1 -VersionOnly
 ./Test-CorePackageBuild.ps1
 # 使用明确的仓库外私钥路径和新的输出目录打包：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.7-local-build
+./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.8-local-build
 ```
 
 正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。
