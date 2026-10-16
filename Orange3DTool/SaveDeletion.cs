@@ -14,11 +14,10 @@ namespace PZ3D {
   internal static bool ValidId(string id){if(string.IsNullOrWhiteSpace(id)||id.Length>260||id.Contains('\\')||id.Contains(':'))return false;string[] parts=id.Split('/');return parts.Length==2&&parts.All(p=>p.Length>0&&p!="."&&p!=".."&&!p.EndsWith(".")&&!p.EndsWith(" ")&&p.IndexOfAny(Path.GetInvalidFileNameChars())<0&&!p.Any(char.IsControl));}
   internal static bool ValidStamp(string stamp){return stamp!=null&&Regex.IsMatch(stamp,@"\AsaveDelete:[a-f0-9]{64}\z");}
   static string Resolve(Engine e,string id){if(!ValidId(id))throw new InvalidOperationException("无效存档标识。");return SaveProfiles.ResolveSave(e,id);}
-  static void Guard(Engine e,Func<bool> running){
-   string launchJournal=Path.Combine(e.Data,"launch-sessions",LaunchProfiles.Key(e)+".json"),workshopJournal=Path.Combine(e.Data,"workshop-rebuild.pending");
-   foreach(string p in new[]{e.Game,e.Config,e.User,e.Mods,e.Data,launchJournal,workshopJournal})LauncherMaintenance.NoReparse(p);
-   e.Guard();if(running())throw new InvalidOperationException("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后删除存档。");
-   if(LaunchProfiles.Pending(e)||Directory.Exists(launchJournal))throw new InvalidOperationException("启动会话尚未恢复，请先恢复后再删除存档。");
+  static void Guard(Engine e){
+   string workshopJournal=Path.Combine(e.Data,"workshop-rebuild.pending");
+   foreach(string p in new[]{e.Game,e.Config,e.User,e.Mods,e.Data,workshopJournal})LauncherMaintenance.NoReparse(p);
+   e.Guard();
    if(File.Exists(workshopJournal)||Directory.Exists(workshopJournal))throw new InvalidOperationException("工坊维护尚未恢复，请先完成恢复。");
   }
   sealed class Snapshot {
@@ -33,16 +32,16 @@ namespace PZ3D {
   static string Stamp(Engine e,string path){return new Snapshot().Read(e,path);}
   public static object Preview(Engine e,string id){string path=Resolve(e,id);return new{id=id,name=Path.GetFileName(path),mode=id.Split('/')[0],path=path,stamp=Stamp(e,path)};}
   public static object Delete(Engine e,string id,string stamp,bool confirmed){return Delete(e,id,stamp,confirmed,CancellationToken.None);}
-  internal static object Delete(Engine e,string id,string stamp,bool confirmed,CancellationToken cancellation){cancellation.ThrowIfCancellationRequested();if(e.TestMode)throw new InvalidOperationException("测试模式禁止调用真实回收站。");Func<bool> running=()=>{cancellation.ThrowIfCancellationRequested();return GameProcessGuard.IsRunning(e.Game);};return Delete(e,id,stamp,confirmed,p=>Recycle(p,()=>Verify(e,id,p,stamp,running)),running,cancellation);}
-  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> recycle,Func<bool> running){return Delete(e,id,stamp,confirmed,recycle,running,CancellationToken.None);}
-  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> recycle,Func<bool> running,CancellationToken cancellation){
-   cancellation.ThrowIfCancellationRequested();Func<bool> checkRunning=()=>{cancellation.ThrowIfCancellationRequested();return running();};
-   if(!confirmed)throw new InvalidOperationException("删除存档需要明确确认。");if(!ValidStamp(stamp))throw new InvalidOperationException("删除预览凭据无效，请重新核对。");if(recycle==null||running==null)throw new ArgumentNullException("recycle/running");Guard(e,checkRunning);string path=Resolve(e,id);
+  internal static object Delete(Engine e,string id,string stamp,bool confirmed,CancellationToken cancellation){cancellation.ThrowIfCancellationRequested();if(e.TestMode)throw new InvalidOperationException("测试模式禁止调用真实回收站。");return Delete(e,id,stamp,confirmed,p=>Recycle(p,()=>Verify(e,id,p,stamp,cancellation)),cancellation);}
+  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> recycle){return Delete(e,id,stamp,confirmed,recycle,CancellationToken.None);}
+  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> recycle,CancellationToken cancellation){
+   cancellation.ThrowIfCancellationRequested();
+   if(!confirmed)throw new InvalidOperationException("删除存档需要明确确认。");if(!ValidStamp(stamp))throw new InvalidOperationException("删除预览凭据无效，请重新核对。");if(recycle==null)throw new ArgumentNullException("recycle");Guard(e);string path=Resolve(e,id);
    // Same naming as SaveProfiles.Save, plus the shared launch/profile lease to close launch races.
    string name="Local\\OrangeSaveProfiles-"+DlssInstaller.Hash(Encoding.UTF8.GetBytes(Path.GetFullPath(Path.Combine(path,"mods.txt")).ToUpperInvariant())).ToLowerInvariant();
-   using(PlayProfileTransaction.Lock(e))using(var mutex=new Mutex(false,name)){bool held=false;try{try{held=mutex.WaitOne(5000);}catch(AbandonedMutexException){held=true;}if(!held)throw new IOException("存档配置正被其他窗口修改，请稍后重试。");Verify(e,id,path,stamp,checkRunning);cancellation.ThrowIfCancellationRequested();recycle(path);if(Directory.Exists(path)||File.Exists(path))throw new IOException("回收站操作未完成；存档仍在原位置。");return new{status="completed",id=id,message=id.Split('/')[0].Equals("Multiplayer",StringComparison.OrdinalIgnoreCase)?"本地多人缓存已移到 Windows 回收站；服务器世界和远程角色未修改。":"存档已移到 Windows 回收站。"};}finally{if(held)mutex.ReleaseMutex();}}
+   using(PlayProfileTransaction.Lock(e))using(var mutex=new Mutex(false,name)){bool held=false;try{try{held=mutex.WaitOne(5000);}catch(AbandonedMutexException){held=true;}if(!held)throw new IOException("存档配置正被其他窗口修改，请稍后重试。");Verify(e,id,path,stamp,cancellation);cancellation.ThrowIfCancellationRequested();recycle(path);if(Directory.Exists(path)||File.Exists(path))throw new IOException("回收站操作未完成；存档仍在原位置。");return new{status="completed",id=id,message=id.Split('/')[0].Equals("Multiplayer",StringComparison.OrdinalIgnoreCase)?"本地多人缓存已移到 Windows 回收站；服务器世界和远程角色未修改。":"存档已移到 Windows 回收站。"};}finally{if(held)mutex.ReleaseMutex();}}
   }
-  static void Verify(Engine e,string id,string expectedPath,string stamp,Func<bool> running){Guard(e,running);string path=Resolve(e,id);if(!string.Equals(path,expectedPath,StringComparison.OrdinalIgnoreCase)||Stamp(e,path)!=stamp)throw new InvalidOperationException("存档已变化，请重新核对后删除。");Guard(e,running);LauncherMaintenance.NoReparse(path);}
+  static void Verify(Engine e,string id,string expectedPath,string stamp,CancellationToken cancellation){cancellation.ThrowIfCancellationRequested();Guard(e);string path=Resolve(e,id);if(!string.Equals(path,expectedPath,StringComparison.OrdinalIgnoreCase)||Stamp(e,path)!=stamp)throw new InvalidOperationException("存档已变化，请重新核对后删除。");cancellation.ThrowIfCancellationRequested();Guard(e);LauncherMaintenance.NoReparse(path);}
   [StructLayout(LayoutKind.Sequential)]struct FileInfoNative {internal uint attributes;internal System.Runtime.InteropServices.ComTypes.FILETIME creation,access,write;internal uint volume,sizeHigh,sizeLow,links,indexHigh,indexLow;}
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(string path,uint access,uint share,IntPtr security,uint disposition,uint flags,IntPtr template);
   [DllImport("kernel32.dll",SetLastError=true)]static extern bool GetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle handle,out FileInfoNative info);

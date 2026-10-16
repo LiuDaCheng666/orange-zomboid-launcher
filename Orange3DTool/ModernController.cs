@@ -118,7 +118,7 @@ namespace PZ3D {
    case "javaSave":Check();object decision;if(!p.TryGetValue("decision",out decision)||!(decision is bool))throw new Exception("必须明确选择允许或拒绝此文件。");return JavaApprovals.Save(engine,Text(p,"stamp"),Text(p,"hash"),(bool)decision);
    case "saveGet":return SaveProfiles.Read(engine,Text(p,"id"));
    case "saveDeletePreview":return SaveDeletion.Preview(engine,Text(p,"id"));
-   case "saveDelete":Check();if(recycleSave==null)return SaveDeletion.Delete(engine,Text(p,"id"),Text(p,"stamp"),Flag(p,"confirmed"),cancel.Token);return SaveDeletion.Delete(engine,Text(p,"id"),Text(p,"stamp"),Flag(p,"confirmed"),recycleSave,Running,cancel.Token);
+   case "saveDelete":Check();if(recycleSave==null)return SaveDeletion.Delete(engine,Text(p,"id"),Text(p,"stamp"),Flag(p,"confirmed"),cancel.Token);return SaveDeletion.Delete(engine,Text(p,"id"),Text(p,"stamp"),Flag(p,"confirmed"),recycleSave,cancel.Token);
    case "saveSave":Check();object requested;if(!p.TryGetValue("mods",out requested)||requested is string||!(requested is System.Collections.IEnumerable))throw new Exception("模组清单必须为数组。");var ids=((System.Collections.IEnumerable)requested).Cast<object>().Select(x=>{if(!(x is string))throw new Exception("模组标识必须为文本。");return (string)x;}).ToArray();return SaveProfiles.Save(engine,Text(p,"id"),Text(p,"stamp"),ids,Flag(p,"confirmed"));
    case "serverList":return servers.List();
    case "serverUpsert":return servers.Upsert(p);
