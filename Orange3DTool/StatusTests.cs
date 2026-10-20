@@ -7,10 +7,11 @@ namespace PZ3D {
    var type=typeof(Engine).Assembly.GetType("PZ3D.RuntimeEvidence");
    Check(type!=null,"runtime evidence evaluator exists");
    Func<bool,bool,string,bool,string> evaluate=(config,loader,log,current)=>(string)type.GetMethod("Evaluate").Invoke(null,new object[]{config,loader,log,current});
-   Check(evaluate(true,true,"[Viewpoint] loaded",false).Contains("待验证"),"old logs cannot confirm the current game");
+   Check(evaluate(true,true,"[Viewpoint] loaded",false).Contains("下次启动启用")&&!evaluate(true,true,"[Viewpoint] loaded",false).Contains("已加载"),"old logs leave the configured next-launch status, not loaded");
    Check(evaluate(true,true,"[Viewpoint] loaded",true).Contains("已加载"),"current startup reports Viewpoint loaded");
    Check(evaluate(true,true,"[Viewpoint] loaded\nrequired mod \"Viewpoint\" not found",true).Contains("失败"),"later multiplayer missing-mod error overrides startup success");
-   Check(evaluate(true,true,"Found patch class: viewpoint.Main",true).Contains("待验证"),"discovery alone is not a successful load");
+   Check(evaluate(true,true,"Found patch class: viewpoint.Main",true).Contains("下次启动启用"),"discovery alone remains a next-launch configuration");
+   Check(evaluate(true,true,"[Viewpoint] loaded\nZomboidFileSystem.loadMods( NeatUI )",true).Contains("清单已切换"),"server mod reset has its own neutral transition status");
    Check(evaluate(true,false,"",false).Contains("不完整"),"missing native loader is not enabled");
    Check(evaluate(false,true,"",false).Contains("未启用"),"disabled configuration is reported separately");
    Check(evaluate(false,false,"[Viewpoint] loaded",true).Contains("已加载"),"running game state remains loaded even if next-launch configuration is off");

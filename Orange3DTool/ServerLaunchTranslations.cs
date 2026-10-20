@@ -48,7 +48,7 @@ namespace PZ3D {
    foreach(string id in selected.Where(Ids.Contains).Distinct()){
     ulong item=id==Ids[0]?3556540080UL:3556544454UL;AddonFiles files;
     try{files=ViewpointAddons.Resolve(e,new ViewpointAddon("translation",item,id,id,""),current);}
-    catch(Exception){if(e.Progress!=null)e.Progress(-1,"统一汉化来源未核实："+id+"；保留原模组，由游戏处理加载。");continue;}
+    catch(Exception){if(e.Progress!=null)e.Progress(-1,"未找到统一汉化来源："+id+"；保留原模组，由游戏处理加载。");continue;}
     string active=files.Folder;Version best=null;
     foreach(string dir in Directory.GetDirectories(files.Folder)){
      LauncherMaintenance.NoReparse(dir);Version candidate;string name=Path.GetFileName(dir);

@@ -29,9 +29,9 @@ namespace PZ3D {
    internal void Warn(string id,string source,string message){if(Warnings.Count<16&&!Warnings.Any(w=>w.id==id&&w.source==source))Warnings.Add(new GameDiagnosticWarning{id=id,source=source,message=Limit(Sanitize(message),512)});}
    internal GameDiagnosticsReport Finish(){
     var ordered=Findings.OrderBy(f=>f.severity=="error"?0:f.severity=="warning"?1:2).ThenBy(f=>Sources.FindIndex(s=>s.id==f.source)).ThenBy(f=>f.id,StringComparer.Ordinal).Take(24).ToArray();
-    var b=new StringBuilder("本报告仅分析有限的本地磁盘证据；日志新旧不证明当前游戏会话。不能据此诊断网络延迟、GPU 瓶颈或完整根因。没有发现仅表示未识别到已收集证据中的已知错误。\n检查时间："+Now.ToString("o")+"\n");
+    var b=new StringBuilder("OZL 游戏与启动器日志报告\n检查时间："+Now.ToString("o")+"\n");
     foreach(var s in Sources)b.AppendLine("来源："+s.label+" · "+s.status+" · "+s.freshness+" · "+s.encoding+" · "+s.bytesRead+" bytes"+(s.truncated?" · 仅保留有界片段":""));
-    foreach(var f in ordered){b.AppendLine("["+f.severity+" / "+f.confidence+(f.historical?" / 历史或年代未核实":" / 近期磁盘证据")+"] "+f.title+" · "+f.source);b.AppendLine(f.message);foreach(string line in f.evidence)b.AppendLine("  "+line);b.AppendLine("建议："+f.nextStep);}
+    foreach(var f in ordered){b.AppendLine("["+f.severity+" / "+f.confidence+(f.historical?" / 历史记录／时间未知":" / 近期日志")+"] "+f.title+" · "+f.source);b.AppendLine(f.message);foreach(string line in f.evidence)b.AppendLine("  "+line);b.AppendLine("建议："+f.nextStep);}
     foreach(var w in Warnings)b.AppendLine("提醒："+w.source+" · "+w.message);
     return new GameDiagnosticsReport{checkedUtc=Now.ToString("o"),findings=ordered,warnings=Warnings.ToArray(),sources=Sources.ToArray(),reportText=Limit(b.ToString(),48000)};
    }
@@ -47,7 +47,7 @@ namespace PZ3D {
    var crash=Discover(state,e.User,"user-crashes",true,"jvm-crash","用户目录 JVM 崩溃日志").Concat(Discover(state,e.Game,"game-crashes",true,"jvm-crash","游戏目录 JVM 崩溃日志")).ToList();index=0;
    foreach(var c in crash.OrderByDescending(c=>c.Modified).ThenBy(c=>c.Path,StringComparer.Ordinal).Take(4)){c.Source.id="crash-"+(++index);Collect(state,c);}if(crash.Count>4)state.Warn("collection-limit","collection","崩溃日志超过文件数量预算，部分未读取。");
    Collect(state,At(Path.Combine(e.Data,"diagnostics","launcher.log.previous"),"launcher-previous","launcher-log","启动器上一份任务日志",true));
-  }catch{state.Warn("collection-incomplete","collection","部分已知来源无法完成安全检查；本报告不代表来源完整或游戏正常。");}return state.Finish();}
+  }catch{state.Warn("collection-incomplete","collection","部分日志读取失败，请查看日志来源和具体错误。");}return state.Finish();}
   static List<Candidate> Discover(State state,string root,string id,bool crashes,string kind,string label){var result=new List<Candidate>();try{
    LauncherMaintenance.NoReparse(root);if(!Directory.Exists(root))return result;
    foreach(string entry in Directory.EnumerateFileSystemEntries(root)){
@@ -66,7 +66,7 @@ namespace PZ3D {
     using(var file=new FileStream(c.Path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete)){
      VerifyHandle(file,c.Path);long length=file.Length;DateTime modified=File.GetLastWriteTimeUtc(c.Path);source.modifiedUtc=modified.ToString("o");
      if(length>FileCeiling){source.status="rejected";state.Warn("source-oversized",source.id,"文本来源超过安全大小上限，未读取。");return;}
-     int allowance=Math.Min(FileBytes,state.RemainingBytes);if(allowance<4){source.status="skipped";state.Warn("collection-limit","collection","累计读取预算已用完，部分来源未核实。");return;}int retained=(int)Math.Min(length,allowance);source.truncated=length>retained;
+     int allowance=Math.Min(FileBytes,state.RemainingBytes);if(allowance<4){source.status="skipped";state.Warn("collection-limit","collection","已达到日志读取大小上限，部分来源未读取。");return;}int retained=(int)Math.Min(length,allowance);source.truncated=length>retained;
      var head=ReadBytes(state,source,file,0,Math.Min(source.kind=="jvm-crash"?8192:3,retained));Encoding decoder;int bom=Bom(head,out decoder,out source.encoding);bool legacy=false;
      if(!source.truncated){byte[] rest=ReadBytes(state,source,file,head.Length,retained-head.Length);byte[] all=head.Concat(rest).ToArray();AnalyzeInto(state,source,Decode(all,bom,all.Length-bom,decoder,bom==0,ref legacy),modified,c.Previous);}
      else{
@@ -97,7 +97,7 @@ namespace PZ3D {
     DateTime? age=at??(contextUnknown?null:context??modified);bool historical=previous||!age.HasValue||age.Value<state.Now.AddHours(-24)||age.Value>state.Now.AddMinutes(5);string body=Body(raw);string rule=Rule(body,precedingHistorical==historical?preceding:"",source.kind);bool contextual=rule=="instrumentation-failure"&&Has(body,@"^at\s+");string[] support=contextual?new[]{precedingRaw,raw}:new[]{raw};preceding=body;precedingRaw=raw;precedingHistorical=historical;if(rule==null)continue;
     var existing=state.Findings.FirstOrDefault(f=>f.id==rule&&f.source==source.id);if(existing==null){if(state.Findings.Count>=24){state.Warn("collection-limit","collection","诊断发现达到数量上限，部分附加错误未展示。");continue;}existing=Finding(rule,source.id);state.Findings.Add(existing);}else if(existing.historical!=historical||contextual)existing.evidence=new string[0];existing.evidence=(existing.evidence??new string[0]).Concat(support.Select(line=>Limit(Sanitize(line),384))).Distinct().Reverse().Take(3).Reverse().ToArray();existing.historical=historical;
    }
-   DateTime? sourceAge=newest??(contextUnknown?null:modified);source.newestEvidenceUtc=newest.HasValue?newest.Value.ToString("o"):"";source.historical=previous||!sourceAge.HasValue||sourceAge.Value<state.Now.AddHours(-24)||sourceAge.Value>state.Now.AddMinutes(5);source.freshness=!sourceAge.HasValue?"unknown":source.historical?"historical":"recent";if(!sourceAge.HasValue)state.Warn("source-age-unknown",source.id,"没有可核实的日志时间；磁盘证据年代未知，不代表本次游戏会话。");
+   DateTime? sourceAge=newest??(contextUnknown?null:modified);source.newestEvidenceUtc=newest.HasValue?newest.Value.ToString("o"):"";source.historical=previous||!sourceAge.HasValue||sourceAge.Value<state.Now.AddHours(-24)||sourceAge.Value>state.Now.AddMinutes(5);source.freshness=!sourceAge.HasValue?"unknown":source.historical?"historical":"recent";if(!sourceAge.HasValue)state.Warn("source-age-unknown",source.id,"该日志没有有效时间记录，显示为时间未知。");
   }
   static string Rule(string body,string previous,string kind){
    if(kind=="launcher-log"){if(Has(body,@"^(?:.*?·\s*)?Steam (?:订阅状态同步超时.*phase=subscription-sync|订阅被拒绝.*phase=subscription-result|订阅确认超时)"))return "subscription-not-confirmed";if(Has(body,@"^.+?·\s*(?:failed|partial)\s*·"))return "launcher-task-failure";return null;}
@@ -121,7 +121,7 @@ namespace PZ3D {
    case "duplicate-mod":severity="warning";title="游戏报告重复模组标识";message="日志记录重复模组 ID；这本身不证明是崩溃原因。";next="人工检查该标识的本地来源及加载清单，先核对再决定处理。";break;
    case "native-access-violation":title="JVM 原生访问冲突";message="崩溃日志记录原生访问冲突；驱动或原生库问题仅为可能原因，不能归因某模组或判断 GPU 性能。";next="保留错误签名，人工核对发生时间、版本与最近变更。";break;
    case "subscription-not-confirmed":severity="warning";title="启动器订阅确认记录未完成";message="记录中的启动器任务未能确认订阅标志或结果；这不证明当前账号仍未订阅，也不是游戏崩溃证据。";next="在 Steam 中人工刷新当前订阅及工坊状态，再核对启动器任务结果。";break;
-   default:severity="warning";title="启动器任务记录失败或部分完成";message="日志记录启动器操作失败或部分完成；该记录不等于游戏加载失败或游戏崩溃。";next="人工查看对应任务及当前文件状态，再决定是否重试。";break;
+   default:severity="warning";title="启动器任务记录失败或部分完成";message="启动器操作失败或部分完成，请查看对应任务记录。";next="人工查看对应任务及当前文件状态，再决定是否重试。";break;
   }return new GameDiagnosticFinding{id=rule,severity=severity,confidence="confirmed",title=Sanitize(title),message=Sanitize(message),source=source,nextStep=Sanitize(next)};}
  }
 }

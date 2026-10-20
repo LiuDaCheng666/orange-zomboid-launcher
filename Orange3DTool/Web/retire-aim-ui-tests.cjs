@@ -25,7 +25,7 @@ async function checkReadOnlyHelp(page){
   await help.waitFor();
   assert.match(await help.innerText(),/右键/);
   assert.match(await help.innerText(),/Ctrl\+V/);
-  assert.match(await help.innerText(),/服务器.*客户端.*匹配|客户端.*服务器.*匹配/);
+  assert.match(await help.innerText(),/服务器.*Shoot to Thrill.*客户端.*枪械组件/);
   assert.equal(await help.locator('input,select,textarea,button').count(),0,'author controls are read-only guidance');
   assert.equal(await page.locator('#reticle-native,#reticle-key,[data-save-reticle]').count(),0,'retired launcher mode and fallback shortcut cannot be edited');
   assert.equal(await page.evaluate(()=>sent.some(m=>m.action==='reticleSave'||m.action==='reticleGet')),false,'opening author guidance never reads or writes retired preferences');

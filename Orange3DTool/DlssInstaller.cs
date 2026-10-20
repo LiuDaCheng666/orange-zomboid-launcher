@@ -28,7 +28,7 @@ namespace PZ3D {
   void Save(string path,DlssRecord r){Directory.CreateDirectory(Path.GetDirectoryName(path));string temp=path+".tmp-"+Guid.NewGuid().ToString("N");try{File.WriteAllText(temp,json.Serialize(r),new UTF8Encoding(false));if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);}finally{if(File.Exists(temp))File.Delete(temp);}}
   public string Enable(string cache){
    cache=Path.GetFullPath(cache);
-   Guard();if(Enabled){ReadRecord();return "DLSS 实验组件已有部署记录；不会重复覆盖。若组件损坏，先关闭再启用。部署不等于神经渲染已生效。";}
+   Guard();if(Enabled){ReadRecord();return "DLSS 实验组件已安装。需要重新安装时，先关闭再启用。";}
    Step(0,"检查完整 x64 OpenGL 实验组件");ValidateCache(cache);
    foreach(string rel in new[]{"opengl32.dll","ReShade.ini","ReShadePreset.ini","dlss5-feed.cfg","dlss5-feed-helper.addon64","nvngx_dlss.dll","nvngx_dlssnr.dll"})if(File.Exists(SafePath(game,rel)))throw new Exception("检测到非本工具管理的渲染文件，请先备份并移走，避免覆盖："+rel);
    if(Directory.EnumerateFiles(game,"*.addon64").Any())throw new Exception("游戏已有 ReShade 附加组件，请先处理既有安装，工具不擅自覆盖。");
@@ -40,7 +40,7 @@ namespace PZ3D {
    var record=new DlssRecord{Game=game,Backup=backup,State="准备安装",Time=DateTime.UtcNow.ToString("o"),Files=files.ToArray()};Save(Path.Combine(backup,"changes.json"),record);WriteGuide(record);
    try{int done=0;foreach(var f in files){Step(15+70*(done++)/files.Count,"部署 "+f.Relative);string p=SafePath(game,f.Relative);Directory.CreateDirectory(Path.GetDirectoryName(p));if(sources.ContainsKey(f.Relative))File.Copy(sources[f.Relative],p,true);else File.WriteAllBytes(p,generated[f.Relative]);f.InstalledHash=HashFile(p);}record.State="组件已部署，等待游戏内验证";Save(Path.Combine(backup,"changes.json"),record);Save(active,record);Step(100,"部署完成；首次进入游戏需确认深度和神经渲染面板");}
    catch(Exception e){var errors=Restore(originals);record.State=errors.Count==0?"安装失败，已回滚":"安装失败，回滚不完整";Save(Path.Combine(backup,"changes.json"),record);throw new Exception(e.Message+"\r\n"+record.State+"\r\n"+string.Join("\r\n",errors)+"\r\n恢复说明："+backup,e);}
-   return "已部署并启用 DLSS 实验组件，下次启动游戏加载。\r\n这不是游戏内成功证明；按内置教程确认深度、运动估计及神经渲染面板。\r\n备份与逐文件清单："+backup;
+   return "已部署并启用 DLSS 实验组件，下次启动游戏加载。\r\n重启后按教程配置深度、运动估计及神经渲染面板。\r\n备份与逐文件清单："+backup;
   }
   List<string> Restore(Dictionary<string,byte[]> originals){var errors=new List<string>();foreach(var entry in originals){try{string p=SafePath(game,entry.Key);if(entry.Value==null){if(File.Exists(p))File.Delete(p);}else{Directory.CreateDirectory(Path.GetDirectoryName(p));File.WriteAllBytes(p,entry.Value);}}catch(Exception e){errors.Add(entry.Key+": "+e.Message);}}return errors;}
   public string Disable(){Guard();if(!Enabled)return "没有本工具管理的 DLSS 部署记录，未删除任何其他文件。";var r=ReadRecord();LastBackup=r.Backup;var current=new Dictionary<string,byte[]>();var restore=new Dictionary<string,byte[]>();

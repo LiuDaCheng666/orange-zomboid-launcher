@@ -15,7 +15,7 @@ namespace PZ3D {
   public LaunchPreflightItem[] items;
  }
  sealed class LaunchReadBudget {
-  internal sealed class Exhausted:IOException {internal Exhausted():base("预检累计读取预算不足，相关来源尚未核实。") {}}
+  internal sealed class Exhausted:IOException {internal Exhausted():base("启动检查读取量超过上限，请查看模组目录详情。") {}}
   int remainingDirectories=4096;long remainingBytes;
   public bool Incomplete {get;private set;}
   public LaunchReadBudget(long maximumBytes){if(maximumBytes<0)throw new ArgumentOutOfRangeException("maximumBytes");remainingBytes=maximumBytes;}
@@ -38,7 +38,7 @@ namespace PZ3D {
    string reason="";
    if(safe){try{if(File.Exists(e.Config)&&new FileInfo(e.Config).Length<=2097152){string text=File.ReadAllText(e.Config);var cleanup=BuddyLaunchArguments.CleanJson(text);if(!cleanup.Safe||cleanup.Changed)reason="启动 JSON 存在不明确或重复的 Buddy 参数，请在组件或维护页核对。";else reason=LauncherLaunch.Reason(e,false,false);}else reason="游戏启动配置缺失或超出安全读取上限，请核对游戏目录。";config=reason=="";}catch{reason="游戏启动配置无法安全读取，请核对游戏目录与 JSON。";}}
    else reason="检查路径不安全，未读取启动配置。";
-   items.Add(Item("launch-config",config?"ok":"error","游戏与启动配置",config?"游戏启动文件和参数通过本次静态检查；加载效果仍由游戏确认。":reason,"components"));
+   items.Add(Item("launch-config",config?"ok":"error","游戏与启动配置",config?"游戏启动文件和参数正常。":reason,"components"));
    bool guarded=false;if(safe&&config&&!pending){try{e.GuardLaunch();guarded=true;}catch{}}
    items.Add(Item("launch-guard",guarded?"ok":safe&&config&&pending?"warning":"error","旧启动参数与 Steam 检查",guarded?"现有 Buddy、备用 BAT 和 Steam 启动项安全检查通过。":pending?"请完成待恢复会话后重新检查启动参数。":"启动参数安全检查未通过，请在维护页核对旧 Buddy、备用 BAT 与 Steam 状态。","maintenance"));
    bool modsChecked=false;
@@ -47,16 +47,16 @@ namespace PZ3D {
     if(targetKind=="server"){string[] retained=LaunchProfiles.Retained(e,budget);LaunchProfiles.BuildDefault(new UTF8Encoding(false,true).GetString(bytes??parsed).TrimStart('\uFEFF'),"server",retained);mods=mods.Where(retained.Contains).ToArray();}
     var sorted=ModConfigurations.SortForPreflight(e,mods,budget);bool invalid=sorted.errors.Length>0||sorted.changed,canAutoSort=sorted.errors.Length==0&&sorted.changed;
     if(canAutoSort&&targetKind=="server"){var defaults=ModConfigurations.SortForPreflight(e,defaultMods);canAutoSort=defaults.errors.Length==0&&defaults.changed;}
-    string message=sorted.errors.Length>0?"本次启动模组存在缺失、依赖或冲突问题，请按下列详情核对。":sorted.changed?"本次启动模组加载顺序与作者声明不一致，请按下列详情排序后继续启动。":sorted.warnings.Length>0?"部分模组来源或元数据未核实，请在模组配置页核对；未断言这些文件缺失。":targetKind=="server"?"服务器启动保留的已知客户端模组通过；普通本地模组会排除，服务器新增模组仍由游戏处理。":"已知本地来源的默认模组依赖与加载顺序通过。";
+    string message=sorted.errors.Length>0?"本次启动模组存在缺失、依赖或冲突问题，请按下列详情核对。":sorted.changed?"本次启动模组加载顺序与作者声明不一致，请按下列详情排序后继续启动。":sorted.warnings.Length>0?"部分模组信息读取不完整，请查看下方详情。":targetKind=="server"?"客户端组件检查通过，将使用服务器模组清单连接。":"已知本地来源的默认模组依赖与加载顺序通过。";
     items.Add(Item("mods",invalid?"error":sorted.warnings.Length>0?"warning":"ok",targetKind=="server"?"服务器保留模组依赖与顺序":"默认模组依赖与顺序",message,"mods",sorted.errors.Concat(sorted.violations).Concat(sorted.warnings).ToArray(),canAutoSort));modsChecked=true;
    }catch(Exception ex){items.Add(Item("mods","error","默认模组依赖与顺序","默认模组清单或已知来源无法安全读取，请在模组配置页核对。","mods",new[]{ex.Message}));modsChecked=true;}}
    if(!modsChecked)items.Add(Item("mods","error","默认模组依赖与顺序","默认模组清单或已知来源无法安全读取，请在模组配置页核对。","mods"));
    var approvals=safe&&config&&guarded&&!pending&&modsChecked?JavaApprovals.CheckForPreflight(e):null;
-   items.Add(Item("java-approvals",approvals!=null&&approvals.supported&&approvals.pending==0&&approvals.denied==0?"ok":"warning","当前 Java 文件授权",approvals==null||!approvals.supported?"当前 Java 授权状态未核实；请打开 Java 授权逐项核对。新存档或服务器文件仍由游戏询问。":approvals.pending>0?"当前已知 Java 文件有待明确授权的项目，请逐项核对；工具不会自动允许。":approvals.denied>0?"当前 Java 文件有明确拒绝的项目，相关模组可能不加载；请在授权页核对。":"当前已知文件没有待决定项目；新文件和服务器授权仍由游戏处理。","java"));
-   string memoryStatus="warning",memoryMessage="本次未核实堆内存，请在内存页核对。";
-   if(safe&&config){try{int heap=LauncherMaintenance.ReadHeapGiB(e);var memory=LauncherMaintenance.MemoryInfo();if(heap>memory.MaximumHeapGiB)memoryMessage="配置的堆内存超过按总物理内存计算的建议上限，请为系统保留至少 4 GiB 或 25%。";else if(heap>memory.AvailableGiB)memoryMessage="当前可用物理内存低于配置堆上限；请关闭其他程序后核对，未修改堆或分页文件。";else{memoryStatus="ok";memoryMessage="配置堆内存在当前物理内存建议范围内；实际占用取决于游戏和模组。";}}catch{memoryMessage="启动配置未设置可核实的 Xmx，或内存信息不可用；可在内存页明确设置后再核对。";}}
+   items.Add(Item("java-approvals",approvals!=null&&approvals.supported&&approvals.pending==0&&approvals.denied==0?"ok":"warning","当前 Java 文件授权",approvals==null||!approvals.supported?"请打开 Java 授权页查看文件授权状态。":approvals.pending>0?"有 Java 文件等待授权，请打开授权页处理。":approvals.denied>0?"当前 Java 文件有明确拒绝的项目，相关模组可能不加载；请在授权页核对。":"当前 Java 文件授权已处理。","java"));
+   string memoryStatus="warning",memoryMessage="未读取到启动内存，请打开内存设置。";
+   if(safe&&config){try{int heap=LauncherMaintenance.ReadHeapGiB(e);var memory=LauncherMaintenance.MemoryInfo();if(heap>memory.MaximumHeapGiB)memoryMessage="配置的堆内存超过按总物理内存计算的建议上限，请为系统保留至少 4 GiB 或 25%。";else if(heap>memory.AvailableGiB)memoryMessage="当前可用物理内存低于配置堆上限；请关闭其他程序后核对，未修改堆或分页文件。";else{memoryStatus="ok";memoryMessage="启动内存在建议范围内。";}}catch{memoryMessage="未读取到 Xmx 或系统内存信息，请打开内存设置。";}}
    items.Add(Item("memory",memoryStatus,"堆内存建议",memoryMessage,"memory"));
-   bool allowed=items.All(i=>i.status!="error");return new LaunchPreflightReport{canLaunch=allowed,checkedUtc=DateTime.UtcNow.ToString("o"),items=items.ToArray(),message=allowed?"本次启动检查通过；授权提示、实际加载、读档和连接结果仍以游戏为准。":items.First(i=>i.status=="error").message};
+   bool allowed=items.All(i=>i.status!="error");return new LaunchPreflightReport{canLaunch=allowed,checkedUtc=DateTime.UtcNow.ToString("o"),items=items.ToArray(),message=allowed?"启动检查通过。":items.First(i=>i.status=="error").message};
   }
  }
 }

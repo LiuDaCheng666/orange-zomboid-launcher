@@ -21,8 +21,8 @@ namespace PZ3D {
    var preview=BuddyTakeover.Preview(engine,environment);return preview.supported&&preview.hasConflicts?preview:null;
   }
   internal static string BuddyTakeoverSummary(BuddyTakeoverResult result){
-   string message=result.cleanupCompleted&&!result.steamVerified?"已清理已识别的游戏文件参数；Steam 启动项未核实、未接管。":result.message;
-   return (result.status=="partial"?"[失败] Steam 重新打开未完成；旧参数清理已校验。\n":"")+message+"\n组件安装仍须继续原安装流程；本次游戏加载待验证。";
+   string message=result.cleanupCompleted&&!result.steamVerified?"游戏文件参数已清理；Steam 启动项尚未处理。":result.message;
+   return (result.status=="partial"?"[失败] Steam 重新打开未完成；旧参数清理已校验。\n":"")+message+"\n可继续安装所需组件。";
   }
   void LegacyBuddyTakeover(bool recover,Func<string> continueInstall=null){
    if(Program.PreviewMode){Write("预览：旧参数接管只展示界面，未执行修改。");return;}
@@ -57,7 +57,7 @@ namespace PZ3D {
    AddButton(maintenance,"打开游戏日志目录",()=>Links.Open(UserDir()));
    var infoPage=Page(tabs,"扩展适配说明");
    AddText(infoPage,"只收录服务器无需操作的客户端扩展。当前两个候选仅声明客户端 Java，缺少 Buddy 所需的本地保留预加载声明，因此暂不提供安装。没有修改它们的 JAR、服务器清单或授权记录。");
-   AddText(infoPage,"Smooth Frames：动画预加载、慢 Lua 和帧时间诊断，以及特定原版错误修复。可能增加载入时间；不是网络延迟修复，也不保证平均帧率提升。作者当前多人部署说明需要服务器列入模组清单，不符合你的纯客户端要求。");
+   AddText(infoPage,"Smooth Frames：动画预加载、慢 Lua 和帧时间诊断，以及特定原版错误修复。联机使用需要服务器将此模组加入清单。");
    AddButton(infoPage,"Smooth Frames 作者页面",()=>Links.Open("https://steamcommunity.com/sharedfiles/filedetails/?id=3816784011"));
    AddText(infoPage,"KK’s TREE：Viewpoint 近处树木视觉增强。当前作者条件为游戏 42.21、Buddy 2.3.2 及 Viewpoint。树林场景可能增加 GPU 开销。未确认服务器未列出时的保留加载；暂不开放安装。");
    AddButton(infoPage,"KK’s TREE 作者页面",()=>Links.Open("https://steamcommunity.com/sharedfiles/filedetails/?id=3813172420"));
@@ -68,7 +68,7 @@ namespace PZ3D {
    var engine=GetEngine();bool running=Process.GetProcessesByName("ProjectZomboid64").Length>0||Process.GetProcessesByName("ProjectZomboid32").Length>0;
    string reason=LauncherLaunch.Reason(engine,busy,running);if(reason!="")throw new Exception(reason);
    if(Program.PreviewMode){Write("预览模式：未启动 Steam 或游戏。");return;}
-   engine.Guard();Process.Start(new ProcessStartInfo("steam://rungameid/108600"){UseShellExecute=true});Write("已向 Steam 发送启动请求，实际运行状态以游戏进程为准。");
+   engine.Guard();Process.Start(new ProcessStartInfo("steam://rungameid/108600"){UseShellExecute=true});Write("已向 Steam 发送启动请求。");
   }
  }
 }
