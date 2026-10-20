@@ -1,6 +1,6 @@
 # OZL / Orange zombiod launcher
 
-**1.2.12 已正式发布为 GitHub 最新稳定版：修复联机漏加载 TrueWeathers 视觉初始化，以及 Buddy 排序选项在重载后重新开启的问题。** [正式发布记录](docs/releases/1.2.12-github-release.md)包含源码、交付哈希及正式 1.2.11 在线更新验证；[1.2.11](docs/releases/1.2.11-github-release.md)及更早记录作为历史保留。
+**1.2.13 已正式发布为 GitHub 最新稳定版：整理界面文案，删除重复免责声明，现有功能不变。** [正式发布记录](docs/releases/1.2.13-github-release.md)包含源码、安装版、免安装版及正式 1.2.12 程序内更新验证；[1.2.12](docs/releases/1.2.12-github-release.md)及更早记录作为历史保留。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
@@ -16,7 +16,7 @@
 
 ## 下载和在线更新
 
-1.2.12 已正式发布为 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.12)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.12/orange-launcher-setup-v1.2.12.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.12/orange-launcher-v1.2.12-win-x64.zip)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
+1.2.13 已正式发布为 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.13)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.13/orange-launcher-setup-v1.2.13.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.13/orange-launcher-v1.2.13-win-x64.zip)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
 
 已安装可信核心版本的玩家，可点顶部“启动器更新”→检查→下载。运行1.2.3后，当前下载校验完成会弹出一次确认，同意后自动更新并重新打开启动器；选择稍后则保留“重启并更新”，不会反复弹窗。游戏运行本身不再一律拦截核心更新，但未保存编辑、文件修改、配置事务或待恢复会话仍须先处理。更新只下载变化的自有文件并校验签名及哈希；重启后完成界面健康检查，失败保留恢复资料并回退。更新启动器不等于更新或启用第三方模组，不要求退出 Steam，也不要求输入 Steam 密码。网络必须能访问 GitHub 及其官方资源下载域名。
 
@@ -25,6 +25,8 @@
 没有内置更新信任的早期单EXE，或缺少官方回退且受API限流影响的历史测试构建，可能需要手动安装一次完整新版。**1.2.1／1.2.2首次升级仍受旧版代码限制，可能需要退出游戏，再手动点“重启并更新”。**历史1.2.8发布验证：原始正式1.2.7通过默认渠道查到1.2.8，实际下载并校验5,393,323字节后达到Ready；新1.2.8返回Latest。均使用隔离目录，未改写原18个文件，不冒充玩家已完成重启。早期版本升级验证作为各版本历史记录保留。 1.2.9发布时，原始正式1.2.8通过默认渠道查到1.2.9并下载至Ready。本次原始正式1.2.9通过默认渠道查到1.2.11，下载并验证5,498,333字节后达到Ready；新1.2.11返回Latest。测试未应用更新或替换真实安装。
 
 ## 开发状态
+
+1.2.13 已发布。原始正式 1.2.12 已通过默认更新渠道查到 1.2.13，并实际下载、校验 5,389,662 字节至 Ready；新 1.2.13 返回 Latest。安装器由冻结源码与同一签名核心包在 Windows CI 构建并完成安装／卸载自检，安装版、免安装版及签名更新附件同时交付。
 
 1.2.12 已发布，[正式发布记录](docs/releases/1.2.12-github-release.md)记录冻结源码、交付哈希及原始1.2.11默认在线更新至Ready的验证。联机保留已启用的 TrueWeathers 视觉初始化，Buddy 的运行时排序和保存选项同步关闭，避免重载覆盖；普通本地模组仍不带入服务器。不新增 Java 桥，不改服务器清单或校验。基础3D、汉化、常用工具入口和直达请求修复继续保留，无需将组件全部卸载重装。后台已实际核对本机服务器顺序、Lua校验及地图资源加载，但未进行角色操作和全部视觉效果测试。
 

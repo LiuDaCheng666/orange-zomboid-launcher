@@ -31,5 +31,5 @@
 
 - [x] Inspect dark/light homepage and component/help screenshots headlessly, check diff for display-only changes, request read-only review.
 - [x] Update VERSION and CHANGELOG, build signed release with Build-CoreRelease.ps1, validate manifest, ZIP extraction and packed installer.
-- [ ] Publish GitHub 1.2.13 after resolving the installer interception or receiving the user's choice to publish only portable/core update artifacts; compare public hashes and test the previous launcher update channel.
+- [x] User explicitly authorized full publication without Microsoft review. Build installer in Windows CI from the frozen tag and signed core; publish all 22 assets, compare public hashes, and test the previous launcher default update channel through Ready.
 - [x] Record verified results and pending publication accurately in docs/releases/1.2.13-validation.md.
