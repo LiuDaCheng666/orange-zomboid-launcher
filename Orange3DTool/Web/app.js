@@ -81,7 +81,7 @@ function memoryEdit(value){const n=Number(value);state.memoryEdit=n;state.memory
 document.addEventListener('input',e=>{if(e.target.matches('#memory-number,#memory-range'))memoryEdit(e.target.value);if(e.target.matches('[data-setting]')){state.settingEdits[e.target.dataset.setting]=e.target.value;state.settingsDirty=true;$('[data-save-settings]').disabled=state.settingsConflict||state.busy;}if(e.target.id==='mod-search'){state.saveSearch=e.target.value;renderCatalog();}if(e.target.id==='log-filter'){const filter=e.target.value.toLowerCase();$('#log-output').textContent=logText().split('\n').filter(line=>line.toLowerCase().includes(filter)).join('\n');}});
 document.addEventListener('change',e=>{if(e.target.matches('[data-setting]')){state.settingEdits[e.target.dataset.setting]=e.target.value;state.settingsDirty=true;$('[data-save-settings]').disabled=state.settingsConflict||state.busy;}});
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||b.disabled)return;
-if(b.dataset.page){route(b.dataset.page);return;}
+if(b.dataset.page){route(b.dataset.page);if(b.dataset.toolFocus){const target=document.querySelector('[data-maintenance="'+b.dataset.toolFocus+'"]');if(target){target.scrollIntoView({block:'center'});target.focus({preventScroll:true});}}return;}
 if(b.id==='theme'){const value=document.documentElement.classList.contains('light')?'dark':'light';const result=await run('theme',{value});if(result){document.documentElement.classList.toggle('light',value==='light');if(state.status)state.status.theme=value;b.textContent=value==='light'?'黑金主题':'浅蓝主题';}return;}
 if(b.id==='cancel'){await run('cancel');return;}
 if(b.hasAttribute('data-refresh')){refresh();return;}
@@ -288,6 +288,7 @@ function actualCover(){
  const version=state.status?.gameVersion,components=state.status?.components,configured=(components||[]).filter(c=>c.configured),heap=state.actual.memory?.currentGiB;
  return `<aside class="scene-status" data-home-actual aria-label="当前实际配置摘要"><h3>当前实际配置</h3><dl><dt>游戏版本</dt><dd>${esc(version?.value||'未知 / 待读取')}</dd><dt>启动内存</dt><dd>${heap!=null?esc(heap)+' GiB':'待读取'}</dd><dt>下次启动已配置组件</dt><dd>${components?configured.length+' 项':'待读取'}</dd></dl><p class="configured-names">${components?configured.map(c=>esc(c.title||c.id)).join(' · ')||'没有已配置组件':'组件状态待读取'}</p><small>已配置不等于本次已加载 · 本次游戏加载待验证</small>${version?.warning?`<p class="status-warning">${esc(version.warning)} <button data-refresh>重新核对</button></p>`:''}</aside>`;
 }
+function launcherTools(){return `<section class="launcher-tools" data-launcher-tools aria-label="常用工具"><h3>常用工具</h3><div class="launcher-tool-links"><button data-page="memory">修改内存</button><button data-page="maintenance" data-tool-focus="cache">清除缓存</button><button data-page="maintenance" data-tool-focus="workshop">重下工坊模组</button><button data-page="mods">更换模组</button></div></section>`;}
 function arrangeHome(){
  const page=$('#page'),launch=$('#page .play-launch'),cover=$('[data-home-cover]');if(!launch||!cover)return;
  const layout=document.createElement('div');layout.className='home-layout';launch.before(layout);layout.append(launch,cover);
@@ -350,8 +351,9 @@ render=function(){
  const scroll=same?[...document.querySelectorAll('main,.mod-list,.mod-detail,.enabled-mods,.play-launch')].map(el=>({key:el.matches('main')?'main':el.classList.contains('mod-list')?'.mod-list':el.classList.contains('mod-detail')?'.mod-detail':el.classList.contains('play-launch')?'.play-launch':'.enabled-mods',top:el.scrollTop})):[];
  const noticeNode=$('#notice'),taskNode=$('#task');$('#page').before(noticeNode,taskNode);
  baseRender();renderedRoute=state.route;const headingNode=$('#page .heading');if(headingNode)headingNode.after(noticeNode,taskNode);else $('#page').prepend(noticeNode,taskNode);noticeNode.hidden=!state.notice||state.noticeRoute!==state.route;
+ if(state.route==='settings')$('#page .heading')?.insertAdjacentHTML('afterend',launcherTools());
  const group=Object.keys(experienceGroups).find(k=>experienceGroups[k].includes(state.route))||'home',tabs=experienceGroups[group];
- $('#secondary-navigation').innerHTML=tabs.length>1?`<div class="secondary-tabs">${tabs.map(n=>`<button data-page="${n}" ${n===state.route?'aria-current="page"':''}>${esc(titles[n])}</button>`).join('')}</div>`:'';
+ $('#secondary-navigation').innerHTML=group==='home'?launcherTools():tabs.length>1?`<div class="secondary-tabs">${tabs.map(n=>`<button data-page="${n}" ${n===state.route?'aria-current="page"':''}>${esc(titles[n])}</button>`).join('')}</div>`:'';
  document.querySelectorAll('nav[aria-label="主导航"]>button').forEach(b=>{b.classList.toggle('active',b.dataset.page===group);if(b.dataset.page===group)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
  if(['maintenance','help'].includes(state.route))$('#page').insertAdjacentHTML(state.route==='maintenance'?'afterbegin':'beforeend',diagnosticsPanel());
  if(state.route==='home')arrangeHome();
