@@ -47,7 +47,7 @@
 **Files:** `VERSION`, `CHANGELOG.md`, release notes/README index, signed `dist/1.2.12-github-release`.
 
 - [x] Set 1.2.12 and accurate release notes; compile/sign via `Build-CoreRelease.ps1` using the existing private key outside the repository. Verify signed 18-file ownership, installer extraction and app version.
-- [ ] Commit reviewed source; fast-forward main, tag v1.2.12 and push without force.
-- [ ] Create GitHub draft, upload all assets, compare server digest/length to local bytes, then publish stable latest.
-- [ ] Verify anonymous official manifest/signature/package downloads. Use an isolated formal old 1.2.11 updater on the unchanged default official channel to check/download 1.2.12 to Ready; do not restart the user's real launcher.
-- [ ] Save publication evidence and report concise results plus remaining test limits.
+- [x] Commit reviewed source; fast-forward main, tag v1.2.12 and push without force.
+- [x] Create GitHub draft, upload all assets, compare server digest/length to local bytes, then publish stable latest.
+- [x] Verify anonymous official manifest/signature/package downloads. Use an isolated formal old 1.2.11 updater on the unchanged default official channel to check/download 1.2.12 to Ready; do not restart the user's real launcher.
+- [x] Save publication evidence and report concise results plus remaining test limits.
