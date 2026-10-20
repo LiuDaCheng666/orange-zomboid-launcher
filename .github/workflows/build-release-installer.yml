@@ -1,0 +1,86 @@
+name: Build release installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag (for example v1.2.13)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out the exact release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - name: Download signed core package and pinned compiler dependency
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = [IO.File]::ReadAllText((Join-Path $PWD 'VERSION')).Trim()
+          if ($env:RELEASE_TAG -cne "v$version") { throw 'Release tag and source version differ' }
+          $release = gh release view $env:RELEASE_TAG --json isDraft,tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$release.isDraft -or $release.tagName -cne $env:RELEASE_TAG) { throw 'An exact draft release is required' }
+          New-Item -ItemType Directory -Path artifacts/installer-release,Dependencies/WebView2 | Out-Null
+          foreach ($name in @("orange-launcher-v$version-win-x64.zip", 'update-manifest.json', 'update-manifest.sig')) {
+            gh release download $env:RELEASE_TAG --pattern $name --dir artifacts/installer-release
+            if ($LASTEXITCODE -ne 0) { throw "Cannot download $name" }
+          }
+          Invoke-WebRequest -Uri 'https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4258.31/microsoft.web.webview2.1.0.4258.31.nupkg' -OutFile Dependencies/webview2.nupkg
+          [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $PWD 'Dependencies/webview2.nupkg'), (Join-Path $PWD 'Dependencies/WebView2'))
+          $hash = (Get-FileHash Dependencies/WebView2/lib/net462/Microsoft.Web.WebView2.Core.dll).Hash
+          if ($hash -cne 'D60E6E94245078CB56E44EBD5F360DC04BF18E460136BE93BFC4CFCA43B98505') { throw 'Pinned WebView2 dependency differs' }
+      - name: Build installer without changing the signed core
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $PWD 'artifacts/installer-release'
+          ./Build-Setup.ps1 -CoreReleaseDirectory $stage
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Verify packed installation and owned uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = [IO.File]::ReadAllText((Join-Path $PWD 'VERSION')).Trim()
+          $installer = Join-Path $PWD "artifacts/installer-release/orange-launcher-setup-v$version.exe"
+          $env:TEMP = Join-Path $PWD 'artifacts/installer-test-temp'
+          $env:TMP = $env:TEMP
+          New-Item -ItemType Directory -Path $env:TEMP | Out-Null
+          $process = Start-Process -FilePath $installer -ArgumentList '--verify-setup' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput artifacts/installer-verify.log -RedirectStandardError artifacts/installer-verify-error.log
+          Get-Content artifacts/installer-verify.log
+          Get-Content artifacts/installer-verify-error.log
+          if ($process.ExitCode -ne 0) { throw 'Packed installer verification failed' }
+          $proof = [ordered]@{
+            tag = $env:RELEASE_TAG
+            source = (git rev-parse HEAD)
+            installer = [IO.Path]::GetFileName($installer)
+            length = (Get-Item -LiteralPath $installer).Length
+            sha256 = (Get-FileHash -LiteralPath $installer).Hash.ToLowerInvariant()
+            coreZipSha256 = (Get-FileHash "artifacts/installer-release/orange-launcher-v$version-win-x64.zip").Hash.ToLowerInvariant()
+            packedVerifyExitCode = $process.ExitCode
+          }
+          $proof | ConvertTo-Json | Set-Content artifacts/installer-proof.json -Encoding utf8
+          Get-Content artifacts/installer-proof.json
+          gh release upload $env:RELEASE_TAG $installer
+          if ($LASTEXITCODE -ne 0) { throw 'Installer upload failed' }
+      - name: Retain build proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-build-proof
+          path: |
+            artifacts/installer-proof.json
+            artifacts/installer-verify*.log
+          if-no-files-found: warn
