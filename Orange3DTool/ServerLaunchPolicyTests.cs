@@ -25,7 +25,7 @@ namespace PZ3D {
    LaunchProfiles.Stage(e,new ProfileLaunchRequest{Kind="server",Host="127.0.0.1",Port=1,Username="synthetic"});File.WriteAllText(translated,"player-edited-text");File.AppendAllText(e.Mods,"\nplayer edit\n");LaunchProfiles.Recover(e,true);
    Check(File.Exists(translated)&&File.ReadAllText(translated)=="player-edited-text"&&File.ReadAllText(e.Mods).Contains("player edit")&&!File.ReadAllText(e.Mods).Contains(overlayId),"recovery preserves edits while removing transient overlay from the edited default list");
    e=Fixture();Source(e,"3556540080","B42ModTrans_CN_As1","B42ModTrans_CN");Put(e.Mods,"mods\n{\n mod = OrdinaryLocal,\n}\nmaps\n{\n}\n");LaunchProfiles.Stage(e,new ProfileLaunchRequest{Kind="server",Host="127.0.0.1",Port=1,Username="synthetic"});Check(!File.ReadAllText(e.Mods).Contains("OZLServerTranslations")&&!Directory.Exists(Path.Combine(e.User,"mods",overlayId)),"installed but disabled translations are not enabled automatically");LaunchProfiles.Recover(e,true);
-   Additional();
+   Additional();VisualWeather();
   }
   static void Additional(){
    var e=Fixture();Source(e,"3556540080","B42ModTrans_CN_As1","B42ModTrans_CN");Source(e,"3556544454","B42Trans_CN_As1","B42Trans_CN");
@@ -45,6 +45,19 @@ namespace PZ3D {
    Check(!enabled.Any(id=>id=="OrangeLauncherSession"||ServerLaunchTranslations.IsOverlay(id)),"inherited save editor does not expose temporary launch mods as persistent selections");
    SaveProfiles.Save(e,"Sandbox/Inherited",stamp,SaveProfiles.DefaultMods(File.ReadAllBytes(e.Mods)),true);LaunchProfiles.Recover(e,true);var saved=SaveProfiles.DefaultMods(File.ReadAllBytes(Path.Combine(e.User,"Saves","Sandbox","Inherited","mods.txt")));
    Check(saved.SequenceEqual(new[]{"B42Trans_CN"}),"saving inherited defaults never writes transient bridge or translation IDs into a save");
+  }
+  static void VisualWeather(){
+   var e=Fixture();Put(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");Put(Path.Combine(e.Game,"ZombieBuddy.jar"),"fixture");Put(Path.Combine(e.Game,"zbNative.dll"),"fixture");
+   string weather=Path.Combine(e.Workshop,"3813908957","mods","ViewpointTrueWeathers","42");Put(Path.Combine(weather,"mod.info"),"id=ViewpointTrueWeathers\njavaJarFile=media/java/client/ViewpointTrueWeathers.jar\njavaPkgName=vptw\n");string jar=Path.Combine(weather,"media","java","client","ViewpointTrueWeathers.jar");Put(jar,"synthetic client JAR without preload declaration");
+   string original="mods\n{\n mod = ZombieBuddy,\n mod = Viewpoint,\n mod = ViewpointTrueWeathers,\n mod = ViewpointTrueWeathersGameplay,\n mod = OrdinaryLocal,\n}\nmaps\n{\n}\n";Put(e.Mods,original);
+   string properties=Path.Combine(e.User,"viewpoint-live.properties"),pack=Path.Combine(e.User,"viewpoint-shaderpacks","trueweathers","pack.properties");Put(properties,"# player choice\ngraphics.pack=trueweathers\ngraphics.mode=Modern\n");Put(pack,"name=Player installed True Weathers\n");byte[] settingsBefore=File.ReadAllBytes(properties),packBefore=File.ReadAllBytes(pack);
+   var request=new ProfileLaunchRequest{Kind="server",Host="127.0.0.1",Port=1,Username="synthetic"};LaunchProfiles.Stage(e,request);var staged=SaveProfiles.DefaultMods(File.ReadAllBytes(e.Mods));
+   Check(staged.Count(id=>id=="ViewpointTrueWeathers")==1,"server startup retains enabled TrueWeathers visual client initializer without requiring premain preload");
+   Check(!staged.Contains("ViewpointTrueWeathersGameplay")&&!staged.Contains("OrdinaryLocal"),"visual weather retention never adds gameplay or ordinary local mods to server startup");
+   Check(File.ReadAllBytes(properties).SequenceEqual(settingsBefore)&&File.ReadAllBytes(pack).SequenceEqual(packBefore),"server staging preserves installed custom shader bytes and the player's exact choice");LaunchProfiles.Recover(e,true);Check(File.ReadAllText(e.Mods)==original,"weather retention recovery restores exact original defaults");
+   Put(e.Mods,"mods\n{\n mod = ZombieBuddy,\n mod = Viewpoint,\n}\nmaps\n{\n}\n");LaunchProfiles.Stage(e,request);Check(!SaveProfiles.DefaultMods(File.ReadAllBytes(e.Mods)).Contains("ViewpointTrueWeathers"),"installed disabled weather is not enabled by server launch");LaunchProfiles.Recover(e,true);
+   Put(e.Mods,original);File.Delete(jar);LaunchProfiles.Stage(e,request);Check(!SaveProfiles.DefaultMods(File.ReadAllBytes(e.Mods)).Contains("ViewpointTrueWeathers"),"missing weather client JAR is not advertised as retained");LaunchProfiles.Recover(e,true);
+   Put(jar,"synthetic client JAR");Put(e.Config,"{\"vmArgs\":[]}");LaunchProfiles.Stage(e,request);Check(!SaveProfiles.DefaultMods(File.ReadAllBytes(e.Mods)).Contains("ViewpointTrueWeathers"),"weather retention does not enable a component when base 3D is unconfigured");LaunchProfiles.Recover(e,true);
   }
   static void NativeFixture(){
    var e=Fixture();Source(e,"3556540080","B42ModTrans_CN_As1","B42ModTrans_CN");Source(e,"3556544454","B42Trans_CN_As1","B42Trans_CN");

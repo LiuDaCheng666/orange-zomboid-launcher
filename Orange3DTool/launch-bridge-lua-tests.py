@@ -19,20 +19,26 @@ def fixture(age=0, kind="server", buddy="present"):
         MainScreen.continueLatestSave=function(mode,save) saveArgs={mode,save} end
         buddyAutoOrder=true;buddyCalls=0
         ZombieBuddy={setAutoFixModOrder=function(value) buddyCalls=buddyCalls+1;buddyAutoOrder=value end}
+        orderOption={value=true,getValue=function(self) return self.value end,setValue=function(self,value) self.value=value end}
+        PZAPI={ModOptions={
+            getOptions=function(self,id) if id=='ZombieBuddy' then return {getOption=function(self,id) if id=='autoFixModOrder' then return orderOption end end} end end,
+            save=function(self) files['ModOptions.ini']='tickbox|ZombieBuddy|autoFixModOrder|'..tostring(orderOption.value)..'\\n' end
+        }}
+        Events.OnMainMenuEnter.Add(function() buddyAutoOrder=orderOption.value end)
         ConnectToServer={instance={connect=function(self,...) connectAutoOrder=buddyAutoOrder;connectArgs={...} end}}
         files={}; reads={}; writes={}
         function getTimestamp() return 2000000000 end
-        function getFileReader(name)
+        function getFileReader(name,create)
             table.insert(reads,name)
-            if not files[name] or files[name]=='' then return nil end
-            local values={}; for line in files[name]:gmatch('([^\\n]*)\\n') do table.insert(values,line) end
+            if not files[name] or files[name]=='' then if create then files[name]='' else return nil end end
+            local values={}; for line in files[name]:gmatch('([^\\n]*)\\n') do table.insert(values,(line:gsub('\\r$',''))) end
             local i=0
             return {readLine=function() i=i+1;return values[i] end,close=function() end}
         end
-        function getFileWriter(name)
+        function getFileWriter(name,create,append)
             local allowed={ini=true,cfg=true,txt=true,log=true,json=true}
             if not allowed[name:match('%.([^.]*)$')] then return nil end
-            local text=''
+            local text=append and (files[name] or '') or ''
             return {write=function(self,value) text=text..value end,
                 close=function() files[name]=text; table.insert(writes,text) end}
         end
@@ -62,6 +68,9 @@ def run():
     assert args is not None, "main-menu render event must submit the request without an in-world OnTick"
     assert lua.globals().connectAutoOrder is False, "server connect must not retain Buddy's local pin-to-front policy"
     assert lua.globals().buddyCalls == 1, "original Buddy order API is applied once before connection"
+    assert lua.globals().files["ModOptions.ini"].splitlines() == ["tickbox|ZombieBuddy|autoFixModOrder|false"], "Buddy's saved option must not re-enable automatic order after Lua reload"
+    lua.globals().emit("OnMainMenuEnter")
+    assert lua.globals().buddyAutoOrder is False, "Buddy menu option reapplication must keep server-authoritative order"
     assert [args[i] for i in range(3, 12)] == ["probe-user", "synthetic-role", "127.0.0.1", "", "1", "synthetic-server", False, True, 1]
     assert status(lua) == "submitted-server\n"
     assert lua.globals().files["OrangeLauncherSession.request.txt"] == ""

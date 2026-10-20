@@ -13,6 +13,50 @@ end
 local function segment(value)
     return safe(value,256) and value~='' and value~='.' and value~='..' and not value:find('[\\/:]')
 end
+-- Vanilla applies the last recognized option row. Read the effective value and
+-- append an override, never truncate the player's unrelated mod settings.
+local function savedBuddyOrder()
+    local reader=getFileReader('ModOptions.ini',true)
+    if not reader then error('mod options unavailable') end
+    local value=nil;local bytes=0;local count=0
+    local ok,reason=pcall(function()
+        while true do
+            local line=reader:readLine()
+            if line==nil then break end
+            bytes=bytes+#line+2
+            count=count+1
+            if bytes>1048576 or count>16384 then error('mod options too large') end
+            local setting=line:match('^tickbox|ZombieBuddy|autoFixModOrder|([^|]+)')
+            if setting=='true' or setting=='false' then value=setting end
+        end
+    end)
+    reader:close()
+    if not ok then error(reason) end
+    return value,count>0
+end
+local function persistBuddyOrder()
+    local value,hasRows=savedBuddyOrder()
+    if value=='false' then return end
+    local out=getFileWriter('ModOptions.ini',true,true)
+    if not out then error('mod options writer unavailable') end
+    local wrote=pcall(function() out:write((hasRows and '\r\n' or '')..'tickbox|ZombieBuddy|autoFixModOrder|false\r\n') end)
+    local closed=pcall(function() out:close() end)
+    if not wrote or not closed or savedBuddyOrder()~='false' then error('mod options persistence not confirmed') end
+end
+local function serverOrder()
+    if not ZombieBuddy or not ZombieBuddy.setAutoFixModOrder then return end
+    local synced=pcall(function()
+        local api=PZAPI and PZAPI.ModOptions
+        local options=api and api:getOptions('ZombieBuddy')
+        local option=options and options:getOption('autoFixModOrder')
+        if not option or not option.setValue then error('Buddy option unavailable') end
+        option:setValue(false)
+        persistBuddyOrder()
+    end)
+    if not synced then print('[OZL] Buddy saved order option unavailable; runtime preference will still be attempted.') end
+    local ordered=pcall(function() ZombieBuddy.setAutoFixModOrder(false) end)
+    if not ordered then print('[OZL] Buddy order preference unavailable; original game connection continues.') end
+end
 local function tick()
     if finished then return end
     local menu=MainScreen and MainScreen.instance
@@ -40,10 +84,7 @@ local function tick()
     elseif lines[4]=='server' and safe(lines[7],256) and lines[7]~='' and tonumber(lines[8]) and tonumber(lines[8])>=1 and tonumber(lines[8])<=65535 and lines[9]~='' and (lines[12]=='0' or lines[12]=='1') then
         -- Original Buddy preference: do not pin local core IDs ahead of the server list.
         -- This API persists that order preference, but does not approve JARs or disable checksums.
-        if ZombieBuddy and ZombieBuddy.setAutoFixModOrder then
-            local ordered=pcall(function() ZombieBuddy.setAutoFixModOrder(false) end)
-            if not ordered then print('[OZL] Buddy order preference unavailable; original game connection continues.') end
-        end
+        serverOrder()
         sessionKind='server'
         status('submitted-server')
         ok=pcall(function()
