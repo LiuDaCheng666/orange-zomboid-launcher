@@ -1,0 +1,7 @@
+{
+	admin 127.0.0.1:2019
+}
+
+http://101.201.143.163 {
+	import /etc/caddy/ozl-static.caddy
+}

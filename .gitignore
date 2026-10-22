@@ -39,3 +39,4 @@ private/
 /integration-*/
 /journal-volume-*/
 /native-services-*/
+**/__pycache__/

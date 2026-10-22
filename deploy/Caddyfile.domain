@@ -1,0 +1,11 @@
+{
+	admin 127.0.0.1:2019
+}
+
+orangezl.com {
+	import /etc/caddy/ozl-static.caddy
+}
+
+www.orangezl.com {
+	redir https://orangezl.com{uri} permanent
+}

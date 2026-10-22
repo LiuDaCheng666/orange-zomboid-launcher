@@ -4,6 +4,12 @@
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
+## 官网与源码
+
+官网已部署为 [IP 验收站](http://101.201.143.163/)，提供产品介绍、使用说明、安装版／免安装版下载、更新日志和备案信息。正式域名为 `orangezl.com`，待解析和 HTTPS 配置完成后启用。旧版程序内更新当前仍走 GitHub。
+
+[项目源码](https://github.com/LiuDaCheng666/orange-zomboid-launcher) · [工作目录说明](docs/workspace.md) · [官网部署与下载镜像](deploy/README.md) · [v1.2.13 安全复核记录](docs/security/2026-10-23-defender-review.md)
+
 本仓库只公开启动器自己的代码与测试，不包含游戏文件、ZombieBuddy/Viewpoint 本体、第三方光影包或作者模组源码。第三方内容及原作者封面从其发布渠道按需获取，版权和分发条件归原权利人。包含私人预设资源的本机测试整合包不能当作公开发行包。
 
 ## 技术结构
