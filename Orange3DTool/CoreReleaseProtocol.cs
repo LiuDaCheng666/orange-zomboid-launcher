@@ -94,7 +94,7 @@ namespace PZ3D {
     ValidateUrl(file.url,manifest.version);
    }
   }
-  static void ValidateUrl(string value,string version) {
+  internal static void ValidateUrl(string value,string version) {
    string prefix=ReleaseBase+"v"+version+"/";
    if(value==null || !value.StartsWith(prefix,StringComparison.Ordinal))throw new InvalidDataException("Untrusted release URL.");
    string asset=value.Substring(prefix.Length); Uri uri;

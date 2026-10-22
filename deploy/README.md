@@ -1,6 +1,6 @@
 # OZL 官网与下载镜像
 
-当前 IP 验收站：[http://101.201.143.163/](http://101.201.143.163/)。正式域名为 `orangezl.com`；DNS 与 HTTPS 尚未启用，不将 HTTP 作为程序自动更新可信传输。
+官网：[https://orangezl.com/](https://orangezl.com/)。`www` 与旧 HTTP IP 地址跳转官网。2026-10-23 已配置公网 DNS 与有效 HTTPS；没有跳过证书校验。
 
 ## 已部署结构
 
@@ -37,16 +37,16 @@ python deploy/deploy_site.py --site website --mirror artifacts/website-mirror/v1
 
 SSH 在发送凭据前固定校验用户确认的 ed25519 指纹 `SHA256:3Kj/0G9bg0xadE8/EjVY49yZEfuSF5iq3qDubXCgYIg`。指纹变更必须从可信控制台核对，不能自动接受。部署再次生成独立已验证目录，只上传该目录的允许文件；原输入中的额外文件不上传。不可变同名文件若已存在，要求远程哈希一致，不覆盖。
 
-启用前以 `caddy` 账户验证配置，避免 root 校验时生成不可写的日志。切换 `current` 后执行服务与 HTTP 检查；校验、reload 或健康检查失败时，恢复旧配置和上一份 `current`。历史版本目录保留，允许手动回退；不要递归删除网站根目录。
+启用前以 `caddy` 账户验证配置，避免 root 校验时生成不可写的日志。正常部署默认选择 `Caddyfile.domain`，并通过 `curl --resolve orangezl.com:443:127.0.0.1 https://orangezl.com/release.json` 检查真实 TLS。仅显式 `--ip-acceptance` 用于域名上线前的 HTTP 验收，不应对正式站使用。校验、reload 或健康检查失败时，恢复旧配置和上一份 `current`。历史版本目录保留，允许手动回退；不要递归删除网站根目录。
 
 ## 域名和程序内更新
 
-1. 将域名 `@` 与 `www` 的 A 记录都设为 `101.201.143.163`。当前公共解析尚未查到这两条地址记录。
+1. 域名 `@` 与 `www` 的 A 记录均为 `101.201.143.163`，TTL 600 秒，公共 DNS 已确认；原 `pz` 记录未改。
 2. 从独立公共 DNS 确认解析后，备份当前配置，使用随部署保存的 `Caddyfile.domain`，以服务账户验证，再 reload。Caddy 申请有效 HTTPS 证书；不跳过证书检查。
 3. 从外网检查 HTTPS、`www` 跳转、两个下载、最新签名清单与所有资源哈希。
 4. 在新启动器版本中接入本站优先、GitHub 备用；保持原签名、哈希、版本与自有路径校验。HTTPS 未验证前不发布切换默认源的程序。
 
-已经安装的 1.2.13 仍读取 GitHub。官网上线和提供镜像，不等于旧版自动更新已切换。此次不修改历史 Release 或已签名清单，不用无签名 `version.json` 替代更新协议。
+已经安装的 1.2.13 仍读取 GitHub。官网上线和提供镜像，不等于旧版自动更新已切换。1.2.14 源码已实现官网优先，但候选交付扫描待复核，暂未发布；准确状态见[候选记录](../docs/releases/1.2.14-github-release.md)。不修改历史 Release 或已签名清单，不用无签名 `version.json` 替代更新协议。
 
 ## 发布与安全记录
 

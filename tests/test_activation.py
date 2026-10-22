@@ -24,6 +24,7 @@ class ActivationTests(unittest.TestCase):
         (self.config / 'Caddyfile').write_text('old config')
         (self.config / 'ozl-static.caddy').write_text('old include')
         (self.site / 'deployment-config/Caddyfile.ip').write_text('new config')
+        (self.site / 'deployment-config/Caddyfile.domain').write_text('new TLS config')
         (self.site / 'deployment-config/ozl-static.caddy').write_text('new include')
         fake = '''#!/bin/sh
 name=$(basename "$0")
@@ -44,9 +45,11 @@ exit 0
         for name in ['runuser', 'caddy', 'systemctl', 'curl', 'chown']:
             file = self.bin / name; file.write_text(fake); file.chmod(0o755)
 
-    def execute(self, mode, prior_active=True):
+    def execute(self, mode, prior_active=True, domain=False):
         env = dict(os.environ, PATH=str(self.bin) + ':' + os.environ['PATH'], FAIL_MODE=mode, PRIOR_ACTIVE='1' if prior_active else '0', OZL_TEST_ACTIVE=str(self.root / 'active'), OZL_TEST_LOG=str(self.root / 'commands'), OZL_TEST_MARKER=str(self.root / 'failed-once'))
-        script = self.module.activation_script(self.identifier, str(self.base), str(self.config), str(self.logs))
+        args = [self.identifier, str(self.base), str(self.config), str(self.logs)]
+        try: script = self.module.activation_script(*args, **({'domain': True} if domain else {}))
+        except TypeError: self.fail('Domain activation must select HTTPS configuration, not downgrade to IP HTTP')
         return subprocess.run(['bash', '-se'], input=script, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, env=env)
 
     def test_success_switches_to_new_site_and_validates_as_service_user(self):
@@ -56,6 +59,22 @@ exit 0
         self.assertEqual((self.config / 'Caddyfile').read_text(), 'new config')
         commands = (self.root / 'commands').read_text()
         self.assertIn('runuser -u caddy -- caddy validate', commands)
+
+    def test_domain_deploy_activates_https_and_probes_valid_tls(self):
+        result = self.execute('', domain=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.config / 'Caddyfile').read_text(), 'new TLS config')
+        commands = (self.root / 'commands').read_text()
+        self.assertIn('https://orangezl.com/release.json', commands)
+        self.assertIn('--resolve orangezl.com:443:127.0.0.1', commands)
+        self.assertNotIn('--insecure', commands)
+
+    def test_domain_health_failure_restores_previous_tls_config(self):
+        (self.config / 'Caddyfile').write_text('previous TLS config')
+        result = self.execute('health', domain=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.config / 'Caddyfile').read_text(), 'previous TLS config')
+        self.assertEqual((self.base / 'current').resolve(), self.base / 'sites/old')
 
     def check_failure(self, mode):
         result = self.execute(mode)

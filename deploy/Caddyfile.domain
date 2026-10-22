@@ -9,3 +9,7 @@ orangezl.com {
 www.orangezl.com {
 	redir https://orangezl.com{uri} permanent
 }
+
+http://101.201.143.163 {
+	redir https://orangezl.com{uri} permanent
+}

@@ -144,12 +144,13 @@ caddy version
                 upload(sftp, Path(__file__).parent / name, config_root + '/' + name)
         finally:
             sftp.close()
-        print(command(connection, 'bash -se', activation_script(site_id).encode()))
-        print(json.dumps(dict(site_id=site_id, url=f'http://{HOST}/', verified_files=len(proof), version=version)))
+        domain = not args.ip_acceptance
+        print(command(connection, 'bash -se', activation_script(site_id, domain=domain).encode()))
+        print(json.dumps(dict(site_id=site_id, url='https://orangezl.com/' if domain else f'http://{HOST}/', verified_files=len(proof), version=version)))
     finally:
         connection.close()
 
-def activation_script(site_id, base=BASE, config='/etc/caddy', logs='/var/log/caddy'):
+def activation_script(site_id, base=BASE, config='/etc/caddy', logs='/var/log/caddy', domain=False):
     if not re.fullmatch(r'[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}', site_id):
         raise ValueError('Invalid site id')
     for path in [base, config, logs]:
@@ -157,6 +158,8 @@ def activation_script(site_id, base=BASE, config='/etc/caddy', logs='/var/log/ca
             raise ValueError('Invalid deployment directory')
     site = f'{base}/sites/{site_id}'
     backup = f'{base}/config-backups/{site_id}'
+    selected = 'Caddyfile.domain' if domain else 'Caddyfile.ip'
+    health = "--resolve orangezl.com:443:127.0.0.1 https://orangezl.com/release.json" if domain else f"-H 'Host: {HOST}' http://127.0.0.1/release.json"
     return f'''set -Ee
 mkdir -p {base}/config/{site_id} {backup}
 mv {site}/deployment-config/* {base}/config/{site_id}/
@@ -175,7 +178,7 @@ rollback() {{
  trap - ERR
  if [ -f {backup}/Caddyfile ]; then
   cp -p {backup}/Caddyfile {config}/Caddyfile
- elif cmp -s {config}/Caddyfile {base}/config/{site_id}/Caddyfile.ip; then unlink {config}/Caddyfile; fi
+ elif cmp -s {config}/Caddyfile {base}/config/{site_id}/{selected}; then unlink {config}/Caddyfile; fi
  if [ -f {backup}/ozl-static.caddy ]; then
   cp -p {backup}/ozl-static.caddy {config}/ozl-static.caddy
  elif cmp -s {config}/ozl-static.caddy {base}/config/{site_id}/ozl-static.caddy; then unlink {config}/ozl-static.caddy; fi
@@ -193,14 +196,14 @@ rollback() {{
 trap rollback ERR
 cp {base}/config/{site_id}/ozl-static.caddy {config}/ozl-static.caddy
 if [ -f {logs}/ozl-access.log ]; then chown caddy:caddy {logs}/ozl-access.log; fi
-runuser -u caddy -- caddy validate --config {base}/config/{site_id}/Caddyfile.ip --adapter caddyfile
+runuser -u caddy -- caddy validate --config {base}/config/{site_id}/{selected} --adapter caddyfile
 ln -s {site} {base}/current-{site_id}
 mv -Tf {base}/current-{site_id} {base}/current
-cp {base}/config/{site_id}/Caddyfile.ip {config}/Caddyfile
+cp {base}/config/{site_id}/{selected} {config}/Caddyfile
 systemctl enable caddy
 if [ "$was_active" = 1 ]; then systemctl reload caddy; else systemctl start caddy; fi
 systemctl is-active caddy
-curl --fail --silent --show-error -H 'Host: {HOST}' http://127.0.0.1/release.json
+curl --fail --silent --show-error {health}
 trap - ERR
 '''
 
@@ -212,6 +215,7 @@ def main():
     parser.add_argument('--public-key', type=Path, default=Path(__file__).resolve().parents[1] / 'release-public-key.xml')
     parser.add_argument('--handover', type=Path, required=True)
     parser.add_argument('--bootstrap', action='store_true')
+    parser.add_argument('--ip-acceptance', action='store_true', help='Explicit HTTP-only acceptance mode before domain setup; normal deployments use HTTPS')
     args = parser.parse_args()
     try: deploy(args)
     except Exception as error:

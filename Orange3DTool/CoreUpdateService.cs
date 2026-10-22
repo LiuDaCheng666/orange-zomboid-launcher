@@ -20,12 +20,13 @@ namespace PZ3D {
  // Transport is an in-process dependency. Neither bridge payloads nor disk files
  // can supply a feed URL or a trust key.
  public sealed class CoreUpdateService:IDisposable {
-  readonly string root,key;readonly Func<CancellationToken,byte[][]> lookup;readonly Func<string,CancellationToken,Stream> open;
+  readonly string root,key;readonly Func<CancellationToken,byte[][]> lookup;readonly Func<string,CancellationToken,Stream> open;readonly Func<string,string[]> sources;
   readonly object gate=new object();CoreUpdateStatus status=new CoreUpdateStatus();CoreManifest candidate;Task worker;CancellationTokenSource cancellation;Timer healthPoll;bool disposed;
   public Action<CoreUpdateStatus> Progress;
-  public CoreUpdateService(string root):this(root,EmbeddedKey(),CoreReleaseNetwork.Lookup,CoreReleaseNetwork.Open){}
+  public CoreUpdateService(string root):this(root,EmbeddedKey(),token=>CoreReleaseSources.Lookup(token,CoreReleaseNetwork.Open,CoreReleaseNetwork.Lookup,EmbeddedKey(),AppVersion.Current),CoreReleaseNetwork.Open,CoreReleaseSources.AssetUrls){}
   static string EmbeddedKey(){try{return CoreUpdateTrust.PublicKeyXml;}catch{return null;}}
-  internal CoreUpdateService(string root,string key,Func<CancellationToken,byte[][]> lookup,Func<string,CancellationToken,Stream> open){this.root=CoreDeployment.Root(root);this.key=key;this.lookup=lookup;this.open=open;if(key==null){status.state="Unavailable";status.message="此旧版构建没有内置更新信任，请安装完整签名版本。";}else{RefreshHistory();if(status.state=="PendingHealth")healthPoll=new Timer(ObserveHealth,null,250,250);}}
+  internal CoreUpdateService(string root,string key,Func<CancellationToken,byte[][]> lookup,Func<string,CancellationToken,Stream> open):this(root,key,lookup,open,url=>new[]{url}){}
+  internal CoreUpdateService(string root,string key,Func<CancellationToken,byte[][]> lookup,Func<string,CancellationToken,Stream> open,Func<string,string[]> sources){this.root=CoreDeployment.Root(root);this.key=key;this.lookup=lookup;this.open=open;this.sources=sources;if(key==null){status.state="Unavailable";status.message="此旧版构建没有内置更新信任，请安装完整签名版本。";}else{RefreshHistory();if(status.state=="PendingHealth")healthPoll=new Timer(ObserveHealth,null,250,250);}}
   void ObserveHealth(object unused){CoreUpdateStatus snapshot=null;lock(gate){if(disposed)return;long revision=status.revision;try{RefreshHistory();}catch(Exception e){status.state="Conflicted";status.message=e.Message;status.revision++;}if(status.revision!=revision)snapshot=Clone();if(status.state!="PendingHealth"&&healthPoll!=null){healthPoll.Dispose();healthPoll=null;}}var callback=Progress;if(snapshot!=null&&callback!=null)try{callback(snapshot);}catch{}}
   void RefreshHistory(){if(key==null||!File.Exists(CoreDeployment.Safe(root,CoreDeployment.RecordName)))return;var history=CoreUpdateTransaction.History(root,key);bool changed=CoreDeployment.Json.Serialize(history)!=CoreDeployment.Json.Serialize(status.history);status.history=history;if(history.Count>0&&new[]{"Idle","PendingHealth","Applying","RollingBack","Succeeded","RolledBack","Conflicted"}.Contains(status.state)){var last=history[0];status.taskId=last.TaskId;status.state=last.State;status.latestVersion=last.Version;status.message=last.State=="Succeeded"?"启动器更新成功，健康验证已完成。":last.State=="RolledBack"?"更新已回退，上一版本已恢复。 "+last.Message:last.State=="Conflicted"?"更新恢复受阻，已保留恢复文件。 "+last.Message:"更新正在完成健康验证或恢复。 "+last.Message;}if(changed)status.revision++;}
   public CoreUpdateStatus Status(){lock(gate){RefreshHistory();return Clone();}}
@@ -51,19 +52,32 @@ namespace PZ3D {
      string cache=CoreDeployment.Runtime+"/CoreDownloads/"+file.sha256.ToLowerInvariant();string path=CoreDeployment.Safe(root,cache);byte[] data;
      if(CoreDeployment.Matches(path,file)){data=CoreDeployment.ReadBytes(path,(int)CoreReleaseProtocol.MaxFileBytes);Log("reuse",file.path);}
      else {
-      using(var input=open(file.url,token))using(var output=new MemoryStream())using(var sha=SHA256.Create()) {
-       var buffer=new byte[65536];long count=0;int read;
-       while((read=input.Read(buffer,0,buffer.Length))>0){token.ThrowIfCancellationRequested();count+=read;if(count>file.length)throw new InvalidDataException("文件超出签名长度："+file.path);sha.TransformBlock(buffer,0,read,null,0);output.Write(buffer,0,read);long received=completed+count;Publish(s=>{s.receivedBytes=received;s.speedBytes=(long)(received/Math.Max(.1,watch.Elapsed.TotalSeconds));});}
-       sha.TransformFinalBlock(new byte[0],0,0);string hash=BitConverter.ToString(sha.Hash).Replace("-","");
-       if(count!=file.length||!string.Equals(hash,file.sha256,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("文件长度或哈希不符："+file.path);
-       data=output.ToArray();CoreDeployment.Atomic(root,cache,data);
-      }
+      data=DownloadFile(file,completed,watch,token);CoreDeployment.Atomic(root,cache,data);
      }
      token.ThrowIfCancellationRequested();bytes.Add(file.path,data);completed+=file.length;Publish(s=>s.receivedBytes=completed);Log("verify",file.path);
     }
     token.ThrowIfCancellationRequested();string task=CoreUpdateTransaction.Stage(root,candidate,bytes,key);Publish(s=>{s.taskId=task;s.state="Ready";s.message="下载已验证，等待确认重启";s.currentFile="";});Log("staged",task);
    }
   });}
+  byte[] DownloadFile(CoreFile file,long completed,Stopwatch watch,CancellationToken token) {
+   string[] urls=sources(file.url);
+   for(int attempt=0;attempt<urls.Length;attempt++) {
+    token.ThrowIfCancellationRequested();Publish(s=>s.receivedBytes=completed);Log("source",urls[attempt]);
+    try {
+     using(var input=open(urls[attempt],token))using(var output=new MemoryStream())using(var sha=SHA256.Create()) {
+      var buffer=new byte[65536];long count=0;int read;
+      while((read=input.Read(buffer,0,buffer.Length))>0){token.ThrowIfCancellationRequested();count+=read;if(count>file.length)throw new InvalidDataException("文件超出签名长度："+file.path);sha.TransformBlock(buffer,0,read,null,0);output.Write(buffer,0,read);long received=completed+count;Publish(s=>{s.receivedBytes=received;s.speedBytes=(long)(received/Math.Max(.1,watch.Elapsed.TotalSeconds));});}
+      sha.TransformFinalBlock(new byte[0],0,0);string hash=BitConverter.ToString(sha.Hash).Replace("-","");
+      if(count!=file.length||!string.Equals(hash,file.sha256,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("文件长度或哈希不符："+file.path);
+      return output.ToArray();
+     }
+    } catch(Exception error) {
+     token.ThrowIfCancellationRequested();if(!CoreReleaseSources.TransportFailure(error)||attempt==urls.Length-1)throw;
+     CoreReleaseSources.DisposeResponse(error);Log("fallback",file.path+": "+error.Message);
+    }
+   }
+   throw new InvalidDataException("没有可用的更新文件来源。");
+  }
   CoreUpdateStatus Start(string phase,Action<CancellationToken> action){lock(gate){if(disposed)throw new ObjectDisposedException("CoreUpdateService");if(worker!=null&&!worker.IsCompleted)return Clone();if(status.state=="Ready"||status.state=="Restarting")return Clone();if(key==null)return Clone();if(cancellation!=null)cancellation.Dispose();cancellation=new CancellationTokenSource();var token=cancellation.Token;status.state=phase;status.revision++;worker=Task.Run(()=>{try{action(token);}catch(OperationCanceledException){Log("cancel","Cancelled");Publish(s=>{s.state="Cancelled";s.message="已取消，当前启动器文件未改变。";});}catch(Exception e){if(token.IsCancellationRequested){Log("cancel","Cancelled");Publish(s=>{s.state="Cancelled";s.message="已取消，当前启动器文件未改变。";});}else{Log("error",e.Message);Publish(s=>{s.state="Error";s.message=e.Message;});}}});return Clone();}}
   public CoreUpdateStatus Cancel(){lock(gate){if(cancellation!=null)cancellation.Cancel();return Clone();}}
   internal string PreparedTask(){lock(gate){if(status.state!="Ready"||worker!=null&&!worker.IsCompleted)throw new InvalidOperationException("更新尚未准备完成。");return status.taskId;}}
@@ -76,7 +90,7 @@ namespace PZ3D {
  }
  internal static class CoreReleaseNetwork {
   const string Latest="https://api.github.com/repos/LiuDaCheng666/orange-zomboid-launcher/releases/latest";
-  internal static bool Allowed(Uri uri){return uri.Scheme=="https"&&uri.IsDefaultPort&&uri.UserInfo==""&&uri.Fragment==""&&(uri.Host=="api.github.com"||uri.Host=="github.com"||uri.Host=="release-assets.githubusercontent.com"||uri.Host=="objects.githubusercontent.com");}
+  internal static bool Allowed(Uri uri){return CoreReleaseSources.Allowed(uri)||uri.Scheme=="https"&&uri.IsDefaultPort&&uri.UserInfo==""&&uri.Fragment==""&&(uri.Host=="api.github.com"||uri.Host=="github.com"||uri.Host=="release-assets.githubusercontent.com"||uri.Host=="objects.githubusercontent.com");}
   public static byte[][] Lookup(CancellationToken token){return Lookup(token,Open);}
   internal static byte[][] Lookup(CancellationToken token,Func<string,CancellationToken,Stream> open){byte[] raw;try{using(var stream=open(Latest,token))raw=ReadBounded(stream,CoreReleaseProtocol.MaxManifestBytes,token);}catch(WebException e){var response=e.Response as HttpWebResponse;if(response==null)throw;int code=(int)response.StatusCode;response.Dispose();if(code==404)return null;if(code!=403&&code!=429)throw;return LatestEnvelope(token,open);}
    var map=new JavaScriptSerializer{MaxJsonLength=CoreReleaseProtocol.MaxManifestBytes}.Deserialize<Dictionary<string,object>>(CoreDeployment.Utf8.GetString(raw));object draft,pre,tag;
@@ -89,10 +103,10 @@ namespace PZ3D {
    try{token.ThrowIfCancellationRequested();using(var manifest=open(prefix+"update-manifest.json",token)){token.ThrowIfCancellationRequested();using(var signature=open(prefix+"update-manifest.sig",token))return new[]{ReadBounded(manifest,CoreReleaseProtocol.MaxManifestBytes,token),ReadBounded(signature,1024,token)};}}
    catch(WebException e){var response=e.Response as HttpWebResponse;if(response==null)throw;int code=(int)response.StatusCode;response.Dispose();if(code==404)return null;throw;}
   }
-  static byte[] ReadBounded(Stream stream,int max,CancellationToken token){using(var bytes=new MemoryStream()){var buffer=new byte[16384];int n;while((n=stream.Read(buffer,0,buffer.Length))>0){token.ThrowIfCancellationRequested();if(bytes.Length+n>max)throw new InvalidDataException("发布响应过大。");bytes.Write(buffer,0,n);}return bytes.ToArray();}}
+  internal static byte[] ReadBounded(Stream stream,int max,CancellationToken token){using(var bytes=new MemoryStream()){var buffer=new byte[16384];int n;while((n=stream.Read(buffer,0,buffer.Length))>0){token.ThrowIfCancellationRequested();if(bytes.Length+n>max)throw new InvalidDataException("发布响应过大。");bytes.Write(buffer,0,n);}return bytes.ToArray();}}
   public static Stream Open(string url,CancellationToken token){Uri uri=new Uri(url);for(int redirect=0;redirect<=3;redirect++){
     token.ThrowIfCancellationRequested();if(!Allowed(uri))throw new InvalidDataException("拒绝非可信 HTTPS 下载地址。");
-    var request=(HttpWebRequest)WebRequest.Create(uri);request.AllowAutoRedirect=false;request.Timeout=20000;request.ReadWriteTimeout=20000;request.UserAgent="OrangeLauncher/"+AppVersion.Current;request.Accept=uri.Host=="api.github.com"?"application/vnd.github+json":"application/octet-stream";if(uri.Host=="api.github.com")request.Headers["X-GitHub-Api-Version"]="2026-03-10";
+    var request=(HttpWebRequest)WebRequest.Create(uri);request.AllowAutoRedirect=false;request.Timeout=uri.Host=="orangezl.com"?8000:20000;request.ReadWriteTimeout=request.Timeout;request.UserAgent="OrangeLauncher/"+AppVersion.Current;request.Accept=uri.Host=="api.github.com"?"application/vnd.github+json":"application/octet-stream";if(uri.Host=="api.github.com")request.Headers["X-GitHub-Api-Version"]="2026-03-10";
     var deadline=CancellationTokenSource.CreateLinkedTokenSource(token);deadline.CancelAfter(60000);var abort=deadline.Token.Register(request.Abort);HttpWebResponse response=null;
     try {response=(HttpWebResponse)request.GetResponse();int code=(int)response.StatusCode;if(code>=300&&code<=399){string location=response.Headers["Location"];response.Dispose();abort.Dispose();deadline.Dispose();if(string.IsNullOrEmpty(location)||redirect==3)throw new InvalidDataException("下载重定向无效或次数过多。");uri=new Uri(uri,location);continue;}if(code!=200)throw new InvalidDataException("下载响应无效。");return new ResponseStream(response,abort,deadline);}
     catch{if(response!=null)response.Dispose();abort.Dispose();deadline.Dispose();throw;}

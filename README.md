@@ -1,12 +1,12 @@
 # OZL / Orange zombiod launcher
 
-**1.2.13 已正式发布为 GitHub 最新稳定版：整理界面文案，删除重复免责声明，现有功能不变。** [正式发布记录](docs/releases/1.2.13-github-release.md)包含源码、安装版、免安装版及正式 1.2.12 程序内更新验证；[1.2.12](docs/releases/1.2.12-github-release.md)及更早记录作为历史保留。
+**当前正式版 1.2.13。1.2.14 官网优先更新候选已完成开发，交付扫描待复核，尚未公开发布。** [候选验证记录](docs/releases/1.2.14-github-release.md)记录准确状态；[1.2.13](docs/releases/1.2.13-github-release.md)及更早记录作为历史保留。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
 ## 官网与源码
 
-官网已部署为 [IP 验收站](http://101.201.143.163/)，提供产品介绍、使用说明、安装版／免安装版下载、更新日志和备案信息。正式域名为 `orangezl.com`，待解析和 HTTPS 配置完成后启用。旧版程序内更新当前仍走 GitHub。
+官网：[orangezl.com](https://orangezl.com/)，提供产品介绍、使用说明、安装版／免安装版下载、更新日志和备案信息。`www` 与旧 IP 地址跳转官网。待 1.2.14 正式发布后，程序内更新优先使用官网，连接失败时自动使用 GitHub；1.2.13 及更早版先通过 GitHub 升级一次。域名上线不会自动改变旧客户端代码。
 
 [项目源码](https://github.com/LiuDaCheng666/orange-zomboid-launcher) · [工作目录说明](docs/workspace.md) · [官网部署与下载镜像](deploy/README.md) · [v1.2.13 安全复核记录](docs/security/2026-10-23-defender-review.md)
 
@@ -22,7 +22,7 @@
 
 ## 下载和在线更新
 
-1.2.13 已正式发布为 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.13)：[安装版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.13/orange-launcher-setup-v1.2.13.exe) 或 [完整免安装 ZIP](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.13/orange-launcher-v1.2.13-win-x64.zip)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
+从[官网下载](https://orangezl.com/#download)安装版或完整免安装 ZIP，也可使用 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
 
 已安装可信核心版本的玩家，可点顶部“启动器更新”→检查→下载。运行1.2.3后，当前下载校验完成会弹出一次确认，同意后自动更新并重新打开启动器；选择稍后则保留“重启并更新”，不会反复弹窗。游戏运行本身不再一律拦截核心更新，但未保存编辑、文件修改、配置事务或待恢复会话仍须先处理。更新只下载变化的自有文件并校验签名及哈希；重启后完成界面健康检查，失败保留恢复资料并回退。更新启动器不等于更新或启用第三方模组，不要求退出 Steam，也不要求输入 Steam 密码。网络必须能访问 GitHub 及其官方资源下载域名。
 
