@@ -64,6 +64,11 @@ select{min-height:44px;background:#ffffff80;border:1px solid var(--line);border-
 .preview-toolbar .text-link{min-height:44px;padding:0 8px;border-radius:6px;font-size:12px;text-decoration:none}
 .preview-toolbar .text-link:hover{background:var(--tint)}
 .app-shot{display:block;width:100%;height:auto;aspect-ratio:8/5;object-fit:contain;background:#1a242d}
+.preview-image{position:relative}
+.preview-error{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);padding:16px}
+.preview-error[hidden]{display:none}
+.preview-error p{margin-bottom:12px;color:var(--muted)}
+.preview-toolbar button:disabled{opacity:.45;cursor:default}
 .panel-copy{padding:24px 28px;border-top:1px solid var(--line)}
 .panel-copy>div{display:grid;grid-template-columns:1fr 1.2fr;column-gap:32px}
 .panel-copy h3{grid-column:1;grid-row:1}

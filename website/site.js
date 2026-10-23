@@ -73,7 +73,25 @@
   const tabs = [...document.querySelectorAll('[role="tab"]')];
   const panel = document.querySelector('[role="tabpanel"]');
   const theme = document.querySelector('select[aria-label="预览主题"]');
-  const screenshot = document.querySelector('[data-feature-image]');
+  let screenshot = document.querySelector('[data-feature-image]');
+  const enlarge = document.querySelector('[data-enlarge]');
+  const previewError = document.querySelector('[data-preview-error]');
+  const retryImage = document.querySelector('[data-retry-image]');
+  function watchScreenshot(image) {
+    const settle = () => {
+      // Each request owns its image node. Late events from removed images cannot
+      // overwrite a newer feature's loading/error state.
+      if (image !== screenshot) return;
+      const failed = image.naturalWidth === 0;
+      previewError.hidden = !failed;
+      image.style.visibility = failed ? 'hidden' : '';
+      enlarge.disabled = failed;
+    };
+    image.addEventListener('load', settle, { once: true });
+    image.addEventListener('error', settle, { once: true });
+    if (image.complete && image.getAttribute('src')) settle();
+  }
+  watchScreenshot(screenshot);
   let selected = 'home';
   function selectFeature(id) {
     selected = id;
@@ -89,10 +107,22 @@
     points.replaceChildren(...features[id][2].map(text => {
       const item = document.createElement('li'); item.textContent = text; return item;
     }));
-    screenshot.src = 'assets/launcher-' + id + '-' + theme.value + '.png';
-    screenshot.alt = tabs.find(tab => tab.dataset.feature === id).querySelector('.feature-name').textContent + (theme.value === 'dark' ? '深色' : '浅色') + '界面';
+    const nextImage = document.createElement('img');
+    for (const name of ['class', 'width', 'height', 'data-feature-image']) nextImage.setAttribute(name, screenshot.getAttribute(name));
+    nextImage.alt = tabs.find(tab => tab.dataset.feature === id).querySelector('.feature-name').textContent + (theme.value === 'dark' ? '深色' : '浅色') + '界面';
+    screenshot.replaceWith(nextImage);
+    screenshot = nextImage;
+    previewError.hidden = true;
+    enlarge.disabled = false;
+    watchScreenshot(nextImage);
+    nextImage.src = 'assets/launcher-' + id + '-' + theme.value + '.png';
     enter(panel);
   }
+  retryImage.addEventListener('click', () => {
+    selectFeature(selected);
+    // The retry control becomes hidden while loading. Keep keyboard focus usable.
+    tabs.find(tab => tab.dataset.feature === selected).focus({ preventScroll: true });
+  });
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => selectFeature(tab.dataset.feature));
     tab.addEventListener('keydown', event => {
@@ -103,7 +133,6 @@
   });
   theme.addEventListener('change', () => selectFeature(selected));
   const dialog = document.querySelector('dialog');
-  const enlarge = document.querySelector('[data-enlarge]');
   enlarge.addEventListener('click', () => {
     const image = document.querySelector('[data-dialog-image]');
     image.src = screenshot.src; image.alt = screenshot.alt;

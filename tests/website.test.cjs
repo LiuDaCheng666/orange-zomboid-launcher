@@ -337,6 +337,69 @@ test('all actual preview assets load on demand in both themes and enlarge at nat
   }
 });
 
+test('failed screenshot offers retry and successful recovery restores enlargement', async () => {
+  const page = await browser.newPage({ reducedMotion: 'reduce' });
+  try {
+    let attempts = 0;
+    await page.route('**/launcher-components-dark.png', route => ++attempts === 1 ? route.abort() : route.continue());
+    await page.goto(base);
+    await page.locator('#tab-components').click();
+    await page.waitForFunction(() => { const image = document.querySelector('[data-feature-image]'); return image.complete && image.naturalWidth === 0; });
+    assert.match(await page.getByRole('tabpanel').innerText(), /预览图片加载失败/);
+    assert.equal(await page.locator('[data-enlarge]').isDisabled(), true);
+    await page.getByRole('button', { name: '重试图片', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-feature-image]').naturalWidth === 1440);
+    assert.equal(attempts, 2);
+    assert.equal(await page.getByText('预览图片加载失败', { exact: true }).isVisible(), false);
+    assert.equal(await page.locator('[data-enlarge]').isEnabled(), true);
+    await page.locator('[data-enlarge]').click();
+    assert.match(await page.locator('[data-dialog-image]').getAttribute('src'), /launcher-components-dark/);
+  } finally { await page.close(); }
+});
+
+test('superseded screenshot recovery cannot overwrite the latest selection or error state', async () => {
+  const page = await browser.newPage({ reducedMotion: 'reduce' });
+  let pending;
+  try {
+    let attempts = 0;
+    await page.route('**/launcher-components-dark.png', route => {
+      if (++attempts === 1) return route.abort();
+      pending = route;
+    });
+    await page.goto(base);
+    await page.locator('#tab-components').click();
+    await page.waitForFunction(() => { const image = document.querySelector('[data-feature-image]'); return image.complete && image.naturalWidth === 0; });
+    assert.match(await page.getByRole('tabpanel').innerText(), /预览图片加载失败/);
+    await page.getByRole('button', { name: '重试图片', exact: true }).click();
+    for (let wait = 0; !pending && wait < 100; wait++) await page.waitForTimeout(10);
+    assert.ok(pending, 'retry makes a new image request');
+    await page.locator('#tab-mods').click();
+    await page.locator('[data-feature-image]').evaluate(image => image.decode());
+    await pending.fulfill({ contentType: 'image/png', body: await fs.readFile(path.join(root, 'assets/launcher-components-dark.png')) });
+    pending = null;
+    await page.waitForTimeout(100);
+    assert.match(await page.locator('[data-feature-image]').getAttribute('src'), /launcher-mods-dark/);
+    assert.equal(await page.locator('#tab-mods').getAttribute('aria-selected'), 'true');
+    assert.equal(await page.getByText('预览图片加载失败', { exact: true }).isVisible(), false);
+    assert.equal(await page.locator('[data-enlarge]').isEnabled(), true);
+    // A late success must also leave a newer request's failure intact.
+    await page.route('**/launcher-components-light.png', route => { pending = route; });
+    await page.route('**/launcher-servers-light.png', route => route.abort());
+    await page.getByLabel('预览主题').selectOption('light');
+    await page.locator('#tab-components').click();
+    for (let wait = 0; !pending && wait < 100; wait++) await page.waitForTimeout(10);
+    assert.ok(pending, 'new theme makes an uncached image request');
+    await page.locator('#tab-servers').click();
+    await page.locator('[data-preview-error]').waitFor();
+    await pending.fulfill({ contentType: 'image/png', body: await fs.readFile(path.join(root, 'assets/launcher-components-light.png')) });
+    pending = null;
+    await page.waitForTimeout(100);
+    assert.match(await page.locator('[data-feature-image]').getAttribute('src'), /launcher-servers-light/);
+    assert.equal(await page.getByText('预览图片加载失败', { exact: true }).isVisible(), true);
+    assert.equal(await page.locator('[data-enlarge]').isDisabled(), true);
+  } finally { await pending?.abort().catch(() => {}); await page.close(); }
+});
+
 test('failed metadata retains a usable official GitHub fallback', async () => {
   const page = await browser.newPage();
   await page.route('**/release.json', route => route.abort());
