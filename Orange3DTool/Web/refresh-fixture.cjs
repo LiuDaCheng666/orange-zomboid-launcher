@@ -35,7 +35,7 @@ async function setup(browser,options={}){
     case'coreUpdateCancel':data={...core,revision:3,state:'Cancelled'};break;
     case'coreUpdateDownload':data={...core,revision:5,state:'Downloading',latestVersion:'1.2.1',taskId:'a'.repeat(32)};break;
     case'componentsAction':{const c=components.find(x=>x.id===m.payload.component);if(c){c.configured=m.payload.operation!=='uninstall';c.downloaded=true;}break;}
-    case'modCatalog':data={mods:[...mods,...components.filter(c=>options.covers[c.item]).map(c=>({id:c.id,title:c.title,name:c.title,author:'工坊原作者',description:c.description,version:c.version,item:c.item,workshopId:c.item,cover:options.covers[c.item],requires:[],require:[],conflicts:[],componentManaged:true,conflict:false,map:false}))],warnings:[]};break;
+    case'modCatalog':data={mods:options.catalogRows?Array.from({length:options.catalogRows},(_,i)=>({...mods[i%mods.length],id:'catalog-'+i})): [...mods,...components.filter(c=>options.covers[c.item]).map(c=>({id:c.id,title:c.title,name:c.title,author:'工坊原作者',description:c.description,version:c.version,item:c.item,workshopId:c.item,cover:options.covers[c.item],requires:[],require:[],conflicts:[],componentManaged:true,conflict:false,map:false}))],warnings:[]};break;
     case'modProfiles':data={stamp:'mods',profiles:[{id:'relax',name:'轻量探索',modCount:3,updated:'2026-10-22'}],activeMods:['survival','map']};break;
     case'modProfileGet':data={id:'relax',name:'轻量探索',stamp:'mods',mods:['survival','map']};break;
     case'savesList':data={saves,warnings:[]};break;
@@ -45,7 +45,7 @@ async function setup(browser,options={}){
     case'memoryGet':data={currentGiB:8,totalGiB:32,availableGiB:21,maximumGiB:24,recommendedGiB:8,stamp:'memory'};break;
     case'settingsGet':data={stamp:'settings',rows:[{key:'view|firstPerson',name:'第一人称切换键',group:'视角与操作',description:'游戏中切换第一人称视角。',kind:'text',value:'O',editable:true},{key:'view|thirdPerson',name:'第三人称视角',group:'视角与操作',description:'使用第三人称视角观察周围环境。',kind:'bool',value:'true',editable:true},{key:'view|fov',name:'视野范围',group:'画面表现',description:'按你的屏幕与习惯设置视野。',kind:'text',value:'90',editable:true}],warnings:[]};break;
     case'shadersGet':data={stamp:'shaders',selected:'original',packs:[{id:'original',name:'原版光影',description:'清晰、自然的游戏原始表现。',valid:true,file:'原版'},{id:'eclipse',name:'Eclipse',description:'为 Viewpoint 适配的光影效果。',valid:true,file:'Eclipse.pack'}]};break;
-    case'javaList':data={supported:true,stamp:'java',jars:[],warnings:[]};break;
+    case'javaList':data={supported:true,stamp:'java',jars:options.javaJars||[],warnings:[]};break;
     case'playProfiles':data={stamp:'play',selectedId:'',selectedProfile:null,profiles:[{id:'explore',name:'周末探索',targetKind:'normal',modCount:3}],pendingRecovery:{pending:false},warnings:[]};break;
     case'playtimeGet':data={todaySeconds:3900,totalSeconds:39240,running:false,sessionSeconds:0,reminderMinutes:60,reminderDue:false,tracking:'stopped'};break;
     case'help':data={message:'核对来源后，仅允许你信任的 Java 文件。'};break;

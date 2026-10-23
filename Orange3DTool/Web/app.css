@@ -728,7 +728,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .mod-row-state .badge{font-size:11px}
 .mod-row-state button{font-size:12px;min-height:32px}
 .shell aside.mod-detail{padding:18px}
-.mod-filter-bar{padding:12px 0;gap:10px}
+.mod-filter-bar{padding:7px 0;gap:10px}
 .mod-filter-bar .small{font-size:12px}
 .library-grid{gap:14px}
 .save-card,.server-card{padding:19px;gap:18px}
@@ -821,15 +821,14 @@ footer{font-size:11px;padding:12px 0}
 .core-components .component-card{grid-template-columns:76px minmax(0,1fr);gap:12px;padding:14px}
 .core-components .component-card>.cover{width:76px;height:76px}
 .core-components .component-title{flex-direction:column;align-items:flex-start}}
-#page[data-route="mods"]>.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-#page[data-route="mods"]>.grid>.card{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:14px;padding:16px 18px}
-#page[data-route="mods"]>.grid>.card>.badge{grid-column:2;grid-row:1/3;align-self:start}
-#page[data-route="mods"]>.grid>.card>h3{grid-row:1;margin:0;font-size:16px}
-#page[data-route="mods"]>.grid>.card>p{grid-column:1;grid-row:2;margin-top:5px}
-#page[data-route="mods"]>.grid>.card>.actions{grid-column:1/-1;margin-top:12px}
-#profile-mod-catalog{margin-top:12px}
-@media(max-width:800px){
-#page[data-route="mods"]>.grid{grid-template-columns:1fr}}
+.profile-library{border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}
+.profile-active{padding:8px 14px;background:var(--panel2);color:var(--muted)}
+.profile-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-top:1px solid var(--line)}
+.profile-entry h3{font-size:14px}.profile-entry p{margin-top:3px}.profile-entry .actions{gap:6px}
+.catalog-section{margin-top:14px}.catalog-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px}.catalog-toolbar h2{font-size:17px}
+.catalog-toolbar #profile-mod-search{width:min(380px,55%);margin:0;min-height:34px}
+#profile-mod-catalog{margin-top:0}
+@media(max-width:800px){.profile-entry{flex-wrap:wrap}.catalog-toolbar{flex-wrap:wrap}.catalog-toolbar #profile-mod-search{width:100%}}
 @media(prefers-reduced-motion:reduce){
 *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 /* Neutral fallback stays legible in catalog rows without imitating author art. */
@@ -856,7 +855,7 @@ footer{font-size:11px;padding:12px 0}
 :root.light{--bg:#edf2f8;--panel:#fff;--panel2:#e6eef8;--line:#ccd9e6;--muted:#50667c;--surface-edge:#ffffff;--section-shadow:0 3px 14px #25496a08}
 body{background:var(--bg)}
 button{transition:transform 140ms ease,opacity 140ms ease}
-.heading{padding:0 0 19px;margin-bottom:22px;border-bottom:1px solid var(--line);align-items:center}
+.heading{padding:0 0 12px;margin-bottom:14px;border-bottom:1px solid var(--line);align-items:center}
 .heading>div:first-child{border-left:3px solid var(--accent);padding-left:13px}
 .heading h1{font-size:28px;line-height:1.35;letter-spacing:-.5px}
 .heading .eyebrow{font-size:10px;letter-spacing:2px;margin-bottom:5px;color:var(--muted)}
@@ -870,12 +869,15 @@ button{transition:transform 140ms ease,opacity 140ms ease}
 .metric{border-top:2px solid var(--line);padding:18px 20px}
 .metric .value{font-size:30px;font-variant-numeric:tabular-nums;letter-spacing:-.6px}
 .metric .value small{letter-spacing:0}
-.setting{padding:18px 0;gap:24px}
+.memory-allocation{padding:18px}.memory-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:16px 0;gap:10px}
+.memory-metrics .metric{padding:12px}.memory-metrics .value{font-size:24px;margin-top:5px}
+@media(max-width:899px){.memory-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.setting{padding:12px 0;gap:24px}
 .setting h3{font-size:15px}
 .setting input,.setting select{min-height:38px;background:var(--bg)}
 .help-list details{padding:13px 20px}
 .help-list details[open]>summary{color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:12px}
-.maintenance{padding:22px;border-left:3px solid var(--line)}
+.maintenance{padding:16px;border-left:3px solid var(--line)}
 .maintenance h2{font-size:19px}
 .maintenance .badge{margin-bottom:6px}
 .launcher-tools{padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
@@ -886,7 +888,7 @@ button{transition:transform 140ms ease,opacity 140ms ease}
 .core-components .component-body h3{font-size:16px;line-height:1.5}
 .core-components .component-title{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 9px}
 .core-components .component-title .badge{font-size:12px}
-.core-components .component-description{font-size:13px;line-height:1.65;min-height:0}
+.core-components .component-description{font-size:13px;line-height:1.65;min-height:3.3em}
 .core-components .component-version{font-size:12px}
 .core-components .component-body details{margin-top:12px}
 .core-components .component-body details summary{padding:8px 0}
@@ -894,26 +896,29 @@ button{transition:transform 140ms ease,opacity 140ms ease}
 .optional-components{margin-top:16px}
 .optional-components>summary{padding:13px 0}
 .scene-controls button{font-size:12px;min-width:32px;min-height:32px;padding:5px 9px}
-.catalog-row{min-height:84px;padding:13px 14px;gap:13px}
+.catalog-row{min-height:72px;padding:5px 10px;gap:10px}
 .catalog-row.selected{box-shadow:inset 3px 0 var(--accent);background:var(--soft)}
 .mod-select{min-height:38px}
 .mod-select h3{font-size:15px}
 .mod-select .small,.mod-select .key{font-size:12px}
 .mod-row-state .badge{font-size:12px}
 .mod-row-state button,.enabled-mods button{font-size:12px;min-height:32px}
-.shell aside.mod-detail{padding:20px;border-top:3px solid var(--accent)}
+.shell aside.mod-detail{padding:16px;border-top:3px solid var(--accent)}
 .mod-detail-title{padding-bottom:14px;border-bottom:1px solid var(--line)}
 .mod-detail-title h3{font-size:16px}
 .mod-detail .full-text{font-size:13px;line-height:1.8}
-.save-card,.server-card{padding:20px}
+.save-card,.server-card{padding:14px;gap:14px;grid-template-columns:96px minmax(0,1fr)}
+.save-card>.original-thumb,.server-card>.original-thumb{width:96px;height:96px;object-fit:contain}
 .library-body h3{font-size:18px}
 .server-metrics strong{font-variant-numeric:tabular-nums}
 #page button{font-size:max(12px,.9em);min-height:32px}
 #page .launch-target #launch{font-size:17px;min-height:50px}
-dialog,#server-workshop-panel{border-radius:16px;box-shadow:0 24px 80px #0005;border:1px solid var(--line);padding:24px}
+dialog,#server-workshop-panel{border-radius:12px;box-shadow:0 24px 80px #0005;border:1px solid var(--line);padding:20px;max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;overflow-wrap:anywhere}
 dialog h2{font-size:21px;line-height:1.4}
 dialog p{font-size:14px;line-height:1.8}
-dialog .actions{padding-top:16px;border-top:1px solid var(--line)}
+dialog .actions{padding-top:12px;border-top:1px solid var(--line)}
+dialog>.actions,dialog>form>.actions:last-child{position:sticky;bottom:-20px;background:var(--panel);padding-bottom:12px;z-index:1}
+dialog button{min-height:32px;font-size:12px}
 dialog::backdrop{background:#070e18b8;backdrop-filter:none}
 @media(max-width:1100px){
 .heading h1{font-size:26px}
@@ -922,11 +927,11 @@ dialog::backdrop{background:#070e18b8;backdrop-filter:none}
 @media(max-width:800px){
 .heading h1{font-size:25px}
 .heading .actions{gap:7px}
-.core-components .component-card{grid-template-columns:92px minmax(0,1fr);gap:16px}
-.core-components .component-card>.cover{width:92px;height:92px}
+.core-components .component-card{grid-template-columns:80px minmax(0,1fr);gap:12px}
+.core-components .component-card>.cover{width:80px;height:80px}
 .core-components .component-description{min-height:0}
 .core-components .component-title{align-items:flex-start}
-.catalog-row{padding:11px;gap:10px}
+.catalog-row{padding:6px 8px;gap:8px}
 .shell aside.mod-detail{padding:16px}
 .maintenance{padding:18px}
 .scene-controls{max-width:calc(100% - 20px)}
