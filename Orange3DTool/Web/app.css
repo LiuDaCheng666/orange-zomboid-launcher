@@ -133,3 +133,70 @@ button{border:1px solid transparent;border-radius:9px;padding:8px 13px;min-heigh
 #server-workshop-panel h2{margin:0}#server-workshop-panel details{margin-top:18px}#server-workshop-panel textarea{width:100%;min-height:96px;margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:13px/1.6 Consolas,monospace;resize:vertical}#server-workshop-panel progress{width:100%}
 .server-workshop-items{padding:0;list-style:none;max-height:220px;overflow:auto}.server-workshop-items li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.server-workshop-items small{color:var(--muted);white-space:nowrap}
 @media(max-width:800px){#server-workshop-panel{top:110px;max-height:calc(100vh - 130px)}}
+/* A shared hierarchy: quiet canvas, clear section edges, and readable controls.
+   Presentation motion is limited to opacity/transform and owned by app.js. */
+:root{--bg:#12181e;--panel:#1c252e;--panel2:#2a3742;--line:#374650;--muted:#b2c0cc;--surface-edge:#ffffff0c;--section-shadow:0 3px 12px #00000012}
+:root.light{--bg:#edf2f8;--panel:#fff;--panel2:#e6eef8;--line:#ccd9e6;--muted:#50667c;--surface-edge:#ffffff;--section-shadow:0 3px 14px #25496a08}
+body{background:var(--bg)}
+button{transition:transform 140ms ease,opacity 140ms ease}
+header{box-shadow:0 1px 0 var(--line);backdrop-filter:none}
+header nav button{position:relative;font-weight:600}
+header nav button.active:after{content:'';position:absolute;bottom:0;left:18px;right:18px;height:2px;border-radius:2px;background:var(--accent)}
+.workspace-bar{background:var(--panel);border-bottom-color:var(--line)}
+main{padding-top:26px}
+.heading{padding:0 0 19px;margin-bottom:22px;border-bottom:1px solid var(--line);align-items:center}
+.heading>div:first-child{border-left:3px solid var(--accent);padding-left:13px}
+.heading h1{font-size:28px;line-height:1.35;letter-spacing:-.5px}
+.heading .eyebrow{font-size:10px;letter-spacing:2px;margin-bottom:5px;color:var(--muted)}
+.card,.metric,.help-list details,.shell aside.mod-detail{box-shadow:var(--section-shadow),inset 0 1px 0 var(--surface-edge);border-radius:12px}
+.card h2,.help-list summary{font-weight:650}
+.card p,.setting p{line-height:1.75}
+.card .row:first-child{align-items:center}
+.badge{font-size:12px;line-height:1.45;padding:3px 9px}
+.status-positive.badge,.status-neutral.badge,.status-negative.badge{border:1px solid currentColor}
+.notice,#notice,#startup-update-notice{border-left:3px solid var(--accent);padding:11px 15px}
+.metric{border-top:2px solid var(--line);padding:18px 20px}
+.metric .value{font-size:30px;font-variant-numeric:tabular-nums;letter-spacing:-.6px}
+.metric .value small{letter-spacing:0}
+.setting{padding:18px 0;gap:24px}
+.setting h3{font-size:15px}.setting input,.setting select{min-height:38px;background:var(--bg)}
+.help-list details{padding:13px 20px}.help-list details[open]>summary{color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:12px}
+.maintenance{padding:22px;border-left:3px solid var(--line)}
+.maintenance h2{font-size:19px}.maintenance .badge{margin-bottom:6px}
+.launcher-tools{padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.workspace-bar .launcher-tools{padding:0;border:0;background:transparent}
+.component-intro{margin-bottom:14px}.component-intro h2{font-size:19px}
+.core-components .component-card{grid-template-columns:88px minmax(0,1fr);gap:15px;padding:16px;align-items:start}
+.core-components .component-card>.cover{width:88px;height:88px;border:1px solid var(--surface-edge);border-radius:10px}
+.core-components .component-body h3{font-size:16px;line-height:1.5}
+.core-components .component-title{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 9px}
+.core-components .component-title .badge{font-size:12px}
+.core-components .component-description{font-size:13px;line-height:1.65;min-height:0}
+.core-components .component-version{font-size:12px}
+.core-components .component-body details{margin-top:12px}
+.core-components .component-body details summary{padding:8px 0}
+.component-actions .secondary{color:var(--text)}
+.optional-components{margin-top:16px}.optional-components>summary{padding:13px 0}
+.home-layout{gap:20px}.home-layout .play-launch{min-height:0;gap:16px;padding:20px;box-shadow:var(--section-shadow);background:var(--panel)}
+.home-layout .current-config{padding-top:16px;padding-bottom:4px}.home-layout .launch-target{margin-top:0;padding-top:16px}
+.home-manage{margin-top:8px}.home-manage>summary{min-height:34px}
+.scene-copy .eyebrow{letter-spacing:2px}.scene-copy h1{font-weight:650;line-height:1.35}
+.scene-controls button{font-size:12px;min-width:32px;min-height:32px;padding:5px 9px}
+.catalog-row{min-height:84px;padding:13px 14px;gap:13px}
+.catalog-row.selected{box-shadow:inset 3px 0 var(--accent);background:var(--soft)}
+.mod-select{min-height:38px}.mod-select h3{font-size:15px}.mod-select .small,.mod-select .key{font-size:12px}
+.mod-row-state .badge{font-size:12px}.mod-row-state button,.enabled-mods button{font-size:12px;min-height:32px}
+.shell aside.mod-detail{padding:20px;border-top:3px solid var(--accent)}
+.mod-detail-title{padding-bottom:14px;border-bottom:1px solid var(--line)}
+.mod-detail-title h3{font-size:16px}.mod-detail .full-text{font-size:13px;line-height:1.8}
+.save-card,.server-card{padding:20px}.library-body h3{font-size:18px}
+.server-metrics strong{font-variant-numeric:tabular-nums}
+#page button{font-size:max(12px,.9em);min-height:32px}
+#page .launch-target #launch{font-size:17px;min-height:50px}
+dialog,#server-workshop-panel{border-radius:16px;box-shadow:0 24px 80px #0005;border:1px solid var(--line);padding:24px}
+dialog h2{font-size:21px;line-height:1.4}dialog p{font-size:14px;line-height:1.8}dialog .actions{padding-top:16px;border-top:1px solid var(--line)}
+dialog::backdrop{background:#070e18b8;backdrop-filter:none}
+@media(max-width:1100px){main{padding-top:20px}.heading h1{font-size:26px}.heading{padding-bottom:16px;margin-bottom:18px}.core-components .component-card{padding:16px}.home-layout{gap:16px}}
+@media(max-width:800px){main{padding-top:18px}.heading h1{font-size:25px}.heading .actions{gap:7px}.core-components .component-card{grid-template-columns:92px minmax(0,1fr);gap:16px}.core-components .component-card>.cover{width:92px;height:92px}.core-components .component-description{min-height:0}.core-components .component-title{align-items:flex-start}.home-layout .play-launch{padding:16px;gap:14px}.home-layout .home-cover{min-height:440px}.catalog-row{padding:11px;gap:10px}.shell aside.mod-detail{padding:16px}.maintenance{padding:18px}.scene-controls{max-width:calc(100% - 20px)}.scene-controls button{font-size:12px;min-height:32px}}
+@media(max-width:580px){.core-components .component-card{grid-template-columns:76px minmax(0,1fr)}.core-components .component-card>.cover{width:76px;height:76px}.heading>div:first-child{padding-left:10px}.setting{gap:12px}.home-layout .home-cover{min-height:440px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}}
