@@ -66,3 +66,7 @@ foreach($entry in $lock.files) {
 - [ ] Main freshly run both new Node suites and PowerShell AST checks; inspect no resources/protocol/VERSION/deploy/website changed. Record all actual counts/exits and boundaries. Do not equate library compilation with AV approval or installation validation.
 - [ ] Document historical detection names/events and missing exact-sample verdict; future authorized normal release requires frozen source/dependencies, pre-execution hashes, final artifact scanning/vendor determination. No new package in this task. Keep unrelated legacy/DLSS/JAR follow-up visible, not silently declared fixed.
 - [ ] After verified review merge/push source main per existing authorization, no force push. Preserve local website preview3837. Tell user what changed, what remains unproven and that no new installer was distributed.
+
+## Execution results
+
+Task1 a1b47c3, Task2 4a795a3+29d8b3e completed and independently approved. Main fresh25/25tests and three library-only C# binding checks passed; mutuallyexclusive symbols rejected. Expected PreviewMode defaultfalse CS0649 recorded. Task3 wholebranchreview and sourceintegration pending. See docs/quality/2026-10-24-release-boundary.md; no productbuild/run/distribution or AVresolution claim.

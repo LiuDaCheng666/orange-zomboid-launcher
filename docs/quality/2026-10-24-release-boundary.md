@@ -1,0 +1,30 @@
+# 发行源码／依赖边界验收
+
+工作目录 E:/Projects/OrangeLauncher，基线9e12c76，修复分支fix/release-source-boundary。此次仅源码工程整改，不发布新安装包，不称为Defender问题已根治。
+
+## 实施结果
+
+- build/ProductionSources.ps1明确列出92项生产源码。正式构建不再按整个目录编入84个测试文件；新未知C#文件不会自动进入产品。
+- Program测试／开发命令及原Test类移入符号守卫的诊断文件，原56套调用及顺序保留。诊断输入179项，发布工具93项。正式入口拒绝11个诊断参数，生产worker分派和其余UI／Engine代码保持不变。
+- Build-CoreRelease、Build-Setup两分支、Build-Modern、Build-Tests统一使用对应解析器、编译符号及入口。双方符号同时启用明确编译失败。
+- 依赖锁来自核验的微软官方NuGet包；下载包先认证再解压，已有缓存与新解压均验证Core、WinForms、nativeLoader三项。安装器core构建和CI复用相同锁／函数，不再各写一份Core-only校验。
+
+## 真实验证
+
+Task1旧校验隔离探针接受被改动WinForms和Loader，形成RED；修复后17项通过。Task2原生产glob包含84测试、入口仍分派56套，断言RED；修改后8项通过。报告保留在本地审查工作区。
+
+主控在29d8b3e重新执行：
+
+`node --test tests/production-boundary.test.cjs tests/dependency-integrity.test.cjs`
+
+25项全部通过，0失败／跳过，退出0，8126.0368ms。包括真实PowerShell校验、每项缺失／变化、错误锁、源码解析器、未知／缺失源码及全部构建命令AST。验证只调用解析器／校验函数，不执行产品构建脚本。
+
+主控随后对已有原始NuGet包、三个SDK文件只读认证成功，直接调用csc `/target:library /platform:x64`：生产92项、诊断179项、发布工具93项均退出0。双方符号用例按预期CS1029退出1。输出仅为临时目录中的三个库，从未加载或执行。生产／工具各有CS0649，来源Program.PreviewMode生产中保持默认false；已明确记录，任务审查认为不改变行为。
+
+这验证C#语义闭包，不验证运行资源、`/main`实际EXE链接、安装／卸载、游戏启动或最终二进制扫描。入口签名和`/main`选择另由AST／代码审查核对。
+
+## 审查与边界
+
+Task1、Task2独立规格与质量审查均通过。审查无法从diff重跑的结果，由上述主控新鲜验证补证；未验证运行时、安装器和AV行为的限制不被消除。
+
+没有调用任何正式构建／准备脚本，没有生成产品EXE或安装包，没有修改18文件更新认证协议、JAR、资源、VERSION、官网、游戏／Steam配置或防护设置，没有访问／恢复／执行隔离样本、运行CI或发布新版本。历史检测、供应链剩余审查项及后续准确样本证据要求见docs/security/2026-10-24-release-boundary-audit.md。
