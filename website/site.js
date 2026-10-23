@@ -18,11 +18,11 @@
     effects.get(target)?.cancel();
     effects.delete(target);
   }
-  function enter(target, duration = 240) {
+  function enter(target, duration = 360) {
     stop(target);
     if (reducedMotion.matches || document.hidden || !target.animate) return;
     const effect = target.animate([
-      { opacity: 0.55, transform: 'translateY(8px)' },
+      { opacity: 0.2, transform: 'translateY(20px)' },
       { opacity: 1, transform: 'translateY(0)' }
     ], { duration, easing: 'cubic-bezier(.2,.7,.2,1)' });
     effects.set(target, effect);
@@ -36,7 +36,7 @@
   if ('IntersectionObserver' in window) {
     const entrance = new IntersectionObserver(entries => {
       for (const entry of entries) if (entry.isIntersecting) {
-        enter(entry.target, 360);
+        enter(entry.target, 560);
         entrance.unobserve(entry.target);
       }
     }, { threshold: 0.08 });

@@ -32,6 +32,58 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); });
 
+test('showcase keeps a readable full screenshot and five horizontal choices on desktop', async () => {
+  for (const width of [1440, 1280]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce' });
+    try {
+      await page.goto(base);
+      const shot = await page.locator('[data-feature-image]').boundingBox();
+      assert.ok(shot.width >= 1050, `software preview must remain readable: ${shot.width}px at ${width}`);
+      assert.ok(Math.abs(shot.width / shot.height - 1.6) < .015, 'show the complete screenshot proportionally');
+      if (width === 1440) assertPreviewExposure(shot, 900);
+      const boxes = await Promise.all((await page.getByRole('tab').all()).map(tab => tab.boundingBox()));
+      assert.equal(boxes.length, 5);
+      assert.ok(boxes.every(box => Math.abs(box.y - boxes[0].y) < 1 && box.height >= 44));
+      for (const summary of await page.locator('.feature-summary').all()) assert.ok(await summary.isVisible());
+      assert.equal(await page.locator('[data-feature-image]').evaluate(img => getComputedStyle(img).objectFit), 'contain');
+    } finally { await page.close(); }
+  }
+});
+
+test('showcase entrance and selection have visible finite movement and cancel on pagehide', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await page.goto(base, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.querySelector('.hero').getAnimations().length > 0);
+    const entrance = await page.locator('.hero').evaluate(el => {
+      const effect = el.getAnimations()[0].effect;
+      return { duration: effect.getTiming().duration, frames: effect.getKeyframes() };
+    });
+    assert.ok(entrance.duration >= 450 && entrance.duration <= 650, `entrance duration ${entrance.duration}`);
+    assert.match(entrance.frames[0].transform, /translateY\((1[6-9]|2[0-4])px\)/);
+    await page.evaluate(() => Promise.all(document.getAnimations().map(a => a.finished.catch(() => {}))));
+    const motion = await page.evaluate(async () => {
+      document.querySelector('#tab-components').click();
+      const panel = document.querySelector('[role=tabpanel]');
+      const animation = panel.getAnimations()[0];
+      const timing = animation.effect.getTiming();
+      const frames = animation.effect.getKeyframes();
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const first = getComputedStyle(panel).transform;
+      await new Promise(resolve => setTimeout(resolve, 110));
+      const intermediate = getComputedStyle(panel).transform;
+      window.dispatchEvent(new Event('pagehide'));
+      return { duration: timing.duration, iterations: timing.iterations, frames, first, intermediate, remaining: panel.getAnimations().length };
+    });
+    assert.ok(motion.duration >= 300 && motion.duration <= 420);
+    assert.equal(motion.iterations, 1);
+    assert.match(motion.frames[0].transform, /translateY\((1[6-9]|2[0-4])px\)/);
+    assert.notEqual(motion.first, motion.intermediate);
+    assert.notEqual(motion.intermediate, 'none');
+    assert.equal(motion.remaining, 0);
+  } finally { await page.close(); }
+});
+
 test('responsive navigation and preview controls have usable targets without crowding the first screen', async () => {
   for (const width of [1440, 768, 390]) for (const name of ['index', 'help', 'changes']) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce' });
@@ -106,7 +158,7 @@ test('feature tabs support keyboard navigation, readable enlargement and reduced
   await page.getByRole('tab', { name: '模组配置', exact: true }).click();
   const panel = page.getByRole('tabpanel');
   assert.ok(await panel.filter({ hasText: '模组清单' }).isVisible());
-  assert.match(await panel.locator('img').getAttribute('src'), /launcher-mods-dark/);
+  assert.match(await panel.locator('[data-feature-image]').getAttribute('src'), /launcher-mods-dark/);
   await page.keyboard.press('ArrowRight');
   assert.equal(await page.getByRole('tab', { name: '服务器连接', exact: true }).getAttribute('aria-selected'), 'true');
   await page.keyboard.press('Home');
