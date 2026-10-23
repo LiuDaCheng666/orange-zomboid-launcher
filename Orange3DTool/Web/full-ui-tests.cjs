@@ -150,6 +150,7 @@ test('rich ordered lists show actual one-based positions after a reorder',async 
 module.exports={setup,route,playwright};
 if(require.main===module)tests.push(...require('./retire-aim-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./product-refresh-ui-tests.cjs').tests);
+if(require.main===module)tests.push(...require('./fluent-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./copy-contact-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./server-workshop-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./final-fix-ui-tests.cjs').tests);
