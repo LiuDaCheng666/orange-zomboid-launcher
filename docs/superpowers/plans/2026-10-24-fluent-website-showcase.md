@@ -43,3 +43,7 @@ assert.ok(Math.abs(r.width/r.height-1.6)<.015,'show the complete screenshot prop
 - [ ] Fresh website+license suite,52 existing launcher UI checks if website changes somehow touch launcher files (otherwise no need), exactpreviewasset hashes unchanged, no horizontaloverflow and image/motionstates at four widths. Inspect actualrecording (or timed rendered frames if playbacktool unavailable), not only assertion counts.
 - [ ] Independent taskreview and wholebranchreview, scoped fixloop for concrete defects. Separate security audit observations from verified Defender cause; do not claim executableproblemfixed by website edits.
 - [ ] Update local preview, show actual changed page/capture; merge/push source per existing authorization onlyaftergreen. No installation/deploy/updatefeed changes. Note live site vs local source clearly.
+
+## Results
+
+Task1 complete 8ee1d6b+0a4766e+a9c74ea; task review and final scoped re-review approved. Main final fresh website+license28total/27pass/0fail/1deploymentSKIP, exit0. See docs/quality/2026-10-24-website-showcase.md for actual geometry, recorded motion and limits. Local preview remains3837; live deployment not part of this change.
