@@ -45,7 +45,7 @@ File.WriteAllText(infoPath, "id=fixture\nname=Changed\n");
 
 **Files:** modify native `InstallWorkflow.cs`, `Program.cs`, `ChinesePatch.cs`, `ModernController.cs`, `ComponentEvidence.cs`, `ModernHostPolicy.cs` as required; add a focused `CoreComponents.cs` and native regression tests; add `docs/components/2026-10-23-upstream-audit.md`. Do not change Web files yet.
 
-**Interfaces:** status exposes `buddy`, `viewpoint`, `chinese` cards in addition to legacy compatibility where needed; existing component action `{id,op,confirmed}` accepts the new IDs. Legacy `base` and existing play-profile formats retain combined behavior. The three cards expose existing title/item/version/configured/update fields. Buddy version is runtime JAR manifest, not installer tag. Task 3 consumes these cards.
+**Interfaces:** status exposes `buddy`, `viewpoint`, `chinese` cards in addition to legacy compatibility where needed; existing `componentsAction` payload `{component,operation,confirmed}` accepts the new IDs. Legacy `base` and existing play-profile formats retain combined behavior. The three cards expose existing title/item/version/configured/update fields. Buddy version is runtime JAR manifest, not installer tag. Task 3 consumes these cards.
 
 - [ ] Write native controller/engine fixture tests: Buddy-only installation does not enable Viewpoint; Chinese with Buddy alone succeeds; Viewpoint auto-fetches only missing Buddy/Viewpoint sources; Viewpoint uninstall retains Buddy native files and launch args; Buddy uninstall leaves downloaded optional files intact; legacy base/profiles and restore-all still work. All fixtures and fake fetches must be isolated.
 
