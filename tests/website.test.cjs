@@ -40,7 +40,7 @@ test('showcase keeps a readable full screenshot and five horizontal choices on d
       const shot = await page.locator('[data-feature-image]').boundingBox();
       assert.ok(shot.width >= 1050, `software preview must remain readable: ${shot.width}px at ${width}`);
       assert.ok(Math.abs(shot.width / shot.height - 1.6) < .015, 'show the complete screenshot proportionally');
-      if (width === 1440) assertPreviewExposure(shot, 900);
+      assert.ok(900 - shot.y >= 360, `first screen must expose 360px of the software preview: top=${shot.y} at ${width}`);
       const boxes = await Promise.all((await page.getByRole('tab').all()).map(tab => tab.boundingBox()));
       assert.equal(boxes.length, 5);
       assert.ok(boxes.every(box => Math.abs(box.y - boxes[0].y) < 1 && box.height >= 44));
