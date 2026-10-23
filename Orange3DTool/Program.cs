@@ -45,7 +45,7 @@ namespace PZ3D {
    if(args.Length>=2 && args[0]=="--verify-cache"){try{FeatureTests.Real(args[1]);return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
    if(args.Length>=2 && args[0]=="--prepare-dlss"){try{Console.WriteLine(ComponentCache.Prepare(args[1],(v,t)=>Console.WriteLine(v+"% "+t),System.Threading.CancellationToken.None));return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
    if(args.Length>=2 && args[0]=="--fetch-workshop"){try{var paths=SteamWorkshop.Fetch(args[1],InstallWorkflow.Requested(args.Contains("--models")),(v,t)=>Console.WriteLine(v+"% "+t),System.Threading.CancellationToken.None,420);foreach(var p in paths)Console.WriteLine(p.Key+"="+p.Value);return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
-if(args.Contains("--self-test")) { try { CatalogCacheTests.Run(); ServerLaunchPolicyTests.Run(); LaunchTransportTests.Run(); AimBridgeRetirementTests.Run(); ConfigurationRuntimeTests.Run(); BuddyTakeoverTests.Run(); SteamLaunchOptionsTests.Run(); BuddyLaunchArgumentsTests.Run(); LauncherNativeServicesTests.Run(); GameFavoritesTests.Run(); FullLauncherIntegrationTests.Run(); ModConfigurationsTests.Run(); SteamLauncherServicesTests.RunUnit(); ConcurrentSnapshotTests.Run(); JournalPrivacyTests.Run(); PhaseProgressTests.Run(); SteamUnavailableTests.Run(); PlaytimeDayTests.Run(); RoofRemovalTests.Run(); ServerRulesTests.Run(); AddonTests.Run(); AddonTests.Resolver(); ComponentEvidenceTests.Run(); SettingsChineseTests.Run(); GameVersionProbeTests.Run(); JavaApprovalsTests.Run(); SaveProfilesTests.Run(); if(ServerProfilesTests.Main()!=0)throw new Exception("服务器配置回归失败"); LaunchProfilesTests.Run(); PortableDeploymentTests.Run(); GameProcessGuardTests.Run(); HardwareProbeTests.Run(); ModernHostTests.Run(); ModernHostTests.QueuedCancel(); ModernControllerTests.Run(); LocalAddonTests.Run(); LauncherFeaturesTests.Run(); MemoryPolicyTests.Run(); LauncherMaintenanceTests.Run(); LauncherWorkshopRebuildTests.Run(); LauncherUiTests.Run(); ComponentBatchTests.Run(); ReticleSettingsTests.Run(); Test.Run(); Test.Extras(); Test.Audit(); FeatureTests.Run(); ChinesePatchTests.Run(); UiUpdateTests.Run(); PortableTests.Run(); WorkshopSubscriptionTests.Run(); SteamSubscriptionWaitTests.Run(); StatusTests.Run(); SettingsTests.Run(); ShaderTests.Run(); UpdateTests.Run(); DiscoveryTests.Run(); ShootClientTests.Run(); PresentationBridgeTests.Run(); return 0; } catch(Exception e) { Console.WriteLine(e); return 1; } }
+if(args.Contains("--self-test")) { try { CoreComponentsTests.Run(); CatalogCacheTests.Run(); ServerLaunchPolicyTests.Run(); LaunchTransportTests.Run(); AimBridgeRetirementTests.Run(); ConfigurationRuntimeTests.Run(); BuddyTakeoverTests.Run(); SteamLaunchOptionsTests.Run(); BuddyLaunchArgumentsTests.Run(); LauncherNativeServicesTests.Run(); GameFavoritesTests.Run(); FullLauncherIntegrationTests.Run(); ModConfigurationsTests.Run(); SteamLauncherServicesTests.RunUnit(); ConcurrentSnapshotTests.Run(); JournalPrivacyTests.Run(); PhaseProgressTests.Run(); SteamUnavailableTests.Run(); PlaytimeDayTests.Run(); RoofRemovalTests.Run(); ServerRulesTests.Run(); AddonTests.Run(); AddonTests.Resolver(); ComponentEvidenceTests.Run(); SettingsChineseTests.Run(); GameVersionProbeTests.Run(); JavaApprovalsTests.Run(); SaveProfilesTests.Run(); if(ServerProfilesTests.Main()!=0)throw new Exception("服务器配置回归失败"); LaunchProfilesTests.Run(); PortableDeploymentTests.Run(); GameProcessGuardTests.Run(); HardwareProbeTests.Run(); ModernHostTests.Run(); ModernHostTests.QueuedCancel(); ModernControllerTests.Run(); LocalAddonTests.Run(); LauncherFeaturesTests.Run(); MemoryPolicyTests.Run(); LauncherMaintenanceTests.Run(); LauncherWorkshopRebuildTests.Run(); LauncherUiTests.Run(); ComponentBatchTests.Run(); ReticleSettingsTests.Run(); Test.Run(); Test.Extras(); Test.Audit(); FeatureTests.Run(); ChinesePatchTests.Run(); UiUpdateTests.Run(); PortableTests.Run(); WorkshopSubscriptionTests.Run(); SteamSubscriptionWaitTests.Run(); StatusTests.Run(); SettingsTests.Run(); ShaderTests.Run(); UpdateTests.Run(); DiscoveryTests.Run(); ShootClientTests.Run(); PresentationBridgeTests.Run(); return 0; } catch(Exception e) { Console.WriteLine(e); return 1; } }
    Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
    if(args.Length>=2 && args[0]=="--preview"){PreviewMode=true;int index=0;if(args.Length>2)int.TryParse(args[2],out index);Func<string,string> option=key=>{int at=Array.IndexOf(args,key);return at>=0&&at+1<args.Length?args[at+1]:null;};using(var f=new MainForm()){f.PreviewLauncher(args[1],index,args.Contains("--busy"),option("--theme"),option("--size"),option("--page"));}return 0;}
    if(args.Length>=2&&args[0]=="--preview-help"){PreviewMode=true;using(var form=new MainForm())form.PreviewHelp(args[1]);return 0;}return ModernBootstrap.Run(args);
@@ -87,6 +87,7 @@ if(args.Contains("--self-test")) { try { CatalogCacheTests.Run(); ServerLaunchPo
   Dictionary<string,object> ReadConfig(){return Json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Config));}
   static string[] Args(Dictionary<string,object> c){return ((System.Collections.IEnumerable)c["vmArgs"]).Cast<object>().Select(o=>o.ToString()).ToArray();}
   public bool Enabled {get{try{return Args(ReadConfig()).Any(Agent) && File.Exists(Mods) && Regex.IsMatch(File.ReadAllText(Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}catch{return false;}}}
+  internal bool FrameworkConfigured {get{try{return Args(ReadConfig()).Any(Agent);}catch{return false;}}}
   public void Guard(){GuardCore(false);}
   public void GuardLaunch(){GuardCore(false,true);}
   internal void GuardMaintenance(){GuardCore(false);if(!TestMode&&RuntimeRunning())throw new Exception("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后清理缓存或重建工坊。");}
@@ -105,48 +106,52 @@ if(args.Contains("--self-test")) { try { CatalogCacheTests.Run(); ServerLaunchPo
   }
   internal void ValidateSwitchJson(){if(!BuddyLaunchArguments.CleanJson(File.ReadAllText(Config)).Safe)throw new Exception("启动 JSON 含不明确的 Buddy 参数，未作修改，请人工检查。");}
   public string Switch(bool on,bool models){using(PlayProfileTransaction.Lock(this)){return SwitchUnlocked(on,models);}}
-  string SwitchUnlocked(bool on,bool models){
+  internal string SwitchComponent(string component,bool on){using(PlayProfileTransaction.Lock(this)){return SwitchUnlocked(on,false,component);}}
+  string SwitchUnlocked(bool on,bool models,string component="base"){
+   bool loader=component!="viewpoint",view=component!="buddy";
    Step(0,"检查启动配置");
-   Guard();ValidateSwitchJson();string bridgeRetirement=on?"":new PresentationBridge().Retire(this);
-   try{if(!on)new DlssInstaller(Game,Data,TestMode).Disable();var cfg=ReadConfig();
+   Guard();ValidateSwitchJson();string bridgeRetirement=on||component!="base"?"":new PresentationBridge().Retire(this);
+   try{if(!on&&component=="base")new DlssInstaller(Game,Data,TestMode).Disable();var cfg=ReadConfig();
    Step(10,"检查已下载模组与光影预设");
-   if(on && (!HasView || !File.Exists(Path.Combine(BuddyLib,"ZombieBuddy.jar")) || !File.Exists(Path.Combine(BuddyLib,"zbNative.dll"))))throw new Exception("尚未下载完整依赖。请在“更新与下载”订阅 ZombieBuddy 和 Viewpoint，等待 Steam 完成下载后重试。");
+   if(on && ((view&&!HasView) || (loader&&(!File.Exists(Path.Combine(BuddyLib,"ZombieBuddy.jar")) || !File.Exists(Path.Combine(BuddyLib,"zbNative.dll")))) || (!loader&&!CoreComponents.FrameworkReady(this))))throw new Exception("尚未下载完整依赖。请在“更新与下载”订阅 ZombieBuddy 和 Viewpoint，等待 Steam 完成下载后重试。");
    if(on && models && !HasModels)throw new Exception("可选 3D 物件包尚未下载，请先订阅或取消勾选。");
    string mod=File.Exists(Mods)?File.ReadAllText(Mods):"VERSION = 1,\r\n\r\nmods\r\n{\r\n}\r\n\r\nmaps\r\n{\r\n}\r\n";
    var block=Regex.Match(mod,@"\bmods\s*\{(?<body>[^}]*)\}");if(!block.Success)throw new Exception("客户端模组文件格式无法识别，未作修改。");
    string body=block.Groups["body"].Value;
-   foreach(string id in ModIds.Concat(on?new string[0]:new[]{ShootClient.Id,ChinesePatch.Id}))body=Regex.Replace(body,@"(?m)^[ \t]*mod\s*=\s*"+Regex.Escape(id)+@"\s*,[^\r\n]*(?:\r?\n|$)","");
-   if(on)body="\r\n    mod = ZombieBuddy,\r\n    mod = Viewpoint,\r\n"+(models?"    mod = PZVoxelStudioViewpoint,\r\n":"")+body.TrimStart('\r','\n');
+   string[] affected=component=="base"?ModIds.Concat(on?new string[0]:new[]{ShootClient.Id,ChinesePatch.Id}).ToArray():component=="buddy"?(on?new[]{"ZombieBuddy"}:ModIds.Concat(new[]{ShootClient.Id,ChinesePatch.Id}).ToArray()):new[]{"Viewpoint"};
+   foreach(string id in affected)body=Regex.Replace(body,@"(?m)^[ \t]*mod\s*=\s*"+Regex.Escape(id)+@"\s*,[^\r\n]*(?:\r?\n|$)","");
+   if(on)body="\r\n"+(loader?"    mod = ZombieBuddy,\r\n":"")+(view?"    mod = Viewpoint,\r\n":"")+(models?"    mod = PZVoxelStudioViewpoint,\r\n":"")+body.TrimStart('\r','\n');
    string updated=mod.Substring(0,block.Groups["body"].Index)+body+mod.Substring(block.Groups["body"].Index+block.Groups["body"].Length);
    cfg["vmArgs"]=Args(cfg).Where(a=>!Agent(a)).Concat(on?new[]{"-agentlib:zbNative"}:new string[0]).ToArray();
    // Remove loader arguments also from OS-specific launch branches.
    if(cfg.ContainsKey("windows")){var windows=cfg["windows"] as Dictionary<string,object>;if(windows!=null)foreach(var value in windows.Values){var branch=value as Dictionary<string,object>;if(branch!=null && branch.ContainsKey("vmArgs"))branch["vmArgs"]=Args(branch).Where(a=>!Agent(a)).ToArray();}}
    string preset=PresetSource;
-   string[] packages=on&&Directory.Exists(preset)?Directory.GetFiles(preset,"*.zip"):new string[0];
+   string[] packages=on&&view&&Directory.Exists(preset)?Directory.GetFiles(preset,"*.zip"):new string[0];
    var shaderCopies=new List<string>();foreach(string zip in packages){ValidateShader(zip);string target=Path.Combine(ShaderDir,Path.GetFileName(zip));if(!File.Exists(target))shaderCopies.Add(zip);}
    string[] targets=new[]{Config,Mods,Path.Combine(Game,"ZombieBuddy.jar"),Path.Combine(Game,"zbNative.dll"),Path.Combine(Game,"ZombieBuddy.jar.new")}.Concat(shaderCopies.Select(p=>Path.Combine(ShaderDir,Path.GetFileName(p)))).ToArray();
    string backup=Path.Combine(Data,"backups",DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")+"-"+Guid.NewGuid().ToString("N").Substring(0,6));Directory.CreateDirectory(backup);
    LastBackup=backup;Step(25,"备份原始文件，生成人工恢复说明");
-   var originals=new Dictionary<string,byte[]>();for(int i=0;i<targets.Length;i++){string p=targets[i];originals[p]=File.Exists(p)?File.ReadAllBytes(p):null;if(originals[p]!=null)File.WriteAllBytes(Path.Combine(backup,i+"-"+Path.GetFileName(p)),originals[p]);}
-   File.WriteAllText(Path.Combine(backup,"manifest.json"),Json.Serialize(targets));
-   var changes=targets.Select((p,i)=>new Dictionary<string,object>{{"path",p},{"backup",originals[p]==null?null:Path.Combine(backup,i+"-"+Path.GetFileName(p))},{"existedBefore",originals[p]!=null},{"operation",i<2?"修改配置":i==4?"清理待更新加载器":on?"安装/更新文件":"停用加载器"},{"beforeSHA256",originals[p]==null?null:Hash(originals[p])}}).ToArray();
+   string[] tracked=loader?targets:new[]{Mods}.Concat(shaderCopies.Select(p=>Path.Combine(ShaderDir,Path.GetFileName(p)))).ToArray();
+   var originals=new Dictionary<string,byte[]>();for(int i=0;i<tracked.Length;i++){string p=tracked[i];originals[p]=File.Exists(p)?File.ReadAllBytes(p):null;if(originals[p]!=null)File.WriteAllBytes(Path.Combine(backup,i+"-"+Path.GetFileName(p)),originals[p]);}
+   File.WriteAllText(Path.Combine(backup,"manifest.json"),Json.Serialize(tracked));
+   var changes=tracked.Select((p,i)=>new Dictionary<string,object>{{"path",p},{"backup",originals[p]==null?null:Path.Combine(backup,i+"-"+Path.GetFileName(p))},{"existedBefore",originals[p]!=null},{"operation",i<2?"修改配置":i==4?"清理待更新加载器":on?"安装/更新文件":"停用加载器"},{"beforeSHA256",originals[p]==null?null:Hash(originals[p])}}).ToArray();
    SaveReport(backup,changes,"准备操作");
    File.WriteAllText(Path.Combine(backup,"人工关闭3D.txt"),ManualGuide()+"\r\n\r\n此次文件与备份对应：\r\n"+string.Join("\r\n",changes.Select(c=>c["path"]+"\r\n  原文件备份："+(c["backup"]??"原先不存在；撤销安装时可移走此文件"))),new UTF8Encoding(true));
    try {
-    Step(40,on?"复制 ZombieBuddy 加载器":"停用 ZombieBuddy 加载器");
-    if(on){File.Copy(Path.Combine(BuddyLib,"ZombieBuddy.jar"),targets[2],true);File.Copy(Path.Combine(BuddyLib,"zbNative.dll"),targets[3],true);}
+    Step(40,loader?(on?"复制 ZombieBuddy 加载器":"停用 ZombieBuddy 加载器"):"保留 ZombieBuddy 加载器");
+    if(loader){if(on){File.Copy(Path.Combine(BuddyLib,"ZombieBuddy.jar"),targets[2],true);File.Copy(Path.Combine(BuddyLib,"zbNative.dll"),targets[3],true);}
     else {foreach(string p in targets.Skip(2).Take(3))if(File.Exists(p))File.Delete(p);}
-    if(on&&File.Exists(targets[4]))File.Delete(targets[4]);
-    Step(60,"写入启动参数，保留内存和其他参数");Atomic(Config,Json.Serialize(cfg));
+    if(on&&File.Exists(targets[4]))File.Delete(targets[4]);}
+    Step(60,"写入启动参数，保留内存和其他参数");if(loader)Atomic(Config,Json.Serialize(cfg));
     Step(72,"更新客户端默认模组列表");Atomic(Mods,updated);
-    Step(82,on?"创建 Viewpoint 光影目录并安装随附预设":"保留光影包，方便下次使用");
-    if(on){Directory.CreateDirectory(ShaderDir);foreach(string zip in shaderCopies)File.Copy(zip,Path.Combine(ShaderDir,Path.GetFileName(zip)));}
+    Step(82,on&&view?"创建 Viewpoint 光影目录并安装随附预设":"保留光影包，方便下次使用");
+    if(on&&view){Directory.CreateDirectory(ShaderDir);foreach(string zip in shaderCopies)File.Copy(zip,Path.Combine(ShaderDir,Path.GetFileName(zip)));}
     Step(94,"校验启用状态与修改记录");
-    if(Enabled!=on)throw new Exception("切换后校验失败。");
+    if((component=="base"?Enabled:component=="buddy"?CoreComponents.FrameworkReady(this):CoreComponents.ViewpointConfigured(this))!=on)throw new Exception("切换后校验失败。");
     foreach(var c in changes){string p=(string)c["path"];c["afterSHA256"]=File.Exists(p)?Hash(File.ReadAllBytes(p)):null;}
-    SaveReport(backup,changes,"已完成");Step(bridgeRetirement.Contains("[待清理]")?-1:100,on?"3D 与 Buddy 已启用，下次启动生效":bridgeRetirement.Contains("[待清理]")?"3D 与 Buddy 已关闭；旧瞄准桥接仍有待清理文件":"3D 与 Buddy 已关闭");
+    SaveReport(backup,changes,"已完成");Step(bridgeRetirement.Contains("[待清理]")?-1:100,component!="base"?(component=="buddy"?"ZombieBuddy":"Viewpoint")+(on?" 已启用，下次启动生效":" 已停用"):on?"3D 与 Buddy 已启用，下次启动生效":bridgeRetirement.Contains("[待清理]")?"3D 与 Buddy 已关闭；旧瞄准桥接仍有待清理文件":"3D 与 Buddy 已关闭");
    }catch(Exception failure){Step(0,"操作失败，正在恢复本阶段原文件");var errors=new List<string>();foreach(var entry in originals){try{if(entry.Value==null){if(File.Exists(entry.Key))File.Delete(entry.Key);}else{Directory.CreateDirectory(Path.GetDirectoryName(entry.Key));File.WriteAllBytes(entry.Key,entry.Value);}}catch(Exception err){errors.Add(entry.Key+": "+err.Message);}}try{SaveReport(backup,changes,errors.Count==0?"失败，已回滚":"失败，回滚不完整："+string.Join("; ",errors));}catch{}throw new Exception(failure.Message+"\r\n"+(errors.Count==0?"已恢复本阶段原文件。":"部分文件未恢复："+string.Join("; ",errors))+(!on?"\r\n此前已停用的开镜 / DLSS / 汉化组件不在本阶段回滚范围，需核对状态后重新安装。":"")+"\r\n人工恢复说明："+Path.Combine(backup,"人工关闭3D.txt"),failure);}
-   return (on?"3D 和 ZombieBuddy 已启用，下次启动应用。":"已关闭 3D 和 ZombieBuddy，加载器已移入备份。")+"\r\n备份："+backup+"\r\n下次启动应用。已有存档可在存档管理中调整模组列表。"+(bridgeRetirement==""?"":"\r\n"+bridgeRetirement);
+   return (component=="base"?(on?"3D 和 ZombieBuddy 已启用，下次启动应用。":"已关闭 3D 和 ZombieBuddy，加载器已移入备份。"):(component=="buddy"?"ZombieBuddy":"Viewpoint")+(on?" 已启用，下次启动应用。":" 已停用，下载文件保留。"))+"\r\n备份："+backup+"\r\n下次启动应用。已有存档可在存档管理中调整模组列表。"+(bridgeRetirement==""?"":"\r\n"+bridgeRetirement);
    }catch(Exception error){if(bridgeRetirement=="")throw;string message=error.Message+"\r\n"+bridgeRetirement;if(error is OperationCanceledException)throw new OperationCanceledException(message,error,((OperationCanceledException)error).CancellationToken);throw new Exception(message,error);}
   }
   static string Hash(byte[] bytes){using(var sha=System.Security.Cryptography.SHA256.Create()){return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","");}}
