@@ -39,4 +39,4 @@
 - [x] Commit only the reviewed website, tests and docs.
 - [x] Run existing `deploy/deploy_site.py --site website --mirror artifacts/website-mirror/v1.2.13 --release-metadata artifacts/publication-1.2.13/github-published.json --handover <existing external document>` without printing credentials.
 - [x] Run `OZL_SITE_URL=https://orangezl.com node --test tests/website.test.cjs`; confirm real HTTPS, no-store metadata, unchanged download version/hash and all feature interactions.
-- [ ] Record actual site ID, results and screenshot paths; sync source to the authorized GitHub repository and report the deployed URL.
+- [x] Record actual site ID, results and screenshot paths; sync source to the authorized GitHub repository and report the deployed URL.

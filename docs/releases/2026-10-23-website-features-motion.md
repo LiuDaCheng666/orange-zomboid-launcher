@@ -29,3 +29,4 @@
 - `OZL_SITE_URL=https://orangezl.com node --test tests/website.test.cjs`：14/14 通过、0 跳过；包含实际 HTTPS、下载缓存策略、交互、主题、键盘与动画检查。
 - 已查看重新生成的线上完整首页与手机截图，路径 `artifacts/website-shots/1440.png`、`390.png`、`home-viewport.png`。
 - 网站实现提交 `702334b`；此次部署未修改旧版 Release、域名解析、证书申请、云资源或服务器游戏配置。
+- 已快进合并到 main，合并后本地网站回归 13 通过、1 项线上专用检查跳过；实现与上线记录已推送 GitHub main（`a779d52`）。
