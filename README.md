@@ -1,6 +1,6 @@
 # OZL / Orange zombiod launcher
 
-**当前正式版 1.2.13；1.2.14 新版界面、独立核心组件和官网优先更新正在完成交付验证，尚未公开发布。** [候选验证记录](docs/releases/1.2.14-github-release.md)记录准确状态；[1.2.13](docs/releases/1.2.13-github-release.md)及更早记录作为历史保留。
+**当前正式版 1.2.13；1.2.14 新界面、独立核心组件、服务器清单和官网更新源码已完成回归与审查，但最终安装器被实时防护隔离，尚未公开发布。** [候选验证记录](docs/releases/1.2.14-github-release.md)与[准确检测记录](docs/security/2026-10-23-product-refresh-candidate.md)保留交付状态；[1.2.13](docs/releases/1.2.13-github-release.md)及更早记录作为历史保留。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
