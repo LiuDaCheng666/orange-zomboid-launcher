@@ -11,7 +11,7 @@ async function setup(browser,options={}){
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(options=>{
   window.sent=[];window.held=[];window.pollCallbacks=[];window.setInterval=f=>pollCallbacks.push(f);
-  window.core={protocol:1,revision:1,state:'Idle',currentVersion:'1.2.0',latestVersion:'',taskId:'',checkedUtc:'2026-10-23T08:00:00Z',notes:'界面与稳定性改进',receivedBytes:0,totalBytes:0,speedBytes:0,currentFile:'',message:'',history:[],...options.core};
+  window.core={protocol:1,revision:1,state:'Idle',currentVersion:options.capture?'1.2.14':'1.2.0',latestVersion:'',taskId:'',checkedUtc:'2026-10-23T08:00:00Z',notes:'界面与稳定性改进',receivedBytes:0,totalBytes:0,speedBytes:0,currentFile:'',message:'',history:[],...options.core};
   const components=[['buddy','ZombieBuddy','3619862853','Java 模组加载支持，保留原生启动方式。'],['viewpoint','Project Viewpoint','3809306528','在第一人称与第三人称之间自由切换。'],['chinese','老余汉化 · JAVA 版','3810637496','独立中文支持，也适用于原版游戏。'],['models','6244 3D Models','3810302175','为物件带来细致的立体模型。'],['shoot','Shoot to Thrill','3813032735','作者枪械与多人联机支持。'],['surface','Surface Fix','3814398576','修复 Viewpoint 表面显示。']].map(([id,title,item,description],i)=>({id,title,item,description,optional:i>2,downloaded:options.missing?false:i<3,configured:options.missing?false:i<3,version:i===0?'未声明':i===1?'0.6.3':'2026.10',runtimeState:'下次启动生效',sourceState:'same',sourceFingerprint:'已核对本地来源',compatibility:i===2?'可独立使用':'Build 42',warning:''}));
   for(const c of components){if(c.id==='buddy')c.version='2.3.4';if(c.id==='viewpoint')c.version='0.1.6.1';if(c.id==='chinese')c.version='1.19.0';}
   components.find(c=>c.id==='chinese').description='为 Viewpoint 等 Java 模组提供简体中文，可独立于 3D 安装。';

@@ -14,6 +14,7 @@ namespace PZ3D {
   static void Reject(Action work,string name){bool denied=false;try{work();}catch{denied=true;}Assert(denied,name);}
   public static int Main(string[] args){try{if(args.Length>=3&&args[0]=="--workshop-worker"){Console.SetError(new StreamWriter(Console.OpenStandardError(),new System.Text.UTF8Encoding(false)){AutoFlush=true});Console.SetOut(new StreamWriter(Console.OpenStandardOutput(),new System.Text.UTF8Encoding(false)){AutoFlush=true});return WorkshopWorker.Run(args[1],args[2],args.Contains("--force"));}if(args.Contains("--legacy-tail")){LauncherWorkshopRebuildTests.Run();LauncherUiTests.Run();ComponentBatchTests.Run();ReticleSettingsTests.Run();Test.Run();Test.Extras();Test.Audit();FeatureTests.Run();ChinesePatchTests.Run();UiUpdateTests.Run();PortableTests.Run();WorkshopSubscriptionTests.Run();StatusTests.Run();SettingsTests.Run();ShaderTests.Run();UpdateTests.Run();DiscoveryTests.Run();ShootClientTests.Run();PresentationBridgeTests.Run();return 0;}Run();return 0;}catch(Exception ex){Console.WriteLine("FAIL: "+ex.Message);return 1;}}
   public static void Run(){
+   LauncherContactTests.Run();
    SaveRecycling();
    BuddyWorkflow();
    ScopedLaunchStamp();

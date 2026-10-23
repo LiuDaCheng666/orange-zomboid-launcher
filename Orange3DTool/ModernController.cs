@@ -142,6 +142,7 @@ namespace PZ3D {
    case "reticleGet":return new{retired=true,message="启动器本地瞄准桥接已退役；使用作者原生控制与校准。"};
    case "reticleSave":CheckStorage();return Message(new PresentationBridge().Retire(engine));
    case "open":return Open(Text(p,"target"));
+   case "openContact":LauncherContact.Open(p,test,Links.Open);return Message("已打开官方 QQ 群邀请。");
    case "openOfficial":string item=Text(p,"item");ulong id;if(!ulong.TryParse(item,out id)||!WorkshopWorker.AllowItem(id))throw new Exception("未知作者条目。");if(test)throw new Exception("测试模式禁止打开外部页面。");Links.Open("https://steamcommunity.com/sharedfiles/filedetails/?id="+id);return Message("已打开作者工坊页面。");
    case "dlss":Confirm(p);Check();string op=Text(p,"operation");var installer=new DlssInstaller(engine.Game,data,test){Progress=(v,t)=>Report(v,t)};if(op=="disable")return Message(installer.Disable());if(op!="enable")throw new Exception("未知 DLSS 操作。");if(test)throw new Exception("测试模式禁止真实下载 DLSS。");string cache=ComponentCache.Prepare(Path.Combine(data,"DLSS-Cache"),(v,t)=>Report(-1,t),cancel.Token);Check();return Message(installer.Enable(cache));
    default:throw new Exception("未允许的操作："+action);

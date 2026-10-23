@@ -11,7 +11,7 @@ const assets=path.resolve(__dirname,'../../website/assets');
    for(const name of routes){
     await route(page,name);await page.waitForFunction(()=>!Object.values(orange.state.loading).some(Boolean));
     if(name==='servers'){await page.locator('[data-server-query="demo"]').click();await page.waitForFunction(()=>orange.state.serverQueries.demo?.status==='online');}
-    await page.evaluate(()=>document.querySelector('main').scrollTo(0,0));await page.waitForTimeout(220);
+    await page.evaluate(async()=>{document.querySelector('main').scrollTo(0,0);await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});await page.waitForTimeout(220);
     assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,`${theme} ${width} ${name} overflow`);
     const dest=path.join(folder,`${theme}-${name}-${width}.png`);await page.screenshot({path:dest});
     if(width===1440&&['home','components','mods','servers','maintenance'].includes(name))fs.copyFileSync(dest,path.join(assets,`launcher-${name}-${theme}.png`));
