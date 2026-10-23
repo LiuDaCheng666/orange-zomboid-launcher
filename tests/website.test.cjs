@@ -146,6 +146,17 @@ test('QQ group number is visible and can be copied from every page', async () =>
   await context.close();
 });
 
+test('clipboard rejection leaves the exact group available for manual copy', async () => {
+  const page=await browser.newPage();
+  await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async()=>{throw new Error('denied');}}}));
+  for(const name of ['index','help','changes']){
+    await page.goto(base+'/'+name+'.html');
+    await page.getByRole('button',{name:'复制群号',exact:true}).click();
+    await page.locator('[data-copy-status]').filter({hasText:'请手动复制群号 1124858561'}).waitFor();
+  }
+  await page.close();
+});
+
 test('every page links to the user-provided QQ invitation with safe new-tab attributes', async () => {
   const page = await browser.newPage();
   for (const name of ['index', 'help', 'changes']) {

@@ -11,8 +11,33 @@ namespace PZ3D {
   object Copy(){return snapshot==null?null:new JavaScriptSerializer().DeserializeObject(new JavaScriptSerializer().Serialize(snapshot));}
   public object Status(){lock(gate)return Copy();}
   void Changed(){snapshot.revision++;if(publish!=null)try{publish(Copy());}catch{/* Closing views must not orphan the owned worker. */}}
-  public object Start(string serverId,ServerWorkshopManifest manifest,Func<string,Action<int,string>,CancellationToken,object> download){lock(gate){if(disposed)throw new ObjectDisposedException("ServerWorkshopPreparation");if(worker!=null&&!worker.IsCompleted){if(snapshot.serverId==serverId&&snapshot.manifestStamp==manifest.stamp)return Copy();throw new Exception("已有服务器准备任务，请先取消或等待完成。");}if(cancellation!=null)cancellation.Dispose();cancellation=new CancellationTokenSource();var token=cancellation.Token;
-   var journal=new LauncherJournal(data);string jobId=journal.Begin("serverWorkshopPrepare","服务器工坊准备");snapshot=new Snapshot{jobId=jobId,serverId=serverId,endpoint=manifest.endpoint,manifestStamp=manifest.stamp,totalItems=manifest.ids.Length,items=manifest.ids.Select(id=>new Item{id=id}).ToArray()};try{Save();}catch(Exception e){snapshot.state="failed";snapshot.message=e.Message;journal.Finish("failed",e.Message);throw;}Changed();worker=Task.Factory.StartNew(()=>Run(download,journal,token),CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);return Copy();}}
+  public object Start(string serverId,ServerWorkshopManifest manifest,Func<string,Action<int,string>,CancellationToken,object> download){
+   lock(gate){
+    if(disposed)throw new ObjectDisposedException("ServerWorkshopPreparation");
+    if(worker!=null&&!worker.IsCompleted){
+     if(snapshot.serverId==serverId&&snapshot.manifestStamp==manifest.stamp)return Copy();
+     throw new Exception("已有服务器准备任务，请先取消或等待完成。");
+    }
+    if(cancellation!=null)cancellation.Dispose();
+    cancellation=new CancellationTokenSource();
+    var token=cancellation.Token;
+    var journal=new LauncherJournal(data);
+    string jobId=journal.Begin("serverWorkshopPrepare","服务器工坊准备");
+    snapshot=new Snapshot{
+     jobId=jobId,serverId=serverId,endpoint=manifest.endpoint,manifestStamp=manifest.stamp,
+     totalItems=manifest.ids.Length,items=manifest.ids.Select(id=>new Item{id=id}).ToArray()
+    };
+    try{Save();}
+    catch(Exception e){
+     snapshot.state="failed";snapshot.message=e.Message;
+     journal.Finish("failed",e.Message);
+     throw;
+    }
+    Changed();
+    worker=Task.Factory.StartNew(()=>Run(download,journal,token),CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
+    return Copy();
+   }
+  }
   void Run(Func<string,Action<int,string>,CancellationToken,object> download,LauncherJournal journal,CancellationToken token){
    try{foreach(var item in snapshot.items){token.ThrowIfCancellationRequested();lock(gate){snapshot.currentItem=item.id;snapshot.progress=-1;item.state="running";snapshot.message="正在处理工坊项目 "+item.id;Changed();}
     try{object result=download(item.id,(value,text)=>{token.ThrowIfCancellationRequested();journal.Update(value,text);lock(gate){snapshot.progress=value<0?-1:Math.Min(value,100);snapshot.message=LauncherJournal.Sanitize(text);Changed();}},token);token.ThrowIfCancellationRequested();var resultMap=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(new JavaScriptSerializer().Serialize(result));object resultId;if(resultMap==null||!resultMap.TryGetValue("id",out resultId)||!(resultId is string)||(string)resultId!=item.id)throw new Exception("Steam 未返回已核实的项目结果。");lock(gate){item.state="completed";item.message="订阅与安装已核实";snapshot.completedItems++;Changed();}}

@@ -3,6 +3,23 @@ namespace PZ3D {static class CatalogCacheTests {
  static void Check(bool b,string s){if(!b)throw new Exception("FAIL: "+s);}
  static object Snapshot(Engine e){var m=typeof(SaveProfiles).GetMethod("DisplaySnapshot",BindingFlags.NonPublic|BindingFlags.Static);Check(m!=null,"catalog and cover must share a discovery snapshot");return m.Invoke(null,new object[]{e});}
  static string Json(object o){return new JavaScriptSerializer().Serialize(o);}
+ static void WatcherLifecycle(Engine e,string root){
+  using(var controller=new ModernController(e.Game,e.User,e.Data,true)){
+   var engine=(Engine)typeof(ModernController).GetField("engine",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(controller);
+   Snapshot(engine);
+   var cache=(System.Collections.IDictionary)typeof(DisplayCache).GetField("snapshots",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null);
+   object owner=cache[DisplayCache.Identity(engine)];
+   var watchers=((System.Collections.IEnumerable)owner.GetType().GetField("watchers",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(owner)).Cast<FileSystemWatcher>().ToArray();
+   Check(watchers.Length>0&&watchers.All(w=>w.EnableRaisingEvents),"actual watchers active before engine switch");
+   typeof(ModernController).GetMethod("SetEngine",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(controller,new object[]{Path.Combine(root,"switched-game")});
+   Check(!cache.Contains(DisplayCache.Identity(engine)),"direct engine switch retires old identity");
+   Check(watchers.All(w=>!w.EnableRaisingEvents),"direct engine switch disables all prior watchers");
+   foreach(var watcher in watchers){bool disposed=false;try{watcher.EnableRaisingEvents=true;}catch(ObjectDisposedException){disposed=true;}Check(disposed,"retired watcher cannot restart after disposal");}
+   var selected=(Engine)typeof(ModernController).GetField("engine",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(controller);
+   Check(!Object.ReferenceEquals(Snapshot(selected),Snapshot(engine)),"switch reads independent current engine snapshot");
+   SaveProfiles.InvalidateDisplay(engine);
+  }
+ }
  public static int Main(){try{Run();return 0;}catch(Exception ex){Console.WriteLine(ex);return 1;}}
  public static void Run(){string root=Path.Combine(LauncherTestPaths.Root,"display-cache-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"steamapps/common/Game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);string mod=Path.Combine(e.Workshop,"123/mods/Fixture");Directory.CreateDirectory(mod);string info=Path.Combine(mod,"mod.info"),poster=Path.Combine(mod,"poster.png");File.WriteAllText(info,"id=fixture\nname=Original\nposter=poster.png\n");using(var image=new Bitmap(2,2)){image.Save(poster,System.Drawing.Imaging.ImageFormat.Png);}Check(Json(SaveProfiles.Catalog(e)).Contains("Original"),"real fixture catalog");object first=Snapshot(e);string token=SaveProfiles.Entries(e,new System.Collections.Generic.List<string>())[0].coverToken;Check(Json(SaveProfiles.Cover(e,token)).Contains("data:image/png"),"real cover");Parallel.For(0,16,i=>{SaveProfiles.Catalog(e);SaveProfiles.Cover(e,token);Check(Object.ReferenceEquals(first,Snapshot(e)),"concurrent catalog/cover reuse discovery");});
  File.WriteAllText(info,"id=fixture\nname=Changed\nposter=poster.png\n");Check(SpinWait.SpinUntil(()=>Json(SaveProfiles.Catalog(e)).Contains("Changed"),5000),"external metadata update");File.Delete(poster);Check(Json(SaveProfiles.Cover(e,token)).Contains("\"cover\":\"\""),"covers revalidate actual file");string added=Path.Combine(e.Workshop,"456/mods/Added");Directory.CreateDirectory(added);File.WriteAllText(Path.Combine(added,"mod.info"),"id=added\nname=Added\n");Check(SpinWait.SpinUntil(()=>Json(SaveProfiles.Catalog(e)).Contains("Added"),5000),"external add");Directory.Delete(added,true);Check(SpinWait.SpinUntil(()=>!Json(SaveProfiles.Catalog(e)).Contains("Added"),5000),"external remove");
@@ -13,6 +30,7 @@ namespace PZ3D {static class CatalogCacheTests {
  string code=Path.Combine(e.Workshop,"3814398576/mods/ViewpointSurface/42/mod.info");Directory.CreateDirectory(Path.GetDirectoryName(code));File.WriteAllText(code,"id=ViewpointSurface\nmodversion=1\n");string hash=ComponentEvidence.Fingerprint(e,"surface");DateTime stamp=File.GetLastWriteTimeUtc(code);ComponentEvidence.Decorate(e,"surface",new{configured=true});File.WriteAllText(code,"id=ViewpointSurface\nmodversion=2\n");File.SetLastWriteTimeUtc(code,stamp);Check(ComponentEvidence.Fingerprint(e,"surface")!=hash,"authoritative fingerprint detects same-size same-time edit");ComponentEvidence.Record(e,"surface");Check(File.ReadAllText(Path.Combine(e.Data,"component-receipts/surface.json")).Contains(ComponentEvidence.Fingerprint(e,"surface")),"record writes fresh authoritative digest");
  Directory.CreateDirectory(e.Game);SaveProfiles.InvalidateDisplay(e);object quiet=Snapshot(e);Thread.Sleep(15100);Check(Object.ReferenceEquals(quiet,Snapshot(e)),"display snapshot survives ordinary polling interval");Directory.CreateDirectory(e.Game);File.WriteAllText(Path.Combine(e.Game,"unrelated.log"),"noise");Directory.CreateDirectory(Path.Combine(e.Data,"diagnostics"));File.WriteAllText(Path.Combine(e.Data,"diagnostics/test.log"),"noise");Thread.Sleep(200);Check(Object.ReferenceEquals(quiet,Snapshot(e)),"unrelated game and journal logs do not invalidate display");
  var cache=(System.Collections.IDictionary)typeof(DisplayCache).GetField("snapshots",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null);object owner=cache[DisplayCache.Identity(e)];var values=(System.Collections.IDictionary)owner.GetType().GetField("Values",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(owner);foreach(object value in values.Values)value.GetType().GetField("Created",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(value,DateTime.UtcNow.AddSeconds(-31));Check(!Object.ReferenceEquals(quiet,Snapshot(e)),"fallback expiry retires display value without notification");
+ WatcherLifecycle(e,root);
  AdditionalSources(root);
  Console.WriteLine("PASS bounded display snapshots, shared cover discovery, external changes, engines, concurrency, controller invalidation, fresh entries and receipts");
  }

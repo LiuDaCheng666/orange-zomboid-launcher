@@ -6,6 +6,38 @@ namespace PZ3D {static class ServerWorkshopTests {
  static void Reject(Action a,string name){try{a();}catch(Exception e){Check(!e.Message.Contains("secret"),"input not echoed");checks++;return;}throw new Exception("FAIL "+name);}
  static Dictionary<string,object> Manifest(ModernController c){var list=D(c.Execute("serverList",null));var saved=D(c.Execute("serverUpsert",new Dictionary<string,object>{{"stamp",list["stamp"]},{"id",""},{"name","Job fixture"},{"host","job.test"},{"port",16261},{"queryPort",0},{"username",""},{"useSteamRelay",false}}));var rows=(System.Collections.IList)saved["servers"];string id=(string)((Dictionary<string,object>)rows[rows.Count-1])["id"];var view=D(c.Execute("serverWorkshopGet",new Dictionary<string,object>{{"id",id}}));return D(c.Execute("serverWorkshopImport",new Dictionary<string,object>{{"id",id},{"stamp",view["stamp"]},{"text","123;456;789"},{"confirmed",true}}));}
  static Dictionary<string,object> Wait(ModernController c){var limit=DateTime.UtcNow.AddSeconds(5);while(DateTime.UtcNow<limit){var s=D(c.Execute("serverWorkshopStatus",new Dictionary<string,object>()));if((string)s["state"]!="running")return s;Thread.Sleep(10);}throw new Exception("FAIL job did not drain");}
+ static void RecoveryPreservesImport(string root){
+  var e=new Engine(Path.Combine(root,"revision-game"),Path.Combine(root,"revision-user"),Path.Combine(root,"revision-data"),true);
+  Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[]}");
+  using(var c=new ModernController(e.Game,e.User,e.Data,true,null,(a,b,p,progress,token,batch)=>{throw new Exception("Unexpected Steam boundary");})){
+   var first=Manifest(c);
+   LaunchProfiles.Stage(e,new ProfileLaunchRequest{Kind="server",Host="job.test",Port=16261,Username="fixture"});
+   var record=json.Deserialize<ProfileSessionRecord>(File.ReadAllText(LaunchProfiles.Journal(e)));
+   File.WriteAllText(Path.Combine(e.User,"Lua","OrangeLauncherWorkshop.txt"),"ORANGE_WORKSHOP_1\n"+record.Nonce+"\njob.test:16261\n1\n123\nEND\n");
+   c.Execute("serverWorkshopImport",new Dictionary<string,object>{{"id",first["id"]},{"stamp",first["stamp"]},{"text","999"},{"confirmed",true}});
+   LaunchProfiles.Recover(e,true);
+   var latest=D(c.Execute("serverWorkshopGet",new Dictionary<string,object>{{"id",first["id"]}}));
+   Check((string)latest["source"]=="imported"&&(string)((Dictionary<string,object>)((System.Collections.IList)latest["items"])[0])["id"]=="999","recovery preserves newer explicit import");
+   Check(!LaunchProfiles.Pending(e),"stale capture does not block recovery");
+   LaunchProfiles.Stage(e,new ProfileLaunchRequest{Kind="server",Host="job.test",Port=16261,Username="fixture"});
+   record=json.Deserialize<ProfileSessionRecord>(File.ReadAllText(LaunchProfiles.Journal(e)));
+   record.CaptureRevision=null;File.WriteAllText(LaunchProfiles.Journal(e),json.Serialize(record));
+   File.WriteAllText(Path.Combine(e.User,"Lua","OrangeLauncherWorkshop.txt"),"ORANGE_WORKSHOP_1\n"+record.Nonce+"\njob.test:16261\n1\n111\nEND\n");
+   LaunchProfiles.Recover(e,true);
+   latest=D(c.Execute("serverWorkshopGet",new Dictionary<string,object>{{"id",first["id"]}}));
+   Check((string)latest["source"]=="imported"&&(string)((Dictionary<string,object>)((System.Collections.IList)latest["items"])[0])["id"]=="999","legacy journal has no authority over existing manifest");
+   Check(!LaunchProfiles.Pending(e),"legacy recovery still completes");
+   LaunchProfiles.Stage(e,new ProfileLaunchRequest{Kind="server",Host="job.test",Port=16261,Username="fixture"});
+   File.Delete(Path.Combine(e.User,"Lua","OrangeLauncherWorkshop.txt"));
+   LaunchProfiles.Recover(e,true);
+   latest=D(c.Execute("serverWorkshopGet",new Dictionary<string,object>{{"id",first["id"]}}));
+   Check((string)latest["source"]=="imported"&&(string)((Dictionary<string,object>)((System.Collections.IList)latest["items"])[0])["id"]=="999","no Required event preserves existing imported list");
+   LaunchProfiles.Stage(e,new ProfileLaunchRequest{Kind="server",Host="job.test",Port=16261,Username="fixture"});
+   File.WriteAllBytes(Path.Combine(e.User,"Lua","OrangeLauncherWorkshop.txt"),new byte[]{255,255});
+   LaunchProfiles.Recover(e,true);
+   Check(!LaunchProfiles.Pending(e),"capture decoding failure cannot block recovery");
+  }
+ }
  static void SharedSteamLane(string root,string action){
   string game=Path.Combine(root,action,"steamapps","common","game"),user=Path.Combine(root,action,"user"),data=Path.Combine(root,action,"data");
   Directory.CreateDirectory(game);File.WriteAllText(Path.Combine(game,"ProjectZomboid64.json"),"{\"vmArgs\":[]}");
@@ -35,6 +67,7 @@ namespace PZ3D {static class ServerWorkshopTests {
   }
  }
  public static int Main(){string root=Path.Combine(LauncherTestPaths.Root,"server-workshop-"+Guid.NewGuid().ToString("N"));try{
+  RecoveryPreservesImport(root);
   var type=typeof(ServerWorkshopTests).Assembly.GetType("PZ3D.ServerWorkshopCatalog");Check(type!=null,"catalog available");
   string localItem=Path.Combine(root,"steamapps","workshop","content","108600","123","mods","Example","42");Directory.CreateDirectory(localItem);File.WriteAllText(Path.Combine(localItem,"mod.info"),"id=Example\nname=Known local title\n");
   var parse=type.GetMethod("Parse",BindingFlags.Static|BindingFlags.Public);Func<string,string[]> ids=s=>(string[])parse.Invoke(null,new object[]{s});
@@ -50,7 +83,7 @@ namespace PZ3D {static class ServerWorkshopTests {
   }
   string capture=Path.Combine(root,"capture.txt");string nonce=new string('a',32);Directory.CreateDirectory(root);
   foreach(string bad in new[]{"ORANGE_WORKSHOP_1\n"+nonce+"\nexample.test:16261\n1\n123", "ORANGE_WORKSHOP_1\nold\nexample.test:16261\n1\n123\nEND", "ORANGE_WORKSHOP_1\n"+nonce+"\nwrong:16261\n1\n123\nEND", "ORANGE_WORKSHOP_1\n"+nonce+"\nexample.test:16261\n0\nEND"}){File.WriteAllText(capture,bad);Check(!ServerWorkshopCatalog.Capture(Path.Combine(root,"data"),"example.test:16261",nonce,capture),"invalid capture ignored");}
-  File.WriteAllText(capture,"ORANGE_WORKSHOP_1\n"+nonce+"\nexample.test:16261\n2\n123\n456\nEND\n");Check(ServerWorkshopCatalog.Capture(Path.Combine(root,"data"),"example.test:16261",nonce,capture),"complete bound capture accepted");
+  File.WriteAllText(capture,"ORANGE_WORKSHOP_1\n"+nonce+"\nexample.test:16261\n2\n123\n456\nEND\n");Check(ServerWorkshopCatalog.Capture(Path.Combine(root,"data"),"example.test:16261",nonce,capture,ServerWorkshopCatalog.Revision(Path.Combine(root,"data"),"example.test:16261")),"complete bound capture accepted");
   var prepType=typeof(ServerWorkshopTests).Assembly.GetType("PZ3D.ServerWorkshopPreparation");Check(prepType!=null,"background coordinator available");
   using(var entered=new ManualResetEventSlim(false))using(var release=new ManualResetEventSlim(false)){int calls=0;using(var c=new ModernController(Path.Combine(root,"steamapps","common","game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true,null,(e,a,p,progress,token,batch)=>{Interlocked.Increment(ref calls);Check(a=="download"&&(bool)p["confirmed"],"existing download boundary");entered.Set();release.Wait(token);progress(37,"37 / 100 bytes");if((string)p["id"]=="456")throw new IOException("fixture item failed");return new{id=p["id"],message="verified"};})){
    var m=Manifest(c);var p=new Dictionary<string,object>{{"id",m["id"]},{"stamp",m["stamp"]},{"confirmed",true}};var watch=System.Diagnostics.Stopwatch.StartNew();var start=D(c.Execute("serverWorkshopPrepare",p));Check(watch.ElapsedMilliseconds<1000,"prepare immediately returns");Check(entered.Wait(2000),"owned worker entered");var duplicate=D(c.Execute("serverWorkshopPrepare",p));Check((string)duplicate["jobId"]==(string)start["jobId"]&&calls==1,"duplicate does not subscribe twice");c.Execute("serverList",null);c.Execute("serverWorkshopImport",new Dictionary<string,object>{{"id",m["id"]},{"stamp",m["stamp"]},{"text","999"},{"confirmed",true}});var ordinary=new LauncherJournal(Path.Combine(root,"data"));string ordinaryId=ordinary.Begin("settingsSave","Fixture settings edit");ordinary.Update(25,"Settings remain usable");var listing=D(c.Execute("serverList",null));c.Execute("serverUpsert",new Dictionary<string,object>{{"stamp",listing["stamp"]},{"id",m["id"]},{"name","Edited during preparation"},{"host","new-job.test"},{"port",16261},{"queryPort",0},{"username",""},{"useSteamRelay",false}});release.Set();var done=Wait(c);ordinary.Finish("completed","Fixture saved");var history=(System.Collections.IList)D(ordinary.Snapshot())["history"];Check(history.Cast<Dictionary<string,object>>().Any(x=>(string)x["id"]==ordinaryId&&(string)x["status"]=="completed"),"preparation does not overwrite simultaneous normal journal");Check((string)done["endpoint"]=="job.test:16261","endpoint edits do not retarget owned worker");Check((string)done["state"]=="partial"&&Convert.ToInt32(done["completedItems"])==2,"one failed item yields partial verified successes");Check((string)done["manifestStamp"]==(string)m["stamp"]&&Convert.ToInt32(done["totalItems"])==3,"import cannot relabel running job");Check(calls==3,"processes original batch only");

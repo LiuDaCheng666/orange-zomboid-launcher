@@ -134,7 +134,7 @@ if(args.Contains("--self-test")) { try { if(ServerWorkshopTests.Main()!=0)throw 
    string[] tracked=loader?targets:new[]{Mods}.Concat(shaderCopies.Select(p=>Path.Combine(ShaderDir,Path.GetFileName(p)))).ToArray();
    var originals=new Dictionary<string,byte[]>();for(int i=0;i<tracked.Length;i++){string p=tracked[i];originals[p]=File.Exists(p)?File.ReadAllBytes(p):null;if(originals[p]!=null)File.WriteAllBytes(Path.Combine(backup,i+"-"+Path.GetFileName(p)),originals[p]);}
    File.WriteAllText(Path.Combine(backup,"manifest.json"),Json.Serialize(tracked));
-   var changes=tracked.Select((p,i)=>new Dictionary<string,object>{{"path",p},{"backup",originals[p]==null?null:Path.Combine(backup,i+"-"+Path.GetFileName(p))},{"existedBefore",originals[p]!=null},{"operation",i<2?"修改配置":i==4?"清理待更新加载器":on?"安装/更新文件":"停用加载器"},{"beforeSHA256",originals[p]==null?null:Hash(originals[p])}}).ToArray();
+   var changes=tracked.Select((p,i)=>new Dictionary<string,object>{{"path",p},{"backup",originals[p]==null?null:Path.Combine(backup,i+"-"+Path.GetFileName(p))},{"existedBefore",originals[p]!=null},{"operation",p==Config||p==Mods?"修改配置":p==Path.Combine(Game,"ZombieBuddy.jar.new")?"清理待更新加载器":on?"安装/更新文件":"停用加载器"},{"beforeSHA256",originals[p]==null?null:Hash(originals[p])}}).ToArray();
    SaveReport(backup,changes,"准备操作");
    File.WriteAllText(Path.Combine(backup,"人工关闭3D.txt"),ManualGuide()+"\r\n\r\n此次文件与备份对应：\r\n"+string.Join("\r\n",changes.Select(c=>c["path"]+"\r\n  原文件备份："+(c["backup"]??"原先不存在；撤销安装时可移走此文件"))),new UTF8Encoding(true));
    try {

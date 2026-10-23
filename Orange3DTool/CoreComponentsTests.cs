@@ -18,6 +18,7 @@ namespace PZ3D {
   }
   public static int Main(){try{Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
   public static void Run(){
+   RecoveryLabels();
    using(var f=new Fixture()){f.Action("chinese","install");Assert(ChinesePatch.Enabled(f.E)&&File.Exists(Path.Combine(f.E.Game,"zbNative.dll"))&&!f.E.Enabled&&f.Requested.SequenceEqual(new[]{3619862853UL,3810637496UL}),"clean Chinese entry installs only Buddy and Chinese");}
    // Catches the combined installer being used for Buddy/Chinese, and dropped native IDs.
    using(var f=new Fixture()){f.Action("buddy","install");Assert(File.Exists(Path.Combine(f.E.Game,"ZombieBuddy.jar"))&&File.ReadAllText(f.E.Config).Contains("zbNative")&&!File.ReadAllText(f.E.Mods).Contains("Viewpoint"),"Buddy alone installs framework without Viewpoint");Assert(f.Requested.SequenceEqual(new[]{3619862853UL}),"Buddy fetch requests only missing framework");Assert((string)f.Card("buddy")["version"]=="2.3.4"&&(bool)f.Card("buddy")["configured"]&&!(bool)f.Card("viewpoint")["configured"],"native cards expose runtime manifest and independent configuration");f.Action("chinese","install");Assert(ChinesePatch.Enabled(f.E)&&!f.E.Enabled&&!f.E.HasView,"Chinese requires Buddy alone");f.Action("viewpoint","install");Assert(f.E.Enabled&&f.Requested.SequenceEqual(new[]{3619862853UL,3810637496UL,3809306528UL}),"Viewpoint fetches missing Viewpoint only");byte[] cfg=File.ReadAllBytes(f.E.Config),jar=File.ReadAllBytes(Path.Combine(f.E.Game,"ZombieBuddy.jar"));f.Action("viewpoint","uninstall");Assert(!f.E.Enabled&&cfg.SequenceEqual(File.ReadAllBytes(f.E.Config))&&jar.SequenceEqual(File.ReadAllBytes(Path.Combine(f.E.Game,"ZombieBuddy.jar")))&&ChinesePatch.Enabled(f.E),"Viewpoint removal retains Buddy bytes arguments and Chinese");f.Action("buddy","uninstall");Assert(!File.Exists(Path.Combine(f.E.Game,"ZombieBuddy.jar"))&&!File.ReadAllText(f.E.Config).Contains("zbNative")&&File.Exists(Path.Combine(f.E.Workshop,"3810637496","mods","LaoYuTranslationJava","42","media","java","client","LaoYuTranslationJava.jar")),"Buddy removal preserves downloaded optional files");}
@@ -30,6 +31,22 @@ namespace PZ3D {
    // Catches a failed mod write losing launch configuration or native bytes during shared transaction rollback.
    using(var f=new Fixture()){f.Source(3619862853);byte[] config=File.ReadAllBytes(f.E.Config),mods=File.ReadAllBytes(f.E.Mods);FileStream held=null;bool failed=false;f.E.Progress=(v,s)=>{if(s=="更新客户端默认模组列表")held=new FileStream(f.E.Mods,FileMode.Open,FileAccess.Read,FileShare.None);else if(s=="操作失败，正在恢复本阶段原文件"&&held!=null){held.Dispose();held=null;}};try{f.E.SwitchComponent("buddy",true);}catch(Exception e){failed=e.Message.Contains("已恢复本阶段原文件");}finally{if(held!=null)held.Dispose();}Assert(failed&&config.SequenceEqual(File.ReadAllBytes(f.E.Config))&&mods.SequenceEqual(File.ReadAllBytes(f.E.Mods))&&!File.Exists(Path.Combine(f.E.Game,"ZombieBuddy.jar")),"independent Buddy failure rolls back exact files and reports I/O error");}
    Console.WriteLine("CORE COMPONENTS PASSED");
+  }
+  static void RecoveryLabels(){
+   foreach(string component in new[]{"viewpoint","base"}){
+    using(var f=new Fixture()){
+     f.Action("buddy","install");f.Source(3809306528);
+     f.E.PresetSource=Path.Combine(f.E.Data,"label-presets");Directory.CreateDirectory(f.E.PresetSource);
+     for(int i=0;i<5;i++)using(var zip=ZipFile.Open(Path.Combine(f.E.PresetSource,i+".zip"),ZipArchiveMode.Create))
+      using(var writer=new StreamWriter(zip.CreateEntry("shaders/final.fsh").Open()))writer.Write("fixture");
+     f.E.SwitchComponent(component,true);
+     var report=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(f.E.LastBackup,"changes.json")));
+     var files=((System.Collections.IEnumerable)report["files"]).Cast<Dictionary<string,object>>().ToArray();
+     Assert(files.Where(x=>((string)x["path"]).EndsWith(".zip")).All(x=>(string)x["operation"]=="安装/更新文件"),component+" shader report labels follow file type");
+     Assert(files.Where(x=>(string)x["path"]==f.E.Mods||(string)x["path"]==f.E.Config).All(x=>(string)x["operation"]=="修改配置"),component+" configuration report labels");
+     if(component=="base")Assert(files.Single(x=>((string)x["path"]).EndsWith("ZombieBuddy.jar.new"))["operation"].Equals("清理待更新加载器"),"pending loader report label");
+    }
+   }
   }
  }
 }
