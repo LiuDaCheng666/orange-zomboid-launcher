@@ -98,6 +98,18 @@ assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 270
 - [ ] Prepare a non-sensitive filing checklist: website name OZL/Orange zombiod launcher; orangezl.com/www; IP 101.201.143.163; Aliyun; HTTPS; ICP 辽ICP备2026024866号-1; public GitHub; no 公安 number or submitted application. Identify identity/address/responsibility fields user must provide on official systems, distinguishing ICP/SSL from 公安备案; link official guidance, no identity collection in repository.
 - [ ] Run website/deployment tests, inspect screenshots of all pages/feature panels at desktop/mobile, correct visual issues. Commit and report RED/GREEN and screenshot paths. Deployment is performed by controller only after integration review; do not change remote latest metadata or delete release assets.
 
+## Task 5: Plain launcher copy and official QQ contact
+
+**Files:** modify `Orange3DTool/Web/app.js`, `app.css` and existing capture fixture/scripts as needed; add `Orange3DTool/LauncherContact.cs`, `LauncherContactTests.cs`, extend `ModernController.cs` and `ModernHostPolicy.cs`; add focused `Web/copy-contact-ui-tests.cjs`, register in full UI suite. Do not modify website pages already handled by Task4.
+
+**Interfaces:** new native action `openContact` accepts only `{}` and opens fixed `https://qm.qq.com/q/cuLGbwUx4A` after explicit user click. `LauncherContact.GroupNumber` is `1124858561`; `LauncherContact.InviteUrl` is that exact URL. A target resolver can be tested without opening external apps; TestMode never opens the browser. UI help contact row shows group number, join and copy actions; retain all existing actions. Existing valid cover markup remains `<img...>`; missing cover is a short neutral icon/label, not a generated author image.
+
+- [ ] Add failing behavior tests: highlighted procedural blurb absent on mods, other route headers do not repeat instructional filler; actual titles/status/actions and rich metadata remain; missing posters fit small rows in dark/light at768/1440; help joins through `openContact` with empty payload and copies exact group number. Use real headless DOM/clipboard or injected native boundary, not source grep alone.
+- [ ] Add native test that resolves only the fixed invitation, rejects supplied URL/path payloads, validates action from trusted page and confirms TestMode does not launch external programs. Register through aggregate tests. Run focused tests and retain RED evidence.
+- [ ] Remove generic page-heading procedural subtitles and other redundant filler, preserving concrete field help and actual errors/authorization notices. Avoid empty paragraph spacing. Put the contact row compactly in help, with clear join/copy controls; do not add another large homepage card or duplicate global button cluster. Keep both themes and all existing navigation/actions.
+- [ ] Polish missing-cover placeholder as code-native icon with concise accessible label, maintaining original images unchanged and existing lazy loading/error behavior. Align capture-only version metadata with candidate1.2.14 without changing ordinary test defaults; normal screenshots must settle animations.
+- [ ] Run focused native/UI tests and full Web suite; recapture actual11routes/3widths/2themes and website exports, inspect copy/placeholder/contact in both themes. Commit and report exact tests, removed copy locations, screenshot paths. No real game/server/player changes or foreground browser.
+
 ## Integration and delivery
 
 - [ ] Review each task diff for spec and quality, fix Important/Critical findings and re-review.
