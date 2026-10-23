@@ -27,8 +27,8 @@
 
 **Interfaces:** Consume existing refresh-fixture.cjs setup(browser,options), route(page,name), routes, chromium; existing render/enhance/arrangeHome/actualCover/launcherTools and native message events. Keep existing data attributes and orange.state/request contract. New capture utility defaults to artifacts/fluent-ui and exports website images ONLY with explicit --export-website. Test module exports {tests} and can run standalone like product-refresh-ui-tests.cjs.
 
-- [ ] Inspect current DOM, CSS blocks and 1440/768 baseline images. Read around arrangeHome and render lifecycle before moving existing nodes. Name the structural changes in report.
-- [ ] Add real DOM regression before production edits: primary nav does not overlap main and keeps all6controls inbounds; homepage cover spans most of content and launch controls sit below it; focused dirty editor remains intact on status refresh; resize and keyboard access retain settings/help/tools. Observe expected RED against old top-nav/side-by-side layout, not a missing helper exception.
+- [x] Inspect current DOM, CSS blocks and 1440/768 baseline images. Read around arrangeHome and render lifecycle before moving existing nodes. Name the structural changes in report.
+- [x] Add real DOM regression before production edits: primary nav does not overlap main and keeps all6controls inbounds; homepage cover spans most of content and launch controls sit below it; focused dirty editor remains intact on status refresh; resize and keyboard access retain settings/help/tools. Observe expected RED against old top-nav/side-by-side layout, not a missing helper exception.
 
 Example geometry assertion after setup at1440x900 (existing selectors, no production test hooks):
 ```js
@@ -38,11 +38,11 @@ assert.ok(boxes.cover.width>=boxes.main.width*.9,'artwork occupies the main work
 assert.ok(boxes.launch.top>=boxes.cover.bottom-1,'launch strip remains below artwork');
 ```
 
-- [ ] Move six main navigation buttons into a persistent left sidebar, add original simple SVGs with aria-hidden and accessible labels; preserve header utilities and actual status/choose-game entry. Move secondary navigation into main. Use208–224px desktop sidebar,64–76px compact rail below900; do not introduce fake titlebar/system buttons.
-- [ ] Rebuild arrangeHome/home presentation into full-width cover followed by launch strip, with configuration/target/button and expandable management/details. Preserve selectors/state, core next-step hints, target pickers, Java entry, recent targets, real config summary and original carousel lifecycle. Keep large original artwork, no crop distortion or duplicated controls.
-- [ ] Replace superseded top-navigation/left-launch-column CSS clusters with an organized Fluent shell section and coherent theme tokens. Keep unrelated feature rules until Task2; avoid piling another full set of overrides. Limit static blur to bounded chrome/floating surfaces with solid fallback, visible borders and contrast; no new media assets.
-- [ ] Add capture utility using existing fixture, all11routes/two themes/1440,1280,768x900 plus contact sheets and selected short-window states. Import original ZombieBuddy art through OZL_CAPTURE_BUDDY_ICON. Default must not write website/assets; --export-website writes only existing10names from1440 captures.
-- [ ] Run focused new tests while iterating; run npm test and motion-quality-ui-tests.cjs once after finishing. Inspect both themes home/components/mods at full resolution and compact rail/short-window utility menus. Self-review and commit scoped files. Full report task-1-report.md with actual RED/GREEN, screenshots, files/commits and concerns.
+- [x] Move six main navigation buttons into a persistent left sidebar, add original simple SVGs with aria-hidden and accessible labels; preserve header utilities and actual status/choose-game entry. Move secondary navigation into main. Use208–224px desktop sidebar,64–76px compact rail below900; do not introduce fake titlebar/system buttons.
+- [x] Rebuild arrangeHome/home presentation into full-width cover followed by launch strip, with configuration/target/button and expandable management/details. Preserve selectors/state, core next-step hints, target pickers, Java entry, recent targets, real config summary and original carousel lifecycle. Keep large original artwork, no crop distortion or duplicated controls.
+- [x] Replace superseded top-navigation/left-launch-column CSS clusters with an organized Fluent shell section and coherent theme tokens. Keep unrelated feature rules until Task2; avoid piling another full set of overrides. Limit static blur to bounded chrome/floating surfaces with solid fallback, visible borders and contrast; no new media assets.
+- [x] Add capture utility using existing fixture, all11routes/two themes/1440,1280,768x900 plus contact sheets and selected short-window states. Import original ZombieBuddy art through OZL_CAPTURE_BUDDY_ICON. Default must not write website/assets; --export-website writes only existing10names from1440 captures.
+- [x] Run focused new tests while iterating; run npm test and motion-quality-ui-tests.cjs once after finishing. Inspect both themes home/components/mods at full resolution and compact rail/short-window utility menus. Self-review and commit scoped files. Full report task-1-report.md with actual RED/GREEN, screenshots, files/commits and concerns.
 
 ## Task 2: Dense Fluent management pages and unified dialogs
 
@@ -50,7 +50,7 @@ assert.ok(boxes.launch.top>=boxes.cover.bottom-1,'launch strip remains below art
 
 **Interfaces:** Consume reviewed Task1 shell and unchanged route/data-action/data-* handlers. Existing components(), mods(), catalog, serverPage(), rich saves/settings/memory/maintenance/help remain functionally equivalent. Use existing status objects; do not invent update availability or game-loading results.
 
-- [ ] Capture baseline after Task1 for all10 non-home routes; inspect actual relevant markup/state. Add behavioral/geometry tests first for dense mod rows, bounded core cards, original-image fitting, short viewport dialogs and existing selected actions dispatching unchanged payloads. Before implementing, run to genuine RED for the missing workspace behavior.
+- [x] Capture baseline after Task1 for all10 non-home routes; inspect actual relevant markup/state. Add behavioral/geometry tests first for dense mod rows, bounded core cards, original-image fitting, short viewport dialogs and existing selected actions dispatching unchanged payloads. Before implementing, run to genuine RED for the missing workspace behavior.
 
 Example visible-row measurement against the normal eight-row synthetic catalog at1280x900 (not a source grep):
 ```js
@@ -58,11 +58,11 @@ const count=await page.locator('.catalog-row').evaluateAll(rows=>rows.filter(e=>
 assert.ok(count>=6,'catalog must expose useful list density without scrolling');
 ```
 
-- [ ] Reorganize component card anatomy around72–88px contained author cover, title, version, semantic state and aligned action. Keep3independent core cards and expandable extras, source/version details and warnings. At1440x900 normal collapsed core cards should be<=250px high; narrow layouts wrap rather than shrinking text below12px.
-- [ ] Compress mod profile entry/toolbars; give list and detail clear hierarchy. At1280x900 show>=6complete normal catalog rows, with readable>=12px metadata and>=32px operation targets. Do not remove profile management, ordering, search/filter, selection, source evidence, dependency warnings or editor actions.
-- [ ] Refine saves/servers horizontal cards using bounded proportional thumbnails (no long empty image banners), readable metrics/actions, consistent focus/selection. Memory becomes allocation editor plus compact system metrics; settings/maintenance/help become organized sections, not oversized empty panels. Preserve all controls and their native payloads; no new edit locks.
-- [ ] Unify tasks/authorization/confirmation/server/profile/editor dialogs with legible surface, close/return and status. Existing close/pending-write semantics must survive; optional finite dialog motion must cancel on close/hidden/reduce and never gate interaction. Keep important path/hash/confirmation data available.
-- [ ] Run new tests, npm test and motion6. Generate current all-route captures with no website export; inspect contact sheets and full-resolution route controls, dialogs and density. Commit scoped changes; report task-2-report.md with RED/GREEN/results and visual proof.
+- [x] Reorganize component card anatomy around72–88px contained author cover, title, version, semantic state and aligned action. Keep3independent core cards and expandable extras, source/version details and warnings. At1440x900 normal collapsed core cards should be<=250px high; narrow layouts wrap rather than shrinking text below12px.
+- [x] Compress mod profile entry/toolbars; give list and detail clear hierarchy. At1280x900 show>=6complete normal catalog rows, with readable>=12px metadata and>=32px operation targets. Do not remove profile management, ordering, search/filter, selection, source evidence, dependency warnings or editor actions.
+- [x] Refine saves/servers horizontal cards using bounded proportional thumbnails (no long empty image banners), readable metrics/actions, consistent focus/selection. Memory becomes allocation editor plus compact system metrics; settings/maintenance/help become organized sections, not oversized empty panels. Preserve all controls and their native payloads; no new edit locks.
+- [x] Unify tasks/authorization/confirmation/server/profile/editor dialogs with legible surface, close/return and status. Existing close/pending-write semantics must survive; optional finite dialog motion must cancel on close/hidden/reduce and never gate interaction. Keep important path/hash/confirmation data available.
+- [x] Run new tests, npm test and motion6. Generate current all-route captures with no website export; inspect contact sheets and full-resolution route controls, dialogs and density. Commit scoped changes; report task-2-report.md with RED/GREEN/results and visual proof.
 
 ## Task 3: Small website refinement and refreshed launcher previews
 
@@ -70,17 +70,17 @@ assert.ok(count>=6,'catalog must expose useful list density without scrolling');
 
 **Interfaces:** Consume reviewed Task2 UI, fluent-capture.cjs --export-website and existing static site download/tab/theme/dialog lifecycle. User explicitly confirmed website, not server admin panel. Preserve all links, five visible summaries, three pages, no-JS and reduced-motion behavior.
 
-- [ ] Inspect existing three pages at1440/768/390. Refine only first-screen proportions, restrained depth/nav/preview framing and spacing to accompany Fluent app; no wholesale content rewrite, added sections or decorative filler.
-- [ ] Any new interaction must first have a failing actual-DOM test. If only presentation changes, extend responsive geometry/usable controls assertions before CSS edits; keep all existing website behavior tests.
-- [ ] Export10 current screenshots after Task2 review; verify exact capture hashes and inspect images. Use original icon path from Task1. Keep warm-white/orange visual identity and desktop height<=2700px; no asset/source/registration/contact/download changes.
-- [ ] Run node --test tests/website.test.cjs; live-only cache test may skip when no deployment. Capture3pages at1440/768/390 and inspect them. No publication, sync to server or binary build.
-- [ ] Commit only scoped source/test/10PNG files; report task-3-report.md with tests, measurements, captures/limits.
+- [x] Inspect existing three pages at1440/768/390. Refine only first-screen proportions, restrained depth/nav/preview framing and spacing to accompany Fluent app; no wholesale content rewrite, added sections or decorative filler.
+- [x] Any new interaction must first have a failing actual-DOM test. If only presentation changes, extend responsive geometry/usable controls assertions before CSS edits; keep all existing website behavior tests.
+- [x] Export10 current screenshots after Task2 review; verify exact capture hashes and inspect images. Use original icon path from Task1. Keep warm-white/orange visual identity and desktop height<=2700px; no asset/source/registration/contact/download changes.
+- [x] Run node --test tests/website.test.cjs; live-only cache test may skip when no deployment. Capture3pages at1440/768/390 and inspect them. No publication, sync to server or binary build.
+- [x] Commit only scoped source/test/10PNG files; report task-3-report.md with tests, measurements, captures/limits.
 
 ## Task 4: Final regression, comparison and source integration
 
 **Files:** Add docs/quality/2026-10-24-fluent-workspace.md, mark plan results. No production edits except reviewed fixes for concrete new regression.
 
-- [ ] Run integrated npm test, motion6, standalone Fluent tests if not included in npm, website and license guide tests; retain raw logs under artifacts/fluent-* and actual skips.
-- [ ] Headless all11routes/two themes/1440,1280,768x900; check733x507,500x760,1100x650 controls and overlay states. Compare before/after home/components/mods to ensure structural rather than token-only change; report exact responsive limits rather than universal performance.
-- [ ] Record no native/runtime/binary/realgame/Steam/server mutation and no site deployment; existing earlier native matrix is historical not freshly rerun. Document which code was actually exercised.
+- [x] Run integrated npm test, motion6, standalone Fluent tests if not included in npm, website and license guide tests; retain raw logs under artifacts/fluent-* and actual skips.
+- [x] Headless all11routes/two themes/1440,1280,768x900; check733x507,500x760,1100x650 controls and overlay states. Compare before/after home/components/mods to ensure structural rather than token-only change; report exact responsive limits rather than universal performance.
+- [x] Record no native/runtime/binary/realgame/Steam/server mutation and no site deployment; existing earlier native matrix is historical not freshly rerun. Document which code was actually exercised.
 - [ ] Obtain whole-branch read-only review; address concrete findings through one scoped fix wave and re-review; merge and sync source per existing authorization only after green. Keep original active game/installed app and public release untouched.
