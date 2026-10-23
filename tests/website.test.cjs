@@ -23,6 +23,38 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); });
 
+test('responsive navigation and preview controls have usable targets without crowding the first screen', async () => {
+  for (const width of [1440, 768, 390]) for (const name of ['index', 'help', 'changes']) {
+    const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce' });
+    try {
+      await page.goto(base + '/' + name + '.html');
+      const navigation = await page.locator('.site-header nav a, .site-header > .button').all();
+      const boxes = [];
+      for (const control of navigation) {
+        const box = await control.boundingBox();
+        assert.ok(box && box.height >= 44 && box.width >= 44, `${name} ${width}: navigation needs a 44px target, got ${JSON.stringify(box)}`);
+        assert.ok(box.x >= 0 && box.x + box.width <= width, 'navigation stays within the viewport');
+        for (const previous of boxes) {
+          assert.ok(box.x >= previous.x + previous.width || previous.x >= box.x + box.width || box.y >= previous.y + previous.height || previous.y >= box.y + box.height, 'navigation targets do not overlap');
+        }
+        boxes.push(box);
+      }
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      if (width === 1440) assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 2700));
+      if (name === 'index') {
+        for (const selector of ['select[aria-label="预览主题"]', '[data-enlarge]']) {
+          const box = await page.locator(selector).boundingBox();
+          assert.ok(box && box.height >= 44 && box.width >= 44, `${width}: preview controls need a 44px target, got ${JSON.stringify(box)}`);
+        }
+        if (width === 1440) {
+          const shot = await page.locator('[data-feature-image]').boundingBox();
+          assert.ok(shot.y + 180 <= 900, `desktop first screen exposes at least 180px of the launcher preview; image starts at ${shot.y}`);
+        }
+      }
+    } finally { await page.close(); }
+  }
+});
+
 test('desktop and mobile expose real downloads without horizontal overflow', async () => {
   for (const width of [1440, 1280, 768, 390]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
