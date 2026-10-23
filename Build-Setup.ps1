@@ -2,6 +2,8 @@ param([switch]$PrivatePresets,[string]$CoreReleaseDirectory='',[string]$PublicKe
 $ErrorActionPreference='Stop'
 $project=Join-Path $PSScriptRoot 'Orange3DTool'
 if($CoreReleaseDirectory){
+ . (Join-Path $PSScriptRoot 'build\DependencyIntegrity.ps1')
+ Assert-OzlWebView2Dependencies -SdkDirectory (Join-Path $PSScriptRoot 'Dependencies\WebView2')
  if(-not $PublicKey){$PublicKey=Join-Path $PSScriptRoot 'release-public-key.xml'}
  $rsa=[Security.Cryptography.RSACryptoServiceProvider]::new()
  try{$rsa.PersistKeyInCsp=$false;$publicXml=[IO.File]::ReadAllText($PublicKey);$rsa.FromXmlString($publicXml);if(-not $rsa.PublicOnly -or $publicXml.Trim() -cne $rsa.ToXmlString($false)){throw 'Installer trust resource must contain canonical public parameters only.'}}finally{$rsa.Dispose()}

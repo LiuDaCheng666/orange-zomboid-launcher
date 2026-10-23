@@ -1,5 +1,6 @@
 param([string]$JdkPath='',[switch]$ForceBridge)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'build\DependencyIntegrity.ps1')
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $deps=Join-Path $PSScriptRoot 'Dependencies'
@@ -8,11 +9,12 @@ $core=Join-Path $sdk 'lib\net462\Microsoft.Web.WebView2.Core.dll'
 if(-not (Test-Path -LiteralPath $core)) {
   New-Item -ItemType Directory -Path $deps -Force | Out-Null
   $package=Join-Path $deps 'microsoft.web.webview2.1.0.4258.31.nupkg'
-  $url='https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4258.31/microsoft.web.webview2.1.0.4258.31.nupkg'
+  $url=(Get-OzlWebView2Lock).package.url
   Invoke-WebRequest -Uri $url -OutFile $package
+  Assert-OzlWebView2Package -PackagePath $package
   [IO.Compression.ZipFile]::ExtractToDirectory($package,$sdk)
 }
-if((Get-FileHash -LiteralPath $core -Algorithm SHA256).Hash -ne 'D60E6E94245078CB56E44EBD5F360DC04BF18E460136BE93BFC4CFCA43B98505'){throw 'WebView2 pinned SDK hash mismatch'}
+Assert-OzlWebView2Dependencies -SdkDirectory $sdk
 $bridge=Join-Path $PSScriptRoot 'Orange3DTool\Assets\OrangeShootPresentation.jar'
 if((Test-Path -LiteralPath $bridge) -and -not $ForceBridge){return}
 $buddy=Join-Path $deps 'ZombieBuddy-v2.3.4.jar'

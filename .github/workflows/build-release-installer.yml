@@ -38,10 +38,11 @@ jobs:
             gh release download $env:RELEASE_TAG --pattern $name --dir artifacts/installer-release
             if ($LASTEXITCODE -ne 0) { throw "Cannot download $name" }
           }
-          Invoke-WebRequest -Uri 'https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4258.31/microsoft.web.webview2.1.0.4258.31.nupkg' -OutFile Dependencies/webview2.nupkg
+          . (Join-Path $PWD 'build/DependencyIntegrity.ps1')
+          Invoke-WebRequest -Uri (Get-OzlWebView2Lock).package.url -OutFile Dependencies/webview2.nupkg
+          Assert-OzlWebView2Package -PackagePath (Join-Path $PWD 'Dependencies/webview2.nupkg')
           [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $PWD 'Dependencies/webview2.nupkg'), (Join-Path $PWD 'Dependencies/WebView2'))
-          $hash = (Get-FileHash Dependencies/WebView2/lib/net462/Microsoft.Web.WebView2.Core.dll).Hash
-          if ($hash -cne 'D60E6E94245078CB56E44EBD5F360DC04BF18E460136BE93BFC4CFCA43B98505') { throw 'Pinned WebView2 dependency differs' }
+          Assert-OzlWebView2Dependencies -SdkDirectory (Join-Path $PWD 'Dependencies/WebView2')
       - name: Build installer without changing the signed core
         shell: pwsh
         run: |
