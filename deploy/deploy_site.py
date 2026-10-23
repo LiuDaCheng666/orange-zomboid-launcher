@@ -15,7 +15,15 @@ import uuid
 HOST = '101.201.143.163'
 HOST_KEY = 'SHA256:3Kj/0G9bg0xadE8/EjVY49yZEfuSF5iq3qDubXCgYIg'
 BASE = '/var/www/ozl'
-SITE_FILES = {'index.html', 'site.css', 'site.js', 'release.json', 'assets/home.png', 'assets/orange-app.png', 'assets/orange-app.ico'}
+SITE_FILES = {
+    'index.html', 'help.html', 'changes.html', 'site.css', 'site.js', 'release.json',
+    'assets/home.png', 'assets/orange-app.png', 'assets/orange-app.ico',
+    'assets/launcher-home-dark.png', 'assets/launcher-home-light.png',
+    'assets/launcher-components-dark.png', 'assets/launcher-components-light.png',
+    'assets/launcher-mods-dark.png', 'assets/launcher-mods-light.png',
+    'assets/launcher-servers-dark.png', 'assets/launcher-servers-light.png',
+    'assets/launcher-maintenance-dark.png', 'assets/launcher-maintenance-light.png',
+}
 
 def validate_site(root):
     root = Path(root).resolve()

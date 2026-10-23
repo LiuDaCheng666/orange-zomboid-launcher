@@ -23,13 +23,13 @@ class DeploymentTreeTests(unittest.TestCase):
         return self.module.validate_site(self.root)
 
     def populate(self):
-        for name in ['index.html', 'site.css', 'site.js', 'release.json', 'assets/home.png', 'assets/orange-app.png', 'assets/orange-app.ico']:
+        for name in ['index.html', 'help.html', 'changes.html', 'site.css', 'site.js', 'release.json', 'assets/home.png', 'assets/orange-app.png', 'assets/orange-app.ico'] + [f'assets/launcher-{panel}-{theme}.png' for panel in ['home', 'components', 'mods', 'servers', 'maintenance'] for theme in ['dark', 'light']]:
             file = self.root / name; file.parent.mkdir(exist_ok=True, parents=True); file.write_bytes(b'public fixture')
 
     def test_valid_site_returns_only_public_relative_files(self):
         self.populate()
         result = self.validate()
-        self.assertEqual(len(result), 7)
+        self.assertEqual(len(result), 19)
         self.assertTrue(all(not p.startswith('/') and '..' not in p for p in result))
 
     def test_secret_and_missing_index_are_rejected(self):
@@ -47,6 +47,13 @@ class DeploymentTreeTests(unittest.TestCase):
             with self.assertRaises(ValueError): self.validate()
         else:
             self.validate()
+
+    def test_unlisted_image_and_page_are_rejected(self):
+        self.populate()
+        for name in ['assets/unapproved.png', 'private.html']:
+            extra = self.root / name; extra.write_bytes(b'unapproved')
+            with self.assertRaises(ValueError): self.validate()
+            extra.unlink()
 
     def test_symlink_to_private_file_is_rejected(self):
         self.populate()
