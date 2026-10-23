@@ -35,8 +35,7 @@ if(-not $CoreDirectory){
  Copy-Item -LiteralPath (Join-Path $sdk 'runtimes\win-x64\native\WebView2Loader.dll') -Destination (Join-Path $CoreDirectory 'Web\WebView2Loader.dll')
  foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua')){Copy-Item -LiteralPath (Join-Path $project "Assets\$name") -Destination (Join-Path $CoreDirectory "Assets\$name")}
  foreach($name in @('VERSION','CHANGELOG.md','release-public-key.xml')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $CoreDirectory $name)}
- $guide=[IO.File]::ReadAllText((Join-Path $PSScriptRoot '使用说明.md'))+"`r`n`r`n"+[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'docs\THIRD-PARTY.md'))
- [IO.File]::WriteAllText((Join-Path $CoreDirectory '使用说明.txt'),$guide,[Text.UTF8Encoding]::new($false))
+ & (Join-Path $PSScriptRoot 'Build-Guide.ps1') -OutputPath (Join-Path $CoreDirectory '使用说明.txt')
 }
 & $tool pack $CoreDirectory $OutputDirectory $SigningKey $public
 if($LASTEXITCODE -ne 0){throw 'Core pack/sign validation failed'}

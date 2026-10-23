@@ -38,7 +38,9 @@
 - `update-manifest.json`、`update-manifest.sig`：签名的原始 UTF-8 JSON 与二进制分离签名。
 - `<完整小写SHA256>.bin`：清单 URL 对应资源；相同字节共享资产名。
 
-独立 JS/CSS/图片与 DLL 按原字节复制；ZIP 项时间戳固定，重复打包相同输入得到相同清单、签名及 ZIP。再次编译 EXE 可能改变编译器时间戳，所以不声称跨编译 EXE 位级复现。依赖许可随 Web/WebView2-LICENSE.txt 提供，第三方说明追加到使用说明.txt。
+独立 JS/CSS/图片与 DLL 按原字节复制；ZIP 项时间戳固定，重复打包相同输入得到相同清单、签名及 ZIP。再次编译 EXE 可能改变编译器时间戳，所以不声称跨编译 EXE 位级复现。依赖许可随 Web/WebView2-LICENSE.txt 提供。
+
+2026-10-23 起，正常源码构建和打包测试均调用 `Build-Guide.ps1`，将 `使用说明.md`、`docs/THIRD-PARTY.md`、`docs/LICENSING.md` 和根目录完整 GPL v3 `LICENSE` 按顺序原文合并到既有 `使用说明.txt`（UTF-8 无 BOM）。没有新增核心路径，允许清单仍为 18 个文件；既有发布不回写。缺少任一输入时生成失败，不覆盖现有说明。使用 `-CoreDirectory` 接受预先构建输入时仍由发布者负责提供对应源码及完整许可说明，不能借此把历史构建重新标成新源码产物。独立验证：`node --test tests/license-guide.test.cjs`。
 
 `Build-Setup.ps1 -CoreReleaseDirectory <发布目录>` 构建正式安装器；其 `-PublicKey` 仅用于明确选择信任公钥（测试用自己的 fixture 公钥）。无参数仍保留旧单 EXE 安装器验证兼容。安装器 `--verify-setup` 在系统临时目录创建隔离安装，核对 v2 版本/全部哈希并验证卸载保留未知个人文件。
 

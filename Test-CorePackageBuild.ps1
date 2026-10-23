@@ -29,7 +29,8 @@ foreach($name in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Win
 Copy-Item -LiteralPath (Join-Path $sdk 'runtimes\win-x64\native\WebView2Loader.dll') -Destination (Join-Path $core 'Web\WebView2Loader.dll')
 foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua')){Copy-Item -LiteralPath (Join-Path $project "Assets\$name") -Destination (Join-Path $core "Assets\$name")}
 foreach($name in @('VERSION','CHANGELOG.md')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $core $name)}
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot '使用说明.md') -Destination (Join-Path $core '使用说明.txt');Copy-Item -LiteralPath $public -Destination (Join-Path $core 'release-public-key.xml')
+& (Join-Path $PSScriptRoot 'Build-Guide.ps1') -OutputPath (Join-Path $core '使用说明.txt')
+Copy-Item -LiteralPath $public -Destination (Join-Path $core 'release-public-key.xml')
 $release=Join-Path $fixture 'release';$again=Join-Path $fixture 'again'
 & $tool pack $core $release $private $public
 if($LASTEXITCODE -ne 0){throw 'Actual fixture pack failed'}
