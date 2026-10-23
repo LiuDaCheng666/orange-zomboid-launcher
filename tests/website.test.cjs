@@ -305,6 +305,38 @@ test('secondary pages preserve native navigation and help disclosure without scr
   await page.close();
 });
 
+test('preview requests bypass prior screenshot caches in every feature and theme', async () => {
+  const page = await browser.newPage({ reducedMotion: 'reduce' });
+  const requested = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/assets/launcher-')) requested.push(url);
+  });
+  try {
+    await page.goto(base);
+    await page.locator('[data-feature-image]').evaluate(image => image.decode());
+    assert.equal(requested.length, 1, 'initial preview has a single image request');
+    assert.equal(requested[0].pathname, '/assets/launcher-home-dark.png');
+    assert.equal(requested[0].searchParams.get('v'), '20261024-fluent', 'initial request must bypass the old unversioned cache');
+    for (const theme of ['dark', 'light']) {
+      await page.getByLabel('预览主题').selectOption(theme);
+      for (const feature of ['home', 'components', 'mods', 'servers', 'maintenance']) {
+        await page.locator(`#tab-${feature}`).click();
+        await page.locator('[data-feature-image]').evaluate(image => image.decode());
+        const selected = await page.locator('[data-feature-image]').getAttribute('src');
+        const url = new URL(selected, base);
+        assert.equal(url.pathname, `/assets/launcher-${feature}-${theme}.png`);
+        assert.equal(url.searchParams.get('v'), '20261024-fluent');
+        await page.locator('[data-enlarge]').click();
+        assert.equal(new URL(await page.locator('[data-dialog-image]').getAttribute('src'), base).href, url.href, 'enlargement uses the exact selected versioned image');
+        await page.locator('[data-close]').click();
+      }
+    }
+    assert.equal(new Set(requested.map(url => url.pathname)).size, 10, 'all ten screenshot URLs are actually requested');
+    assert.ok(requested.every(url => url.searchParams.get('v') === '20261024-fluent'), 'dynamic requests use the same cache version as the initial image');
+  } finally { await page.close(); }
+});
+
 test('all actual preview assets load on demand in both themes and enlarge at native resolution', async () => {
   await fs.mkdir(path.resolve(__dirname, '../artifacts/website-shots'), { recursive: true });
   for (const width of [1440, 390]) {
@@ -341,7 +373,7 @@ test('failed screenshot offers retry and successful recovery restores enlargemen
   const page = await browser.newPage({ reducedMotion: 'reduce' });
   try {
     let attempts = 0;
-    await page.route('**/launcher-components-dark.png', route => ++attempts === 1 ? route.abort() : route.continue());
+    await page.route(url => url.pathname === '/assets/launcher-components-dark.png', route => ++attempts === 1 ? route.abort() : route.continue());
     await page.goto(base);
     await page.locator('#tab-components').click();
     await page.waitForFunction(() => { const image = document.querySelector('[data-feature-image]'); return image.complete && image.naturalWidth === 0; });
@@ -362,7 +394,7 @@ test('superseded screenshot recovery cannot overwrite the latest selection or er
   let pending;
   try {
     let attempts = 0;
-    await page.route('**/launcher-components-dark.png', route => {
+    await page.route(url => url.pathname === '/assets/launcher-components-dark.png', route => {
       if (++attempts === 1) return route.abort();
       pending = route;
     });
@@ -383,8 +415,8 @@ test('superseded screenshot recovery cannot overwrite the latest selection or er
     assert.equal(await page.getByText('预览图片加载失败', { exact: true }).isVisible(), false);
     assert.equal(await page.locator('[data-enlarge]').isEnabled(), true);
     // A late success must also leave a newer request's failure intact.
-    await page.route('**/launcher-components-light.png', route => { pending = route; });
-    await page.route('**/launcher-servers-light.png', route => route.abort());
+    await page.route(url => url.pathname === '/assets/launcher-components-light.png', route => { pending = route; });
+    await page.route(url => url.pathname === '/assets/launcher-servers-light.png', route => route.abort());
     await page.getByLabel('预览主题').selectOption('light');
     await page.locator('#tab-components').click();
     for (let wait = 0; !pending && wait < 100; wait++) await page.waitForTimeout(10);

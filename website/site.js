@@ -115,7 +115,7 @@
     previewError.hidden = true;
     enlarge.disabled = false;
     watchScreenshot(nextImage);
-    nextImage.src = 'assets/launcher-' + id + '-' + theme.value + '.png';
+    nextImage.src = 'assets/launcher-' + id + '-' + theme.value + '.png?v=20261024-fluent';
     enter(panel);
   }
   retryImage.addEventListener('click', () => {
