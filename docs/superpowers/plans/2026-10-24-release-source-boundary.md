@@ -70,3 +70,7 @@ foreach($entry in $lock.files) {
 ## Execution results
 
 Task1 a1b47c3, Task2 4a795a3+29d8b3e completed and independently approved. Main fresh25/25tests and three library-only C# binding checks passed; mutuallyexclusive symbols rejected. Expected PreviewMode defaultfalse CS0649 recorded. Task3 wholebranchreview and sourceintegration pending. See docs/quality/2026-10-24-release-boundary.md; no productbuild/run/distribution or AVresolution claim.
+
+## Final integration findings requiring the single fix wave
+
+Controller cross-caller check found existing Test-CorePackageBuild.ps1 and Test-CoreNativeUpdate.ps1 select Build-Tests -Entry PZ3D.CoreReleaseTool, now excluded from diagnostic inputs. Those scripts also directly compile all C# without OZL_DIAGNOSTICS, causing real CS0103 Test errors after extraction. Test-LegacySetupBuild.ps1 copies scripts to an isolated fixture but omits new build helpers/lock. Preserve these existing test callers by adapting their inputs/defines and copying build support files; do not run packaging/EXE tests. Add AST/membership/copy-input regression coverage and library-only binding. Also untrack only this plan's accidentally committed task-2-report.md, preserve local evidence and never force-add scratch again. These are compatibility/scope fixes, not a new feature or AV workaround.
