@@ -14,6 +14,7 @@ async function shootFixture(page,extra={}){
     };
   },extra);
   await route(page,'components');
+  await page.locator('[data-optional-components]>summary').click();
   await page.waitForFunction(()=>!orange.state.loading.modCatalog);
   await page.evaluate(()=>{orange.state.modCatalog={mods:[{id:'author-gun',workshopId:'3813032735',cover:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZyAAAAAASUVORK5CYII='}],warnings:[]};});
 }
