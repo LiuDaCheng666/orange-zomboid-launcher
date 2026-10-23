@@ -84,3 +84,47 @@ test('PowerShell AST confirms every compiler invocation uses resolver and matchi
  assert.match(read('Build-CoreRelease.ps1'),/\$toolSources=@\(\$sources\)\+@\(Join-Path \$project 'CoreReleaseTool.cs'\)/);
 });
 
+
+function astTexts(file,predicate){
+ const r=ps('$tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile('+q(path.join(root,file))+',[ref]$tokens,[ref]$errors);if($errors.Count){throw ($errors | Out-String)}; @($ast.FindAll({param($n) '+predicate+'},$true) | ForEach-Object {$_.Extent.Text}) | ConvertTo-Json -Compress');
+ assert.equal(r.status,0,r.stderr);if(!r.stdout.trim())return [];const value=JSON.parse(r.stdout);return Array.isArray(value)?value:[value];
+}
+test('existing CoreReleaseTool selector adds exactly one source only for that entry',()=>{
+ const statements=astTexts('Build-Tests.ps1','$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.VariablePath.UserPath -eq "sources" -and $n.Right.Extent.Text -match "Get-OzlDiagnosticSources"');
+ const selectors=astTexts('Build-Tests.ps1','$n -is [Management.Automation.Language.IfStatementAst] -and $n.Extent.Text -match "CoreReleaseTool.cs"');
+ for(const entry of ['PZ3D.DiagnosticProgram','PZ3D.CoreReleaseTool','PZ3D.CorePackageFixtureTests']){
+ const r=ps('. '+q(path.join(root,'build/ProductionSources.ps1'))+'; $project='+q(project)+';$Entry='+q(entry)+';'+statements.concat(selectors).join(';')+'; $sources | ConvertTo-Json -Compress');
+ assert.equal(r.status,0,r.stderr);const names=JSON.parse(r.stdout).map(p=>path.basename(p));
+ assert.equal(names.filter(n=>n==='CoreReleaseTool.cs').length,entry==='PZ3D.CoreReleaseTool'?1:0);
+ assert.equal(names.length,entry==='PZ3D.CoreReleaseTool'?180:179);assert.equal(new Set(names).size,names.length);
+ }
+});
+test('direct package and native fixture compilers use diagnostic resolver and symbol',()=>{
+ for(const [file,count] of [['Test-CorePackageBuild.ps1',2],['Test-CoreNativeUpdate.ps1',3]]){
+ const commands=astTexts(file,'$n -is [Management.Automation.Language.CommandAst] -and $n.Extent.Text -match "/target:"');
+ assert.equal(commands.length,count);
+ for(const c of commands){assert.match(c,/\/define:OZL_DIAGNOSTICS/);assert.match(c,/\$(?:sources|currentFiles)\b/);assert.doesNotMatch(c,/Get-ChildItem/);}
+ const script=read(file);assert.match(script,/\. \(Join-Path \$PSScriptRoot 'build\\ProductionSources.ps1'\)/);
+ const assignments=astTexts(file,'$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.VariablePath.UserPath -eq "sources"');
+ assert.equal(assignments.length,1);
+ const r=ps('. '+q(path.join(root,'build/ProductionSources.ps1'))+';$project='+q(project)+';'+assignments[0]+';$sources | ConvertTo-Json -Compress');
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout).sort(),sources(project,true).sort());
+ }
+});
+test('negative native fixture replaces only PlaytimeTracker in diagnostic sources',()=>{
+ const assignments=astTexts('Test-CoreNativeUpdate.ps1','$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.VariablePath.UserPath -eq "currentFiles"');
+ const r=ps('. '+q(path.join(root,'build/ProductionSources.ps1'))+';$project='+q(project)+';$sources=@(Get-OzlDiagnosticSources -ProjectDirectory $project);'+assignments[0]+';$currentFiles | ConvertTo-Json -Compress');
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout).sort(),sources(project,true).filter(p=>path.basename(p)!=='PlaytimeTracker.cs').sort());
+ const commands=astTexts('Test-CoreNativeUpdate.ps1','$n -is [Management.Automation.Language.CommandAst] -and $n.Extent.Text -match "/target:" -and $n.Extent.Text -match "currentFiles"');
+ assert.equal(commands.length,1);assert.match(commands[0],/\$currentFiles \$oldFile/);
+});
+test('legacy sandbox copy manifest includes source resolver and dependency authentication support',()=>{
+ const loops=astTexts('Test-LegacySetupBuild.ps1','$n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Extent.Text -match "Build-Setup.ps1"');
+ assert.equal(loops.length,1);
+ const r=ps('function Copy-Input([string]$Relative){$Relative};'+loops[0]+'');
+ assert.equal(r.status,0,r.stderr);const names=r.stdout.trim().split(/\r?\n/);
+ for(const name of ['build\\ProductionSources.ps1','build\\DependencyIntegrity.ps1','build\\dependencies.lock.json']){
+ assert.ok(names.includes(name),'sandbox omits '+name);assert.ok(fs.statSync(path.join(root,name)).isFile());
+ }
+});
+

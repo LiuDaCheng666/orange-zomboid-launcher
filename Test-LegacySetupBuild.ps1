@@ -14,7 +14,7 @@ function Copy-Input([string]$Relative){
  New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
  Copy-Item -LiteralPath $source -Destination $destination
 }
-foreach($name in @('Build-Setup.ps1','Build-Version.ps1','Build-CoverGallery.ps1','Prepare-Assets.ps1','Prepare-Dependencies.ps1','VERSION','使用说明.md','docs\THIRD-PARTY.md','Orange3DTool\Build-Modern.ps1','Orange3DTool\app.manifest')){Copy-Input $name}
+foreach($name in @('Build-Setup.ps1','Build-Version.ps1','Build-CoverGallery.ps1','Prepare-Assets.ps1','Prepare-Dependencies.ps1','build\ProductionSources.ps1','build\DependencyIntegrity.ps1','build\dependencies.lock.json','VERSION','使用说明.md','docs\THIRD-PARTY.md','Orange3DTool\Build-Modern.ps1','Orange3DTool\app.manifest')){Copy-Input $name}
 foreach($name in @('crossroads','riverside','safehouse')){Copy-Input ('docs\assets\cover-candidates\'+$name+'.png')}
 foreach($file in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool') -Filter '*.cs'){Copy-Input ('Orange3DTool\'+$file.Name)}
 foreach($name in @('OrangeLaunchBridge.lua','OrangeShootPresentation.jar','orange-app.ico')){Copy-Input ('Orange3DTool\Assets\'+$name)}

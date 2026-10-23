@@ -1,5 +1,6 @@
 param([string]$FixtureRoot='',[switch]$RecoveryOnly,[switch]$IncludeRootMonitorComparison)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'build\ProductionSources.ps1')
 . (Join-Path $PSScriptRoot 'CoreNativeFixturePath.TestHelper.ps1')
 if(-not $FixtureRoot){$FixtureRoot=Join-Path $PSScriptRoot ('artifacts\TestFixtures\native-update-'+[Guid]::NewGuid().ToString('N').Substring(0,8))}
 $fixtureDescendantPrefix=Get-CoreNativeFixtureDescendantPrefix $FixtureRoot
@@ -63,6 +64,7 @@ if($LASTEXITCODE -ne 0){throw 'Ephemeral fixture key generation failed'}
 $source=Join-Path $FixtureRoot 'source';New-Item -ItemType Directory -Path $source,(Join-Path $source 'Web'),(Join-Path $source 'Assets') | Out-Null
 $project=Join-Path $PSScriptRoot 'Orange3DTool';$sdk=Join-Path $PSScriptRoot 'Dependencies\WebView2';$compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $refs=@('/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Management.dll','/reference:System.IO.Compression.dll','/reference:System.IO.Compression.FileSystem.dll','/reference:System.Security.dll',"/reference:$sdk\lib\net462\Microsoft.Web.WebView2.Core.dll","/reference:$sdk\lib\net462\Microsoft.Web.WebView2.WinForms.dll")
+$sources=@(Get-OzlDiagnosticSources -ProjectDirectory $project)
 $versionAttributes=& (Join-Path $PSScriptRoot 'Build-Version.ps1')
 if($LASTEXITCODE -ne 0){throw 'Fixture version generation failed'}
 $currentVersion=(Get-Content -Raw (Join-Path $PSScriptRoot 'VERSION')).Trim()
@@ -70,7 +72,7 @@ $parts=$currentVersion.Split('.')
 $nextVersion="$($parts[0]).$($parts[1]).$([int]$parts[2]+1)"
 if([int]$parts[2] -ge 65534){throw 'Next fixture patch version exceeds assembly limits'}
 foreach($entry in @(@('PZ3D.CoreUpdateNativeFixtureTests','橙子启动器.exe'),@('PZ3D.CoreUpdaterProgram','橙子更新助手.exe'),@('PZ3D.CoreUpdateNativeFixtureTests','卸载橙子启动器.exe'))){
- & $compiler /nologo /target:winexe /platform:x64 "/main:$($entry[0])" "/out:$source\$($entry[1])" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$PSScriptRoot\VERSION,Launcher.Version.txt" $refs $versionAttributes (Get-ChildItem -LiteralPath $project -Filter '*.cs').FullName
+ & $compiler /nologo /define:OZL_DIAGNOSTICS /target:winexe /platform:x64 "/main:$($entry[0])" "/out:$source\$($entry[1])" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$PSScriptRoot\VERSION,Launcher.Version.txt" $refs $versionAttributes $sources
  if($LASTEXITCODE -ne 0){throw 'Native fixture compile failed'}
 }
 foreach($name in @('index.html','app.js','app.css','home.png','orange-app.ico','WebView2-LICENSE.txt')){Copy-Item -LiteralPath (Join-Path $project "Web\$name") -Destination (Join-Path $source "Web\$name")}
@@ -93,8 +95,8 @@ if($IncludeRootMonitorComparison){
  $oldTracker=& git -C $PSScriptRoot show "${revision}:Orange3DTool/PlaytimeTracker.cs"
  if($LASTEXITCODE -ne 0){throw 'Cannot read pre-isolation tracker source'}
  $oldFile=Join-Path $FixtureRoot 'RootBound.PlaytimeTracker.cs';[IO.File]::WriteAllText($oldFile,($oldTracker -join "`r`n"),[Text.UTF8Encoding]::new($false))
- $currentFiles=(Get-ChildItem -LiteralPath $project -Filter '*.cs' | Where-Object Name -ne 'PlaytimeTracker.cs').FullName
- & $compiler /nologo /target:winexe /platform:x64 /main:PZ3D.CoreUpdateNativeFixtureTests "/out:$redSource\橙子启动器.exe" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$PSScriptRoot\VERSION,Launcher.Version.txt" $refs $versionAttributes $currentFiles $oldFile
+ $currentFiles=@($sources | Where-Object { [IO.Path]::GetFileName($_) -ne 'PlaytimeTracker.cs' })
+ & $compiler /nologo /define:OZL_DIAGNOSTICS /target:winexe /platform:x64 /main:PZ3D.CoreUpdateNativeFixtureTests "/out:$redSource\橙子启动器.exe" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$PSScriptRoot\VERSION,Launcher.Version.txt" $refs $versionAttributes $currentFiles $oldFile
  if($LASTEXITCODE -ne 0){throw 'Root-bound comparison fixture build failed'}
  $redRelease=Join-Path $FixtureRoot 'root-bound-release'; & $tool pack $redSource $redRelease $private $public
  if($LASTEXITCODE -ne 0){throw 'Root-bound comparison fixture signing failed'}
@@ -131,7 +133,7 @@ foreach($layout in $(if($RecoveryOnly){@('full')}else{@('sparse','full')})){fore
   $nextAttributes=Join-Path $FixtureRoot 'Fixture.Version.g.cs'
   [IO.File]::WriteAllText($nextAttributes,"using System.Reflection; [assembly: AssemblyVersion(`"$nextVersion.0`")] [assembly: AssemblyFileVersion(`"$nextVersion.0`")] [assembly: AssemblyInformationalVersion(`"$nextVersion`")]",[Text.UTF8Encoding]::new($false))
   foreach($entry in @(@('PZ3D.CoreUpdateNativeFixtureTests','橙子启动器.exe'),@('PZ3D.CoreUpdaterProgram','橙子更新助手.exe'),@('PZ3D.CoreUpdateNativeFixtureTests','卸载橙子启动器.exe'))){
-   & $compiler /nologo /target:winexe /platform:x64 "/main:$($entry[0])" "/out:$nextSource\$($entry[1])" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$nextSource\VERSION,Launcher.Version.txt" $refs $nextAttributes (Get-ChildItem -LiteralPath $project -Filter '*.cs').FullName
+   & $compiler /nologo /define:OZL_DIAGNOSTICS /target:winexe /platform:x64 "/main:$($entry[0])" "/out:$nextSource\$($entry[1])" "/resource:$public,Launcher.UpdatePublicKey.xml" "/resource:$nextSource\VERSION,Launcher.Version.txt" $refs $nextAttributes $sources
    if($LASTEXITCODE -ne 0){throw 'Version-bumped native fixture compile failed'}
   }
   [IO.File]::WriteAllBytes((Join-Path $nextSource 'Web\app.js'),$bytes)
