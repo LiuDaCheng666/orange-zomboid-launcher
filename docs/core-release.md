@@ -1,8 +1,8 @@
 # 核心发布与签名
 
-**1.2.11 已正式发布为 GitHub latest。** 源码标签、公开下载哈希及原始1.2.9默认在线更新至Ready的验证见[正式发布记录](releases/1.2.11-github-release.md)。[1.2.9](releases/1.2.9-github-release.md)及更早记录保留，更新签名身份和18文件路径不变。
+**当前正式发布为 1.2.13，源码版本为尚未发布的 1.2.14。** 公开资源与上一正式版更新验证见[1.2.13 发布记录](releases/1.2.13-github-release.md)；新版交付状态见[1.2.14 验证记录](releases/1.2.14-github-release.md)。更新签名身份和18文件路径不变。
 
-正式版本来自根目录 VERSION（当前源码 1.2.11）。1.2.11 公开发布工作采用独立 `dist/1.2.11-github-release/`，保留已验证本地候选的原始签名字节，正式1.2.9及更早历史包保持不变；不得用历史包证明新源码已交付。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
+正式版本来自根目录 VERSION。发布使用新的独立输出目录，保留已验证候选的原始签名字节与历史包；不得用历史包证明新源码已交付。先前 `dist/1.2.14-verified/` 为官网传输通道阶段的早期候选，扫描记录保留，不能作为本轮界面与组件改造的交付物。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
 
 ```powershell
 ./Build-CoreRelease.ps1 -VersionOnly
