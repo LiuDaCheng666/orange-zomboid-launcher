@@ -106,3 +106,25 @@ CORE UPDATE READY UI: PASS one-time/manual consent, native boundary payloads, id
 ## Self-review and limits
 
 `git diff --check` is clean. Existing callbacks, mutation boundaries, menu routes and Java/launch/restore safeguards are retained. No extra JS deployment resource was added; production changes stay in the already embedded files. Capture-only native mocks cannot prove native independent installation/uninstallation; Task 2 integration and final release review remain with the main task. Original covers are displayed with `object-fit:contain`; missing local covers remain explicit neutral placeholders. No native version values are inferred from screenshots or combined legacy records.
+
+## Review correction — asynchronous startup check protocol
+
+Review of `49ac400` found that the native check acknowledges immediately with `Checking`, then emits its terminal result through `coreUpdateProgress`. The original fixture returned `Available` directly, masking a real missing-notice defect. Corrected the fixture to return Checking and subsequently publish a controlled progress event.
+
+RED: with only this protocol/test change, the dirty-draft/Available test timed out after 4 seconds: `#startup-update-notice` remained hidden despite the accepted Available event. The other four groups passed.
+
+GREEN: startup discovery now establishes completion ownership before dispatch, retains it after Checking, and consumes it only when a newer accepted terminal status arrives. The accepted-event path sets the notice version; manual request generation still retires automatic notice ownership. A terminal event racing ahead of the check acknowledgement is handled once and the later stale Checking reply cannot regress it. Same-version dismissal, dirty drafts, explicit download/Ready state, and the one-check limit remain protected.
+
+Scoped verification after this correction (no broad suite or screenshot rerun):
+
+```
+PASS three independent core cards dispatch only the selected component; Chinese installs alone
+PASS next step is contextual and existing tool routes remain accessible in both themes
+PASS startup checks once after native readiness, silently handles Latest and Error without locking editors
+PASS available startup notice is dismissible, preserves a dirty draft, and opens the updater only explicitly
+PASS Checking acknowledgement retains event ownership but manual cancellation retires the startup notice
+PASS late automatic responses cannot replace manual download or Ready state, including progress events
+CORE UPDATE READY UI: PASS one-time/manual consent, native boundary payloads, identity/generation/async guards, local/native blockers, stale consent, double clicks, game running, Escape, both 820x600 themes
+```
+
+Focused protocol/race coverage is now six groups, including delayed Available after Checking, completion before acknowledgement, newer repeated dismissed events, Latest/Error event silence, cancellation followed by obsolete completion, and late events during manual Downloading/Ready with a retained dirty memory draft. Both commands exited 0. `git diff --check` is clean. No native, game, website, or image files changed in this correction.

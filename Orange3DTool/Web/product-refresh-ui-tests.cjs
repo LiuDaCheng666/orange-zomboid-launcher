@@ -30,6 +30,7 @@ test('next step is contextual and existing tool routes remain accessible in both
 test('startup checks once after native readiness, silently handles Latest and Error without locking editors',async browser=>{
  for(const update of ['Latest','Error']){
   const {page}=await setup(browser,{update});await page.waitForFunction(()=>sent.some(m=>m.action==='coreUpdateCheck'));
+  await page.waitForFunction(update=>orange.state.coreUpdate?.state===update,update);
   await page.evaluate(()=>pollCallbacks.forEach(f=>f()));await route(page,'memory');await page.locator('#memory-number').fill('12');
   assert.equal(await page.evaluate(()=>sent.filter(m=>m.action==='coreUpdateCheck').length),1);
   assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(await page.locator('#startup-update-notice').isVisible(),false);
@@ -42,12 +43,26 @@ test('startup checks once after native readiness, silently handles Latest and Er
  const malformed=await setup(browser,{core:{protocol:9}});await malformed.page.waitForTimeout(40);assert.equal(await malformed.page.locator('#notice').isVisible(),false);assert.equal(await malformed.page.locator('#startup-update-notice').isVisible(),false);await malformed.page.close();
 });
 test('available startup notice is dismissible, preserves a dirty draft, and opens the updater only explicitly',async browser=>{
- const {page}=await setup(browser,{hold:'coreUpdateCheck'});await page.waitForFunction(()=>held.length===1);await route(page,'memory');await page.locator('#memory-number').fill('12');
- const deliver=()=>page.evaluate(()=>reply({data:{id:held[0].id,ok:true,data:{...core,revision:2,state:'Available',latestVersion:'1.2.1'}}}));await deliver();
+ const {page}=await setup(browser,{holdCoreProgress:true,update:'Available'});await page.waitForFunction(()=>typeof completeCoreCheck==='function');await page.waitForTimeout(40);await route(page,'memory');await page.locator('#memory-number').fill('12');
+ const deliver=()=>page.evaluate(()=>completeCoreCheck());await deliver();
  await page.locator('#startup-update-notice').waitFor();assert.equal(await page.locator('#memory-number').inputValue(),'12');assert.equal(await page.evaluate(()=>orange.state.memoryDirty),true);
- await page.locator('[data-startup-dismiss]').click();await deliver();await page.evaluate(()=>reply({data:{event:'coreUpdateProgress',data:{...core,revision:3,state:'Available',latestVersion:'1.2.1'}}}));
+ await page.locator('[data-startup-dismiss]').click();await deliver();await page.evaluate(()=>reply({data:{event:'coreUpdateProgress',data:{...core,revision:4,state:'Available',latestVersion:'1.2.1'}}}));
  assert.equal(await page.locator('#startup-update-notice').isVisible(),false);assert.equal(await page.evaluate(()=>sent.some(m=>/coreUpdateDownload|coreUpdateApply/.test(m.action))),false);await page.close();
  const next=await setup(browser,{update:'Available'});await next.page.locator('#startup-update-notice [data-core-open]').click();assert.equal(await next.page.locator('#core-update-panel').isVisible(),true);await next.page.close();
+ const early=await setup(browser,{update:'Available',coreProgressBeforeReply:true});await early.page.locator('#startup-update-notice').waitFor();assert.equal(await early.page.evaluate(()=>orange.state.coreUpdate.state),'Available');await early.page.close();
+});
+test('Checking acknowledgement retains event ownership but manual cancellation retires the startup notice',async browser=>{
+ const {page}=await setup(browser,{update:'Available',holdCoreProgress:true});await page.waitForFunction(()=>orange.state.coreUpdate?.state==='Checking');
+ await route(page,'memory');await page.locator('#memory-number').fill('12');await route(page,'help');await page.locator('[data-core-cancel]').click();await page.waitForFunction(()=>orange.state.coreUpdate.state==='Cancelled');
+ await page.evaluate(()=>completeCoreCheck({revision:4}));assert.equal(await page.locator('#startup-update-notice').isVisible(),false,'cancelled automatic discovery cannot later notify');
+ await page.locator('[data-core-download]').click();await page.waitForFunction(()=>orange.state.coreUpdate.state==='Downloading');
+ for(const phase of ['Downloading','Ready']){
+  if(phase==='Ready')await page.evaluate(()=>reply({data:{event:'coreUpdateProgress',data:{...core,revision:6,state:'Ready',latestVersion:'1.2.1',taskId:'a'.repeat(32)}}}));
+  await page.evaluate(()=>completeCoreCheck({revision:99,latestVersion:'9.9.9'}));
+  assert.equal(await page.evaluate(()=>orange.state.coreUpdate.state),phase);assert.equal(await page.locator('#startup-update-notice').isVisible(),false);
+  assert.equal(await page.evaluate(()=>orange.state.memoryDirty&&orange.state.memoryEdit===12),true);
+ }
+ assert.equal(await page.evaluate(()=>sent.some(m=>m.action==='coreUpdateApply')),false);await page.close();
 });
 test('late automatic responses cannot replace manual download or Ready state, including progress events',async browser=>{
  const {page}=await setup(browser,{hold:'coreUpdateCheck'});await page.waitForFunction(()=>held.length===1);await route(page,'help');

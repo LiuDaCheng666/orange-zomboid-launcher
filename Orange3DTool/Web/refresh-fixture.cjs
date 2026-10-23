@@ -25,7 +25,13 @@ async function setup(browser,options={}){
    switch(m.action){
     case'status':data=demoStatus;break;
     case'coreUpdateStatus':data=core;break;
-    case'coreUpdateCheck':data={...core,revision:2,state:options.update||'Latest',latestVersion:options.update==='Available'?'1.2.1':''};break;
+    case'coreUpdateCheck':
+     data={...core,revision:2,state:'Checking'};
+     window.completeCoreCheck=(overrides={})=>reply({data:{event:'coreUpdateProgress',data:{...core,revision:3,state:options.update||'Latest',latestVersion:options.update==='Available'?'1.2.1':'',...overrides}}});
+     if(options.coreProgressBeforeReply)queueMicrotask(()=>completeCoreCheck());
+     else if(!options.holdCoreProgress)setTimeout(()=>completeCoreCheck(),20);
+     break;
+    case'coreUpdateCancel':data={...core,revision:3,state:'Cancelled'};break;
     case'coreUpdateDownload':data={...core,revision:5,state:'Downloading',latestVersion:'1.2.1',taskId:'a'.repeat(32)};break;
     case'componentsAction':{const c=components.find(x=>x.id===m.payload.component);if(c){c.configured=m.payload.operation!=='uninstall';c.downloaded=true;}break;}
     case'modCatalog':data={mods:[...mods,...components.filter(c=>options.covers[c.item]).map(c=>({id:c.id,title:c.title,name:c.title,author:'工坊原作者',description:c.description,version:c.version,item:c.item,workshopId:c.item,cover:options.covers[c.item],requires:[],require:[],conflicts:[],componentManaged:true,conflict:false,map:false}))],warnings:[]};break;

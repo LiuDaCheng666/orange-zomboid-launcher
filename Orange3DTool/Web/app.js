@@ -224,14 +224,21 @@ function acceptCoreUpdate(value){
  // even when a late native progress message carries a newer global revision.
  if(['Downloading','Ready','Restarting'].includes(state.coreUpdate?.state)&&['Idle','Checking','Available','Latest','Unavailable'].includes(value?.state))return;
  if(startupUpdate.pending&&startupUpdate.generation!==coreRequestGeneration&&value?.state==='Error'&&!value.taskId)return;
- if(!validCoreStatus(value)){coreDownloadIntent=null;coreStatusVerified=false;state.coreUpdateError='更新状态读取失败，请重新检查或安装完整版本。';renderCoreUpdate();return;}if(value.revision<=(state.coreUpdate?.revision??-1))return;state.coreUpdate=value;coreStatusVerified=true;state.coreUpdateError='';observeCoreDownload(value);renderCoreUpdate();renderStartupNotice();offerCoreReady();
+ if(!validCoreStatus(value)){coreDownloadIntent=null;coreStatusVerified=false;state.coreUpdateError='更新状态读取失败，请重新检查或安装完整版本。';renderCoreUpdate();return;}if(value.revision<=(state.coreUpdate?.revision??-1))return;state.coreUpdate=value;coreStatusVerified=true;state.coreUpdateError='';observeCoreDownload(value);observeStartupCompletion(value);renderCoreUpdate();renderStartupNotice();offerCoreReady();
 }
 function bytes(n){return Number(n||0)<1024?Number(n||0)+' B':Number(n)<1048576?(Number(n)/1024).toFixed(1)+' KiB':(Number(n)/1048576).toFixed(1)+' MiB';}
 function coreUpdatePanel(){const s=state.coreUpdate||{},phase=s.state||'Idle',working=['Checking','Downloading','Restarting'].includes(phase),labels={Idle:'尚未检查',Checking:'正在检查',Available:'可更新至 '+s.latestVersion,Latest:'已验证当前正式版本',Downloading:'正在下载并核验',Ready:'下载完成，等待重启安装',Cancelled:'已取消',Unavailable:'更新渠道暂不可用',Error:'更新未完成',Restarting:'正在重启',Succeeded:'更新成功',RolledBack:'已回退',Conflicted:'恢复受阻',PendingHealth:'正在验证新版界面'},tone=['Error','Unavailable','RolledBack','Conflicted'].includes(phase)?'status-warning':phase==='Ready'||phase==='Latest'||phase==='Succeeded'?'status-positive':'status-neutral';return `<article id="core-update-panel" class="card core-update-panel"><div class="row"><h2>启动器更新</h2><span class="badge ${tone}" role="status">${esc(labels[phase]||phase)}</span></div><p class="small">当前版本 <span data-core-current>${esc(s.currentVersion||'待读取原生版本')}</span> · 最新版本 ${esc(s.latestVersion||'未检查')}</p><div class="actions section"><button data-core-check data-safe ${working||phase==='Ready'?'disabled':''}>检查启动器更新</button>${['Available','Cancelled','Error'].includes(phase)&&s.latestVersion?'<button data-core-download data-safe class="primary">下载启动器更新</button>':''}${['Checking','Downloading'].includes(phase)?'<button data-core-cancel data-safe>取消启动器更新</button>':''}${phase==='Ready'?'<button data-core-apply data-safe class="primary">重启并更新</button>':''}</div><p class="small">检查时间：${s.checkedUtc?esc(localDate(s.checkedUtc)):'尚未检查'} · 启动时检查一次，不会自动下载</p>${state.coreUpdateError?'<p class="status-negative">'+esc(state.coreUpdateError)+'</p>':'<p>'+esc(s.message||'仅更新启动器自身，游戏与组件更新仍各自管理。')+'</p>'}${s.notes?'<p class="core-release-notes">'+esc(s.notes)+'</p>':''}${phase==='Downloading'||phase==='Ready'?'<progress max="'+Math.max(1,s.totalBytes||0)+'" value="'+(s.receivedBytes||0)+'" aria-label="启动器下载进度"></progress><div class="row small"><span>'+esc(bytes(s.receivedBytes))+' / '+esc(bytes(s.totalBytes))+'</span><span>'+esc(bytes(s.speedBytes))+'/s</span></div><p class="key">'+esc(s.currentFile||'文件已验证')+'</p>':''}${s.history?.length?'<section data-core-history><h3>启动器更新记录</h3>'+s.history.map(item=>'<p class="small"><strong>'+esc(({Succeeded:'更新成功',RolledBack:'已回退',Conflicted:'恢复受阻',PendingHealth:'正在验证新版界面'})[item.State]||item.State)+'</strong> · '+esc(item.Version)+' · '+esc(localDate(item.UpdatedUtc))+'<br>'+esc(item.Message||(item.State==='Succeeded'?'健康验证已完成':'等待完成验证或恢复'))+'</p>').join('')+'</section>':''}<p class="small">只重启启动器，游戏可以继续；未保存编辑或待恢复任务需要先处理。</p></article>`;}
 function renderCoreUpdate(){const panel=$('#core-update-panel');if(panel)panel.outerHTML=coreUpdatePanel();}
 let coreRequestGeneration=0,coreDownloadIntent=null,corePrompting=false,coreStatusVerified=false;
 // Automatic discovery owns neither the manual request generation nor download intent.
-const startupUpdate={started:false,pending:false,generation:0,version:'',dismissed:new Set()};
+const startupUpdate={started:false,pending:false,awaitingCompletion:false,baselineRevision:-1,generation:0,version:'',dismissed:new Set()};
+function observeStartupCompletion(value){
+ if(!startupUpdate.pending||!startupUpdate.awaitingCompletion||value.revision<=startupUpdate.baselineRevision)return;
+ if(startupUpdate.generation!==coreRequestGeneration){startupUpdate.pending=false;startupUpdate.awaitingCompletion=false;return;}
+ if(value.state==='Checking')return;
+ if(value.state==='Available')startupUpdate.version=value.latestVersion;
+ startupUpdate.pending=false;startupUpdate.awaitingCompletion=false;
+}
 async function checkStartupUpdate(){
  if(startupUpdate.started||!state.status||!host||preview)return;
  startupUpdate.started=true;
@@ -242,14 +249,15 @@ async function checkStartupUpdate(){
   const initial=await request('coreUpdateStatus',{protocol:1});
   if(!current()||!validCoreStatus(initial))return;
   if(['Checking','Downloading','Ready','Restarting','PendingHealth'].includes(initial.state)){acceptCoreUpdate(initial);return;}
+  // Check acknowledges with Checking; its terminal result arrives as progress.
+  // Establish ownership before dispatch so an event racing the reply is covered.
+  startupUpdate.baselineRevision=Math.max(initial.revision,state.coreUpdate?.revision??-1);
+  startupUpdate.awaitingCompletion=true;
   const result=await request('coreUpdateCheck',{protocol:1});
-  if(!current()||!validCoreStatus(result))return;
-  // Errors remain silent; the explicit updater can always query the native state.
-  if(!['Available','Latest'].includes(result.state))return;
+  if(!current()||!validCoreStatus(result)){startupUpdate.awaitingCompletion=false;return;}
   acceptCoreUpdate(result);
-  if(result.state==='Available'&&state.coreUpdate?.state==='Available'&&state.coreUpdate.latestVersion===result.latestVersion){startupUpdate.version=result.latestVersion;renderStartupNotice();}
- }catch{/* Startup network failure is non-blocking and never a global error. */}
- finally{startupUpdate.pending=false;}
+ }catch{startupUpdate.awaitingCompletion=false;/* Startup failures never become global errors. */}
+ finally{if(!startupUpdate.awaitingCompletion)startupUpdate.pending=false;}
 }
 function renderStartupNotice(){
  const el=$('#startup-update-notice');if(!el)return;
