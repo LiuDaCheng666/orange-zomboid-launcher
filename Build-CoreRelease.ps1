@@ -1,5 +1,6 @@
 param([switch]$VersionOnly,[string]$SigningKey='', [string]$CoreDirectory='', [string]$OutputDirectory='')
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'build\ProductionSources.ps1')
 $versionAttributes = & (Join-Path $PSScriptRoot 'Build-Version.ps1')
 $releaseVersion=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'VERSION')).Trim()
 if($VersionOnly){[pscustomobject]@{Version=$releaseVersion;Tag="v$releaseVersion"};return}
@@ -13,10 +14,11 @@ $project=Join-Path $PSScriptRoot 'Orange3DTool'
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $sdk=Join-Path $PSScriptRoot 'Dependencies\WebView2'
 $refs=@('/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Management.dll','/reference:System.IO.Compression.dll','/reference:System.IO.Compression.FileSystem.dll','/reference:System.Security.dll',"/reference:$sdk\lib\net462\Microsoft.Web.WebView2.Core.dll","/reference:$sdk\lib\net462\Microsoft.Web.WebView2.WinForms.dll")
-$sources=(Get-ChildItem -LiteralPath $project -Filter '*.cs').FullName
+$sources=@(Get-OzlProductionSources -ProjectDirectory $project)
+$toolSources=@($sources)+@(Join-Path $project 'CoreReleaseTool.cs')
 $resources=@("/resource:$PSScriptRoot\VERSION,Launcher.Version.txt","/resource:$public,Launcher.UpdatePublicKey.xml")
 $tool=Join-Path $PSScriptRoot 'artifacts\core-release-tool.exe'
-& $compiler /nologo /target:exe /main:PZ3D.CoreReleaseTool "/out:$tool" $refs $resources $versionAttributes $sources
+& $compiler /nologo /define:OZL_PRODUCTION /target:exe /main:PZ3D.CoreReleaseTool "/out:$tool" $refs $resources $versionAttributes $toolSources
 if($LASTEXITCODE -ne 0){throw 'Release tool compilation failed'}
 if(-not $OutputDirectory){$OutputDirectory=Join-Path $PSScriptRoot "dist\$releaseVersion"}
 if(Test-Path -LiteralPath $OutputDirectory){throw 'Release output already exists; choose a fresh output directory.'}
@@ -25,7 +27,7 @@ if(-not $CoreDirectory){
  $CoreDirectory=Join-Path $PSScriptRoot ('artifacts\core-build-'+[Guid]::NewGuid().ToString('N'))
  New-Item -ItemType Directory -Path $CoreDirectory | Out-Null
  foreach($target in @(@('PZ3D.Program','橙子启动器.exe'),@('PZ3D.CoreUpdaterProgram','橙子更新助手.exe'),@('PZ3D.UninstallerProgram','卸载橙子启动器.exe'))){
-  & $compiler /nologo /target:winexe "/main:$($target[0])" /platform:x64 /optimize+ "/out:$CoreDirectory\$($target[1])" "/win32manifest:$project\app.manifest" "/win32icon:$project\Assets\orange-app.ico" $refs $resources $versionAttributes $sources
+  & $compiler /nologo /define:OZL_PRODUCTION /target:winexe "/main:$($target[0])" /platform:x64 /optimize+ "/out:$CoreDirectory\$($target[1])" "/win32manifest:$project\app.manifest" "/win32icon:$project\Assets\orange-app.ico" $refs $resources $versionAttributes $sources
   if($LASTEXITCODE -ne 0){throw "Compilation failed: $($target[0])"}
  }
  New-Item -ItemType Directory -Path (Join-Path $CoreDirectory 'Web'),(Join-Path $CoreDirectory 'Assets') | Out-Null
