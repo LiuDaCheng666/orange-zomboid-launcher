@@ -61,4 +61,8 @@
 - [x] Run full Web UI, new motion tests, website and license-guide tests once on the integrated branch; do not claim skipped live/Linux checks passed.
 - [x] Run headless capture across both themes/all 11 routes at 1440/1280/768×900, plus 1100×650 where controls must fit. Inspect contact sheets and representative full-resolution controls, mod lists, authorization, tasks and server dialogs. Capture website all three pages at 1440/768/390 and final screen previews.
 - [x] Record each feature group's fixture result and any real-world tests not performed (actual Steam downloads, live game/server entry, actual quarantined installer). Report performance measurements as observed values, not universal guarantees. Include source revision and no-release/no-deploy status.
-- [ ] Obtain one whole-branch read-only review, address concrete blockers with focused tests, then run covering checks. Merge and push verified source per existing user authorization without changing public releases or live site.
+- [x] Obtain one whole-branch read-only review, address concrete blockers with focused tests, then run covering checks. Merge and push verified source per existing user authorization without changing public releases or live site.
+
+## Verified outcome
+
+Launcher task d7ca0c4, website tasks f7ab8d5/cc1a1d1 and diagnostics test-only synchronization 156427d passed task reviews. Whole-branch review 21c70ae..e928118 approved without findings. Main fast-forwarded to 4f596be, reran npm test (41/41, exit 0) and pushed that implementation source to origin/main; remote SHA matched. Full evidence and explicit excluded live tests: docs/quality/2026-10-23-ui-motion-regression.md. No release, installer build, website deployment or update-feed change occurred.
