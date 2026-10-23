@@ -8,6 +8,8 @@
 
 **Tech Stack:** .NET Framework C#, WebView2 HTML/CSS/JavaScript, static HTML/CSS/JavaScript site, Playwright headless, Python deployment tooling.
 
+**Execution order after user's UI-first clarification:** Task 1 (already underway), Task 3 (launcher UI using the specified three-card native contract in isolated fixtures), Task 2 (native contract integration), Task 4 (website using completed new UI captures). Re-run the Task 3 integration tests after Task 2. Do not begin website implementation before the refreshed launcher UI is visually inspected.
+
 ## Global Constraints
 
 - Work only in `E:/Projects/OrangeLauncher`, existing `feature/self-hosted-updates` branch; preserve unrelated files and existing tests.
@@ -62,7 +64,7 @@ controller.Execute("componentsAction", new Dictionary<string,object>{{"component
 
 **Files:** modify `Orange3DTool/Web/app.js`, `app.css`, `index.html` as needed, create focused UI modules only if embedded/deployment resources are also updated; extend headless tests in `Web/` and existing full suite. Keep user-facing feature routes/actions intact.
 
-**Interfaces:** consume Task 2 native cards/IDs and existing `coreUpdateCheck`, `coreUpdateStatus`, `coreUpdateProgress` protocol. Preserve legacy fixture compatibility if useful but primary UI shows exactly three core cards. Optional addons stay separated. Do not modify update signature/transport.
+**Interfaces:** consume the specified Task 2 native cards/IDs and existing `coreUpdateCheck`, `coreUpdateStatus`, `coreUpdateProgress` protocol. During UI-first development, isolated native-boundary fixtures supply the specified contract; Task 2 integrates it before final screenshots/delivery. Preserve legacy fixture compatibility if useful but primary UI shows exactly three core cards. Optional addons stay separated. Do not modify update signature/transport.
 
 - [ ] Write failing headless tests for exactly three independent core actions, optional additions collapsed/separate, Chinese-only workflow, clear next step only when game/core missing, and accessible existing memory/maintenance/mod/save/server routes in both themes. Add startup tests with controlled native responses: one silent check after readiness; Latest/Error produce no modal/global error; Available yields dismissible notice; manual in-flight/Ready state not overwritten; dirty drafts survive.
 
