@@ -22,7 +22,7 @@
 
 **Interfaces:** Existing .site-header, [role=tab], data-feature-image/title/description/points, theme select, data-enlarge/close and download metadata validation. Existing tests start a loopback server. New capture script accepts OZL_SITE_URL (defaults http://127.0.0.1:3837), outputs artifacts/website-showcase, uses existing playwright-runtime.cjs, no publication.
 
-- [ ] Add actual-DOM regression before production edits: preview width at least1050px at1440 and1280, original8:5 aspect and no crop/stretch; viewport intersection at least180px on1440x900; five summaries visible and usable. Capture genuineRED against840px oldlayout, not a missing-selector exception.
+- [ ] Add actual-DOM regression before production edits: preview width at least1050px at1440 and1280, original8:5 aspect and no crop/stretch; viewport intersection at least360px on1440x900; five summaries visible and usable. Capture genuineRED against840px oldlayout, not a missing-selector exception.
 
 ```js
 const r=await page.locator('[data-feature-image]').boundingBox();
