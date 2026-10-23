@@ -35,3 +35,22 @@ An initial timing pass during concurrent native fixture writes exposed unrelated
 ## Limits and concerns
 
 External notifications are asynchronous; a read racing notification delivery can briefly return the preceding display snapshot. The 30-second fallback limits stale display data even when notifications are lost/unavailable. Explicit refresh and all authoritative operations remain fresh. Global cache synchronization serializes cold discoveries, deliberately preventing duplicate concurrent discovery. No persistence or speculative background worker was added.
+
+## Review fix round 1
+
+Finding: watcher coverage omitted workshop roots parsed from libraryfolders.vdf and optional-component directories resolved through workshop-paths.json. These could retain display data until fallback expiry despite functioning notifications.
+
+Changes:
+
+- `GameDiscovery.WorkshopSources` resolves the common catalog/workshop watcher source set and the libraryfolders input files. SaveProfiles discovery and DisplayCache consume this same result. The selected game's own Steam installation root is included along with registry-discovered roots; this also allows isolated alternate-library fixtures without registry writes or a global test hook.
+- DisplayCache resolves every supported component item through the same `InstallWorkflow.Source` used by authoritative component fingerprints, including mapped optional sources. Mapping-file edits retire the snapshot so replacement watchers follow the new mapping.
+- Reformatted DisplayCache into maintainable methods and grouped targets sharing an existing watcher directory, avoiding duplicate handles for sibling file targets.
+- Added real alternate-library catalog edit and mapped optional-component display-evidence edit fixtures. Extended polling reuse to 15.1 seconds, verified fallback expiry by aging the private cached values in test utility code (no production clock/test hook), and verified controller disposal retires its snapshot.
+
+RED/GREEN commands: `./Build-Tests.ps1 -Entry PZ3D.CatalogCacheTests -Output artifacts/catalog-cache-tests.exe`, then `./artifacts/catalog-cache-tests.exe`.
+
+- RED: initial fixture failed `alternate library discovered through shared source set`. After introducing the shared resolver but retaining old watchers, it failed `alternate library edits invalidate catalog` (exit 1), proving actual external-edit coverage was missing.
+- Mapped-source mutation check: temporarily omitting resolved component roots failed `mapped optional component edits invalidate display evidence` (exit 1); the roots were restored before final validation.
+- GREEN: final focused run exited 0 with the cache fixture PASS, including actual 15-second reuse, both new external-source edits, fallback retirement and lifecycle retirement. A test cleanup issue initially double-disposed ModernController; the fixture was corrected to dispose once, without changing controller behavior.
+
+Focused covering validation is green and `git diff --check` is clean. A full native run was already started in background session 89205 before the request to defer repeated whole-suite runs to branch integration; its log is artifacts/cache-self-test.log and its completion is not required for this scoped handoff. No real source files, registry entries or user/game/server files were modified; all new fixtures are temporary test directories.

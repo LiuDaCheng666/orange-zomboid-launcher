@@ -1,19 +1,104 @@
-using System;using System.IO;using System.Linq;using System.Collections.Generic;
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
 namespace PZ3D {
  // Display data only. Validation and mutation callers continue to discover fresh sources.
  static class DisplayCache {
+  const int MaximumIdentities=4,MaximumValues=32;
+  static readonly TimeSpan MaximumAge=TimeSpan.FromSeconds(30);
   sealed class Value {internal object Data;internal DateTime Created=DateTime.UtcNow;}
   sealed class Snapshot:IDisposable {
-   internal volatile bool Dirty;internal DateTime Used=DateTime.UtcNow;internal readonly Dictionary<string,Value> Values=new Dictionary<string,Value>();readonly List<FileSystemWatcher> watchers=new List<FileSystemWatcher>();
-   internal Snapshot(IEnumerable<string> roots){foreach(string root in roots.Distinct(StringComparer.OrdinalIgnoreCase)){try{string path=root;while(!Directory.Exists(path)&&Path.GetDirectoryName(path)!=null)path=Path.GetDirectoryName(path);LauncherMaintenance.NoReparse(path);if(Path.GetPathRoot(path)==path)continue;string target=root;FileSystemEventHandler changed=(s,a)=>{if(Related(target,a.FullPath))Dirty=true;};var watcher=new FileSystemWatcher(path){IncludeSubdirectories=true,NotifyFilter=NotifyFilters.FileName|NotifyFilters.DirectoryName|NotifyFilters.LastWrite|NotifyFilters.Size|NotifyFilters.CreationTime};watcher.Changed+=changed;watcher.Created+=changed;watcher.Deleted+=changed;watcher.Renamed+=(s,a)=>{if(Related(target,a.FullPath)||Related(target,a.OldFullPath))Dirty=true;};watcher.Error+=(s,a)=>Dirty=true;watchers.Add(watcher);watcher.EnableRaisingEvents=true;}catch{Dirty=true;}}}
-   static bool Related(string root,string path){return root.Equals(path,StringComparison.OrdinalIgnoreCase)||path.StartsWith(root+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)||root.StartsWith(path+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase);}
+   internal volatile bool Dirty;
+   internal DateTime Used=DateTime.UtcNow;
+   internal readonly Dictionary<string,Value> Values=new Dictionary<string,Value>();
+   readonly List<FileSystemWatcher> watchers=new List<FileSystemWatcher>();
+   internal Snapshot(IEnumerable<string> roots){
+    var groups=new Dictionary<string,List<string>>(StringComparer.OrdinalIgnoreCase);
+    foreach(string root in roots.Distinct(StringComparer.OrdinalIgnoreCase)){
+     try{
+      string path=root;
+      while(!Directory.Exists(path)&&Path.GetDirectoryName(path)!=null)path=Path.GetDirectoryName(path);
+      LauncherMaintenance.NoReparse(path);
+      if(Path.GetPathRoot(path)==path)continue;
+      List<string> targets;
+      if(!groups.TryGetValue(path,out targets))groups[path]=targets=new List<string>();
+      targets.Add(root);
+     }catch{Dirty=true;}
+    }
+    foreach(var group in groups){
+     try{
+      var targets=group.Value.ToArray();
+      FileSystemEventHandler changed=(s,a)=>{if(targets.Any(t=>Related(t,a.FullPath)))Dirty=true;};
+      var watcher=new FileSystemWatcher(group.Key){
+       IncludeSubdirectories=true,
+       NotifyFilter=NotifyFilters.FileName|NotifyFilters.DirectoryName|NotifyFilters.LastWrite|NotifyFilters.Size|NotifyFilters.CreationTime
+      };
+      watcher.Changed+=changed;watcher.Created+=changed;watcher.Deleted+=changed;
+      watcher.Renamed+=(s,a)=>{if(targets.Any(t=>Related(t,a.FullPath)||Related(t,a.OldFullPath)))Dirty=true;};
+      watcher.Error+=(s,a)=>Dirty=true;
+      watchers.Add(watcher);
+      watcher.EnableRaisingEvents=true;
+     }catch{Dirty=true;}
+    }
+   }
+   static bool Related(string root,string path){
+    return root.Equals(path,StringComparison.OrdinalIgnoreCase)
+     ||path.StartsWith(root+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)
+     ||root.StartsWith(path+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase);
+   }
    public void Dispose(){Dirty=true;foreach(var watcher in watchers)watcher.Dispose();}
   }
-  static readonly object gate=new object();static readonly Dictionary<string,Snapshot> snapshots=new Dictionary<string,Snapshot>(StringComparer.OrdinalIgnoreCase);
+  static readonly object gate=new object();
+  static readonly Dictionary<string,Snapshot> snapshots=new Dictionary<string,Snapshot>(StringComparer.OrdinalIgnoreCase);
   static string Canonical(string p){return string.IsNullOrEmpty(p)?"":Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);}
   internal static string Identity(Engine e){return string.Join("\n",new[]{e.Game,e.User,e.Data,e.Workshop,e.BuddySource,e.ViewSource,e.ModelsSource}.Select(Canonical))+"\n"+e.TestMode;}
-  static IEnumerable<string> Roots(Engine e){var roots=new List<string>{Path.Combine(e.User,"mods"),Path.Combine(e.Data,"component-receipts"),Path.Combine(e.Data,"workshop-paths.json"),e.Workshop,Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(e.Workshop)),"appworkshop_108600.acf")};foreach(string file in new[]{"game-version.txt","version.txt","media/version.txt","projectzomboid.jar","ZombieBuddy.jar","zbNative.dll"})roots.Add(Path.Combine(e.Game,file));roots.AddRange(new[]{e.BuddySource,e.ViewSource,e.ModelsSource}.Where(p=>!string.IsNullOrEmpty(p)));if(!e.TestMode)foreach(string steam in GameDiscovery.SteamRoots()){roots.Add(Path.Combine(steam,"steamapps/workshop/content/108600"));roots.Add(Path.Combine(steam,"steamapps/libraryfolders.vdf"));}return roots.Select(Canonical);}
-  internal static T Read<T>(Engine e,string name,Func<T> create){lock(gate){string key=Identity(e);Snapshot snapshot;if(snapshots.TryGetValue(key,out snapshot)&&snapshot.Dirty){snapshots.Remove(key);snapshot.Dispose();snapshot=null;}if(snapshot==null){while(snapshots.Count>=4){var oldest=snapshots.OrderBy(p=>p.Value.Used).First();snapshots.Remove(oldest.Key);oldest.Value.Dispose();}snapshot=new Snapshot(Roots(e));snapshots[key]=snapshot;}snapshot.Used=DateTime.UtcNow;Value value;if(snapshot.Values.TryGetValue(name,out value)&&(DateTime.UtcNow-value.Created).TotalSeconds<30)return (T)value.Data;T data=create();if(snapshot.Values.Count>=32)snapshot.Values.Clear();snapshot.Values[name]=new Value{Data=data};return data;}}
-  internal static void Invalidate(Engine e){if(e==null)return;lock(gate){Snapshot snapshot;string key=Identity(e);if(snapshots.TryGetValue(key,out snapshot)){snapshots.Remove(key);snapshot.Dispose();}}}
+  static IEnumerable<string> Roots(Engine e){
+   var sources=GameDiscovery.WorkshopSources(e,new List<string>());
+   var roots=new List<string>{
+    Path.Combine(e.User,"mods"),Path.Combine(e.Data,"component-receipts"),
+    Path.Combine(e.Data,"workshop-paths.json"),
+    Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(e.Workshop)),"appworkshop_108600.acf")
+   };
+   roots.AddRange(sources.Roots);
+   roots.AddRange(sources.Inputs);
+   foreach(string file in new[]{"game-version.txt","version.txt","media/version.txt","projectzomboid.jar","ZombieBuddy.jar","zbNative.dll"})roots.Add(Path.Combine(e.Game,file));
+   roots.AddRange(new[]{e.BuddySource,e.ViewSource,e.ModelsSource}.Where(p=>!string.IsNullOrEmpty(p)));
+   // Resolve exactly the sources used by component fingerprints, including optional mapped items.
+   ulong[] items=ComponentEvidence.Items("base")
+    .Concat(new[]{3810302175UL,ShootClient.Item,ChinesePatch.Item})
+    .Concat(ViewpointAddons.All.Select(a=>a.Item)).Distinct().ToArray();
+   foreach(ulong item in items)roots.Add(InstallWorkflow.Source(e,item));
+   return roots.Select(Canonical);
+  }
+  internal static T Read<T>(Engine e,string name,Func<T> create){
+   lock(gate){
+    string key=Identity(e);Snapshot snapshot;
+    if(snapshots.TryGetValue(key,out snapshot)&&snapshot.Dirty){
+     snapshots.Remove(key);snapshot.Dispose();snapshot=null;
+    }
+    if(snapshot==null){
+     while(snapshots.Count>=MaximumIdentities){
+      var oldest=snapshots.OrderBy(p=>p.Value.Used).First();
+      snapshots.Remove(oldest.Key);oldest.Value.Dispose();
+     }
+     snapshot=new Snapshot(Roots(e));snapshots[key]=snapshot;
+    }
+    snapshot.Used=DateTime.UtcNow;
+    Value value;
+    if(snapshot.Values.TryGetValue(name,out value)&&DateTime.UtcNow-value.Created<MaximumAge)return (T)value.Data;
+    T data=create();
+    if(snapshot.Values.Count>=MaximumValues)snapshot.Values.Clear();
+    snapshot.Values[name]=new Value{Data=data};
+    return data;
+   }
+  }
+  internal static void Invalidate(Engine e){
+   if(e==null)return;
+   lock(gate){
+    Snapshot snapshot;string key=Identity(e);
+    if(snapshots.TryGetValue(key,out snapshot)){snapshots.Remove(key);snapshot.Dispose();}
+   }
+  }
  }
 }
