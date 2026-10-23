@@ -13,10 +13,30 @@
     }
   });
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  if ('IntersectionObserver' in window && !reducedMotion.matches) {
+  const effects = new Map();
+  function stop(target) {
+    effects.get(target)?.cancel();
+    effects.delete(target);
+  }
+  function enter(target, duration = 240) {
+    stop(target);
+    if (reducedMotion.matches || document.hidden || !target.animate) return;
+    const effect = target.animate([
+      { opacity: 0.55, transform: 'translateY(8px)' },
+      { opacity: 1, transform: 'translateY(0)' }
+    ], { duration, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    effects.set(target, effect);
+    const release = () => { if (effects.get(target) === effect) effects.delete(target); };
+    effect.finished.then(release, release);
+  }
+  function stopAll() { for (const target of effects.keys()) stop(target); }
+  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) stopAll(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopAll(); });
+  window.addEventListener('pagehide', stopAll);
+  if ('IntersectionObserver' in window) {
     const entrance = new IntersectionObserver(entries => {
       for (const entry of entries) if (entry.isIntersecting) {
-        entry.target.classList.add('is-revealed');
+        enter(entry.target, 360);
         entrance.unobserve(entry.target);
       }
     }, { threshold: 0.08 });
@@ -55,8 +75,6 @@
   const theme = document.querySelector('select[aria-label="预览主题"]');
   const screenshot = document.querySelector('[data-feature-image]');
   let selected = 'home';
-  let transition;
-  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) transition?.cancel(); });
   function selectFeature(id) {
     selected = id;
     tabs.forEach(tab => {
@@ -73,11 +91,7 @@
     }));
     screenshot.src = 'assets/launcher-' + id + '-' + theme.value + '.png';
     screenshot.alt = tabs.find(tab => tab.dataset.feature === id).querySelector('.feature-name').textContent + (theme.value === 'dark' ? '深色' : '浅色') + '界面';
-    transition?.cancel();
-    if (!reducedMotion.matches) transition = panel.animate([
-      { opacity: 0.45, transform: 'translateY(8px)' },
-      { opacity: 1, transform: 'translateY(0)' }
-    ], { duration: 260, easing: 'ease-out' });
+    enter(panel);
   }
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => selectFeature(tab.dataset.feature));
@@ -95,9 +109,11 @@
     image.src = screenshot.src; image.alt = screenshot.alt;
     document.querySelector('[data-dialog-title]').textContent = screenshot.alt;
     dialog.showModal();
+    enter(dialog, 200);
   });
-  document.querySelector('[data-close]').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => enlarge.focus());
+  document.querySelector('[data-close]').addEventListener('click', () => { stop(dialog); dialog.close(); });
+  dialog.addEventListener('cancel', () => stop(dialog));
+  dialog.addEventListener('close', () => { stop(dialog); enlarge.focus(); });
   function validate(data) {
     if (!data || !/^\d+\.\d+\.\d+$/.test(data.version) || !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) throw Error('Invalid release');
     for (const [kind, filename] of Object.entries({ setup: `orange-launcher-setup-v${data.version}.exe`, portable: `orange-launcher-v${data.version}-win-x64.zip` })) {

@@ -37,7 +37,7 @@ test('desktop and mobile expose real downloads without horizontal overflow', asy
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     if (width === 1440) assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 2700), 'homepage stays compact');
     assert.equal(errors.length, 0);
-    if (width === 1440 || width === 390) {
+    if ([1440, 768, 390].includes(width)) {
       await fs.mkdir(path.resolve(__dirname, '../artifacts/website-shots'), { recursive: true });
       await page.screenshot({ path: path.resolve(__dirname, `../artifacts/website-shots/${width}.png`), fullPage: true, animations: 'disabled' });
       if (width === 1440) await page.screenshot({ path: path.resolve(__dirname, '../artifacts/website-shots/home-viewport.png'), animations: 'disabled' });
@@ -120,6 +120,43 @@ test('selecting a feature plays a short transition and reduced-motion users get 
   }
 });
 
+test('motion lifecycle cancels obsolete effects on close, hidden document and preference change', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(base);
+  await page.evaluate(() => Promise.all(document.getAnimations().map(a => a.finished.catch(() => {}))));
+  const state = await page.evaluate(() => {
+    document.querySelector('[data-enlarge]').click();
+    const dialog = document.querySelector('dialog');
+    const effects = dialog.getAnimations();
+    document.querySelector('[data-close]').click();
+    return { count: effects.length, running: effects.some(a => a.playState === 'running'), open: dialog.open };
+  });
+  assert.ok(state.count > 0, 'opening has a short native DOM animation');
+  assert.equal(state.open, false, 'close takes effect synchronously');
+  assert.equal(state.running, false, 'closing must cancel the opening effect');
+  await page.waitForFunction(() => document.activeElement === document.querySelector('[data-enlarge]'));
+  const hidden = await page.evaluate(() => {
+    document.querySelector('#tab-components').click();
+    document.querySelector('#tab-mods').click();
+    const panel = document.querySelector('[role=tabpanel]');
+    const before = panel.getAnimations().filter(a => a.playState === 'running').length;
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    document.querySelector('#tab-servers').click();
+    return { before, after: panel.getAnimations().length, selected: panel.getAttribute('aria-labelledby') };
+  });
+  assert.equal(hidden.before, 1, 'rapid selections replace the prior effect');
+  assert.equal(hidden.after, 0, 'hidden document cancels and suppresses effects');
+  assert.equal(hidden.selected, 'tab-servers');
+  await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); document.querySelector('[data-enlarge]').click(); });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.waitForFunction(() => document.getAnimations().length === 0);
+  assert.ok(await page.getByRole('dialog').isVisible());
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('dialog').evaluate(el => el.open), false);
+  await page.close();
+});
+
 test('feature explanations and the initial screenshot remain readable without JavaScript', async () => {
   const page = await browser.newPage({ javaScriptEnabled: false, viewport: { width: 390, height: 900 } });
   await page.goto(base);
@@ -134,15 +171,33 @@ test('feature explanations and the initial screenshot remain readable without Ja
 test('help and text-only changes have no historical download links and fit narrow screens', async () => {
   for (const width of [390, 768, 1280, 1440]) for (const name of ['help', 'changes']) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(base);
     await page.getByRole('link', { name: name === 'help' ? '使用帮助' : '更新记录', exact: true }).first().click();
     assert.ok(page.url().endsWith(`/${name}.html`));
     assert.ok(await page.getByRole('heading', { level: 1 }).isVisible());
     assert.equal(await page.locator('a[href*="/releases/download/"], a[href$=".exe"], a[href$=".zip"]').count(), 0);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    assert.equal(await page.locator('nav [aria-current="page"]').getAttribute('href'), `${name}.html`);
+    assert.deepEqual(errors, []);
     await page.screenshot({ path: path.resolve(__dirname, `../artifacts/website-shots/${name}-${width}.png`), fullPage: true, animations: 'disabled' });
     await page.close();
   }
+});
+
+test('secondary pages preserve native navigation and help disclosure without scripts', async () => {
+  const page = await browser.newPage({ javaScriptEnabled: false, viewport: { width: 390, height: 900 } });
+  for (const name of ['help', 'changes']) {
+    await page.goto(base + '/' + name + '.html');
+    assert.ok(await page.getByRole('heading', { level: 1 }).isVisible());
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    if (name === 'help') {
+      await page.locator('summary').first().focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator('details').first().getAttribute('open'), '');
+    }
+  }
+  await page.close();
 });
 
 test('all actual preview assets load on demand in both themes and enlarge at native resolution', async () => {
