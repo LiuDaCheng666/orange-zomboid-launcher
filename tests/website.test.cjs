@@ -135,6 +135,18 @@ test('motion lifecycle cancels obsolete effects on close, hidden document and pr
   assert.equal(state.open, false, 'close takes effect synchronously');
   assert.equal(state.running, false, 'closing must cancel the opening effect');
   await page.waitForFunction(() => document.activeElement === document.querySelector('[data-enlarge]'));
+  const reopened = await page.evaluate(async () => {
+    const dialog = document.querySelector('dialog');
+    document.querySelector('[data-enlarge]').click();
+    document.querySelector('[data-close]').click();
+    document.querySelector('[data-enlarge]').click();
+    const effect = dialog.getAnimations()[0];
+    await new Promise(resolve => dialog.addEventListener('close', resolve, { once: true }));
+    return { open: dialog.open, cancelled: effect.playState === 'idle' };
+  });
+  assert.equal(reopened.open, true);
+  assert.equal(reopened.cancelled, false, 'a queued old close must not cancel the reopened dialog');
+  await page.keyboard.press('Escape');
   const hidden = await page.evaluate(() => {
     document.querySelector('#tab-components').click();
     document.querySelector('#tab-mods').click();

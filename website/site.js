@@ -113,7 +113,11 @@
   });
   document.querySelector('[data-close]').addEventListener('click', () => { stop(dialog); dialog.close(); });
   dialog.addEventListener('cancel', () => stop(dialog));
-  dialog.addEventListener('close', () => { stop(dialog); enlarge.focus(); });
+  dialog.addEventListener('close', () => {
+    // A queued close event may belong to an earlier opening.
+    if (dialog.open) return;
+    stop(dialog); enlarge.focus();
+  });
   function validate(data) {
     if (!data || !/^\d+\.\d+\.\d+$/.test(data.version) || !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) throw Error('Invalid release');
     for (const [kind, filename] of Object.entries({ setup: `orange-launcher-setup-v${data.version}.exe`, portable: `orange-launcher-v${data.version}-win-x64.zip` })) {
