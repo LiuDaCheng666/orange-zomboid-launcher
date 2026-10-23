@@ -12,19 +12,51 @@
       message.textContent = '请手动复制群号 1124858561，在 QQ 中搜索加入';
     }
   });
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  if ('IntersectionObserver' in window && !reducedMotion.matches) {
+    const entrance = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        entry.target.classList.add('is-revealed');
+        entrance.unobserve(entry.target);
+      }
+    }, { threshold: 0.08 });
+    document.querySelectorAll('[data-reveal]').forEach(section => entrance.observe(section));
+  }
   if (!status) return;
   const features = {
-    home: ['启动首页', '确认游戏目录与组件状态，选择启动方式，查看最近使用的存档。'],
-    components: ['组件管理', '查看 Buddy、Viewpoint 与中文适配的版本和状态，按需安装或更新。'],
-    mods: ['模组清单', '查看模组名称与依赖，搜索和整理启用顺序，保存自己的配置。缺少封面的演示条目使用中性占位。'],
-    servers: ['服务器', '从连接记录或服主提供的工坊 ID 准备模组，确认后在后台订阅并逐项下载。'],
-    maintenance: ['维护工具', '查看缓存与工坊维护入口、任务进度及操作日志；执行前阅读提示。']
+    home: ['启动游戏与管理存档', '启动前选好配置和目标，不用每次重新整理模组。', [
+      '进入主菜单，或选择指定存档、服务器启动',
+      '查看存档封面、游玩记录与各存档的模组清单',
+      '删除不用的存档，移到系统回收站'
+    ]],
+    components: ['核心组件安装与更新', '三个核心组件放在一起，其他扩展按你的需要选择。', [
+      '安装 ZombieBuddy 框架、Viewpoint 3D 和中文汉化',
+      '查看已装版本、启用状态与可用更新',
+      '按组件安装、卸载，或一键恢复全部组件'
+    ]],
+    mods: ['模组配置与依赖排序', '看封面、看介绍、查依赖，为不同玩法保存不同配置。', [
+      '搜索本地模组，查看封面、作者、版本与前置依赖',
+      '检查缺失依赖，预览自动排序，也能手动调整顺序',
+      '保存多套配置，为不同存档整理各自的模组清单'
+    ]],
+    servers: ['服务器列表与公开大厅', '个人列表、游戏收藏与公开大厅，放在同一个地方。', [
+      '保存服务器地址、端口与角色登录信息',
+      '查看在线人数与延迟，搜索、筛选和排序公开大厅',
+      '选择服务器启动，连接时使用服务器下发的模组清单'
+    ]],
+    maintenance: ['内存设置与工坊维护', '任务进行到哪一步、哪里出错，在进度和日志里查看。', [
+      '自动读取总内存与当前设置，调整 Java 启动内存',
+      '清理缓存，调用 Steam 重新下载工坊模组',
+      '跟踪操作进度、完成结果与详细日志'
+    ]]
   };
   const tabs = [...document.querySelectorAll('[role="tab"]')];
   const panel = document.querySelector('[role="tabpanel"]');
   const theme = document.querySelector('select[aria-label="预览主题"]');
   const screenshot = document.querySelector('[data-feature-image]');
   let selected = 'home';
+  let transition;
+  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) transition?.cancel(); });
   function selectFeature(id) {
     selected = id;
     tabs.forEach(tab => {
@@ -35,13 +67,22 @@
     panel.setAttribute('aria-labelledby', 'tab-' + id);
     document.querySelector('[data-feature-title]').textContent = features[id][0];
     document.querySelector('[data-feature-description]').textContent = features[id][1];
+    const points = document.querySelector('[data-feature-points]');
+    points.replaceChildren(...features[id][2].map(text => {
+      const item = document.createElement('li'); item.textContent = text; return item;
+    }));
     screenshot.src = 'assets/launcher-' + id + '-' + theme.value + '.png';
-    screenshot.alt = features[id][0] + (theme.value === 'dark' ? '深色' : '浅色') + '界面';
+    screenshot.alt = tabs.find(tab => tab.dataset.feature === id).querySelector('.feature-name').textContent + (theme.value === 'dark' ? '深色' : '浅色') + '界面';
+    transition?.cancel();
+    if (!reducedMotion.matches) transition = panel.animate([
+      { opacity: 0.45, transform: 'translateY(8px)' },
+      { opacity: 1, transform: 'translateY(0)' }
+    ], { duration: 260, easing: 'ease-out' });
   }
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => selectFeature(tab.dataset.feature));
     tab.addEventListener('keydown', event => {
-      const next = { ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 }[event.key];
+      const next = { ArrowDown: (index + 1) % tabs.length, ArrowUp: (index + tabs.length - 1) % tabs.length, ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 }[event.key];
       if (next === undefined) return;
       event.preventDefault(); tabs[next].focus(); selectFeature(tabs[next].dataset.feature);
     });
@@ -73,15 +114,15 @@
       const file = data[kind];
       document.querySelectorAll(`[data-download="${kind}"]`).forEach(link => { link.href = file.url; });
       document.querySelector(`[data-github="${kind}"]`).href = file.github;
-      document.querySelector(`[data-file-meta="${kind}"]`).textContent = `v${data.version} · ${(file.length / 1048576).toFixed(1)} MiB · Windows x64`;
+      document.querySelector(`[data-file-meta="${kind}"]`).textContent = `${(file.length / 1048576).toFixed(1)} MiB · Windows x64`;
       document.querySelector(`[data-hash="${kind}"]`).textContent = file.sha256.toUpperCase();
     }
-    document.querySelector('[data-version]').textContent = `v${data.version} 稳定版`;
+    document.querySelector('[data-version]').textContent = `v${data.version}`;
     document.querySelector('[data-release-date]').textContent = data.date;
     document.querySelector('[data-release-date]').dateTime = data.date;
     const notes = document.querySelector('[data-release-notes]'); notes.replaceChildren();
     for (const text of data.notes) { const li = document.createElement('li'); li.textContent = text; notes.append(li); }
-    status.textContent = `v${data.version} · Windows x64 · 免费使用`;
+    status.textContent = '';
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);

@@ -29,7 +29,7 @@ test('desktop and mobile expose real downloads without horizontal overflow', asy
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const response = await page.goto(base);
     assert.equal(response.status(), 200, 'website must serve an actual page');
-    await page.locator('[data-release-status]').filter({ hasText: '1.2.13' }).waitFor();
+    await page.locator('[data-version]').filter({ hasText: '1.2.13' }).waitFor();
     assert.ok(await page.getByRole('heading', { level: 1 }).isVisible());
     assert.ok(await page.locator('[data-download="setup"]').first().isVisible());
     assert.equal(await page.locator('[data-download="setup"]').first().getAttribute('href'), '/releases/v1.2.13/orange-launcher-setup-v1.2.13.exe');
@@ -62,20 +62,72 @@ test('feature tabs support keyboard navigation, readable enlargement and reduced
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   await page.goto(base);
   assert.equal(await page.getByRole('tab').count(), 5);
-  await page.getByRole('tab', { name: '模组清单', exact: true }).click();
+  await page.getByRole('tab', { name: '模组配置', exact: true }).click();
   const panel = page.getByRole('tabpanel');
   assert.ok(await panel.filter({ hasText: '模组清单' }).isVisible());
   assert.match(await panel.locator('img').getAttribute('src'), /launcher-mods-dark/);
   await page.keyboard.press('ArrowRight');
-  assert.equal(await page.getByRole('tab', { name: '服务器', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.getByRole('tab', { name: '服务器连接', exact: true }).getAttribute('aria-selected'), 'true');
   await page.keyboard.press('Home');
-  assert.equal(await page.getByRole('tab', { name: '启动首页', exact: true }).getAttribute('aria-selected'), 'true');
-  await page.getByRole('button', { name: '查看大图' }).click();
+  assert.equal(await page.getByRole('tab', { name: '启动与存档', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.getByRole('button', { name: '查看大图 ↗' }).click();
   assert.ok(await page.getByRole('dialog').isVisible());
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(), 0);
-  assert.equal(await page.getByRole('button', { name: '查看大图' }).evaluate(el => el === document.activeElement), true);
-  assert.equal(await panel.evaluate(el => parseFloat(getComputedStyle(el).animationDuration)), 0);
+  assert.equal(await page.getByRole('button', { name: '查看大图 ↗' }).evaluate(el => el === document.activeElement), true);
+  assert.equal(await panel.evaluate(el => el.getAnimations().length), 0);
+  await page.close();
+});
+
+test('feature navigation explains every category before selection and shows concrete selected capabilities', async () => {
+  for (const width of [1440, 390]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } });
+    await page.goto(base + '/index.html#features');
+    const tabs = page.getByRole('tab');
+    assert.equal(await tabs.count(), 5);
+    for (const tab of await tabs.all()) {
+      const summary = tab.locator('.feature-summary');
+      assert.equal(await summary.count(), 1, 'each function needs a visible explanation, not just a name');
+      assert.ok(await summary.isVisible());
+      assert.ok((await summary.innerText()).trim().length >= 14);
+      const visibleName = await tab.locator('.feature-name').innerText();
+      assert.equal(await page.getByRole('tab', { name: visibleName, exact: true }).count(), 1, 'the visible label must also work for voice control and screen readers');
+    }
+    const before = await page.locator('[data-feature-points]').innerText();
+    await page.getByRole('tab', { name: '组件安装', exact: true }).click();
+    assert.equal(await page.locator('[data-feature-points] li').count(), 3);
+    assert.notEqual(await page.locator('[data-feature-points]').innerText(), before);
+    assert.ok(await page.getByRole('tabpanel').isVisible());
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await page.close();
+  }
+});
+
+test('selecting a feature plays a short transition and reduced-motion users get an immediate change', async () => {
+  for (const reducedMotion of ['no-preference', 'reduce']) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion });
+    await page.goto(base + '/index.html#features');
+    await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))));
+    await page.getByRole('tab', { name: '组件安装', exact: true }).click();
+    const durations = await page.getByRole('tabpanel').evaluate(panel => panel.getAnimations().filter(animation => animation.playState === 'running').map(animation => animation.effect.getTiming().duration));
+    if (reducedMotion === 'reduce') assert.deepEqual(durations, []);
+    else assert.ok(durations.some(duration => duration >= 180 && duration <= 460), 'a user selection should visibly transition, not jump');
+    await page.getByRole('tab', { name: '服务器连接', exact: true }).click();
+    await page.getByRole('tab', { name: '模组配置', exact: true }).click();
+    assert.equal(await page.getByRole('tab', { name: '模组配置', exact: true }).getAttribute('aria-selected'), 'true');
+    assert.match(await page.locator('[data-feature-image]').getAttribute('src'), /launcher-mods-dark/);
+    await page.close();
+  }
+});
+
+test('feature explanations and the initial screenshot remain readable without JavaScript', async () => {
+  const page = await browser.newPage({ javaScriptEnabled: false, viewport: { width: 390, height: 900 } });
+  await page.goto(base);
+  assert.equal(await page.locator('.feature-summary').count(), 5);
+  assert.equal(await page.locator('[data-feature-points] li').count(), 3);
+  assert.ok(await page.locator('[data-feature-image]').evaluate(image => image.complete && image.naturalWidth >= 1280));
+  assert.ok(await page.getByRole('link', { name: '下载 OZL ↓', exact: true }).isVisible());
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await page.close();
 });
 
@@ -104,7 +156,7 @@ test('all actual preview assets load on demand in both themes and enlarge at nat
     assert.equal(requested.length, 1, 'unselected screenshots are not eagerly fetched');
     for (const theme of ['dark', 'light']) {
       await page.getByLabel('预览主题').selectOption(theme);
-      for (const [id, name] of [['home', '启动首页'], ['components', '组件管理'], ['mods', '模组清单'], ['servers', '服务器'], ['maintenance', '维护工具']]) {
+      for (const [id, name] of [['home', '启动与存档'], ['components', '组件安装'], ['mods', '模组配置'], ['servers', '服务器连接'], ['maintenance', '内存与维护']]) {
         await page.getByRole('tab', { name, exact: true }).click();
         const shot = page.locator('[data-feature-image]');
         await shot.evaluate(image => image.decode());
@@ -112,10 +164,11 @@ test('all actual preview assets load on demand in both themes and enlarge at nat
         assert.ok(await shot.evaluate(image => image.naturalWidth >= 1280));
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
         if (width === 1440) assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 2700));
+        await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))));
         await page.locator('#features').screenshot({ path: path.resolve(__dirname, '../artifacts/website-shots/preview-' + id + '-' + theme + '-' + width + '.png'), animations: 'disabled' });
       }
     }
-    await page.getByRole('button', { name: '查看大图', exact: true }).click();
+    await page.getByRole('button', { name: '查看大图 ↗', exact: true }).click();
     assert.ok(await page.locator('[data-dialog-image]').evaluate(image => image.width >= 1280));
     await page.screenshot({ path: path.resolve(__dirname, '../artifacts/website-shots/enlarged-' + width + '.png'), animations: 'disabled' });
     await page.getByRole('button', { name: '关闭大图 ×' }).click();
