@@ -146,6 +146,20 @@ test('QQ group number is visible and can be copied from every page', async () =>
   await context.close();
 });
 
+test('every page links to the user-provided QQ invitation with safe new-tab attributes', async () => {
+  const page = await browser.newPage();
+  for (const name of ['index', 'help', 'changes']) {
+    await page.goto(base + '/' + name + '.html');
+    const invitation = page.getByRole('link', { name: '加入QQ群', exact: true });
+    assert.equal(await invitation.count(), 1);
+    assert.ok(await invitation.isVisible());
+    assert.equal(await invitation.getAttribute('href'), 'https://qm.qq.com/q/cuLGbwUx4A');
+    assert.equal(await invitation.getAttribute('target'), '_blank');
+    assert.equal(await invitation.getAttribute('rel'), 'noopener noreferrer');
+  }
+  await page.close();
+});
+
 test('untrusted metadata cannot inject markup or send downloads to a foreign host', async () => {
   const page = await browser.newPage();
   const hostile = { version: '<img src=x onerror="window.injected=1">', setup: { url: 'https://evil.example/a.exe' } };
