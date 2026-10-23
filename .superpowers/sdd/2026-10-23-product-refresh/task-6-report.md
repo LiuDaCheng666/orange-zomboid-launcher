@@ -99,3 +99,33 @@ Self-review checked the catalog/parser, session nonce association, unchanged ori
 Two implementation slices were briefly dispatched before the controller clarified the active no-parallel-implementation workflow. Both were immediately interrupted before producing changes; all shipped work above was implemented and verified sequentially by this task agent.
 
 No real subscription/download, game/server/player configuration mutation, foreground browser/game test, Java API addition, real successful connection claim, publication or deployment occurred. Conditional Required observation and Steam success are covered at real-Lua/fake-service boundaries, not end-to-end against a live game/server. The existing 18-file release protocol is unchanged: C# builds automatically and Lua remains in the existing owned bridge resource.
+
+## Review fix round 1/5
+
+Preserved controller documentation HEAD `54fcca6`. Addressed both Important findings together:
+
+1. Existing standalone Steam download and component Fetch bypassed the preparation SDK lane. Added `WithSteamLane` with explicit wait/try/finally release, used by preparation, standalone downloads, component fetch/update, and the existing workshop-rebuild worker lifetime. Existing network reads use the same semaphore. No game/server-running guard was added. A standalone download now uses the existing injected `networkFetch` boundary (whose production default is still `SteamLauncherServices.Execute`); this behavior-preserving seam was connected before RED execution so the test could never enter real Steam. Controlled controller fixtures hold preparation in its fake download, start each competing action on another thread, assert no competing SDK entry until release, then assert its actual fake boundary result. They also verify settings remain readable during preparation.
+2. A subsequent job's completion event could be discarded before its older start response. Pending starts now buffer bounded latest-per-job events matching the confirmed server/endpoint/stamp. The response binds the returned job ID, and the highest revision wins. Buffer ownership is cleared in finally. Expanded the amended event reconciliation/helper code for readable ordering. Actual DOM fixture runs two jobs and delivers job2 completed revision5 before running revision1 acknowledgement; the displayed result remains completed2/2.
+
+RED commands/results:
+
+```powershell
+./Build-Tests.ps1 -Entry PZ3D.ServerWorkshopTests -Output artifacts/server-workshop-tests.exe
+./artifacts/server-workshop-tests.exe
+```
+
+Exit1: `FAIL componentsAction cannot overlap preparation SDK worker`, `FAIL steamDownload cannot overlap preparation SDK worker`, then `FAIL all download entry points share the SDK lane`.
+
+```powershell
+node Orange3DTool/Web/server-workshop-ui-tests.cjs
+```
+
+Exit1: second-job timing fixture expected `completed`, actual `running`; `3/4 server workshop UI groups passed`.
+
+GREEN on final fix source:
+
+- Same native command: exit0, `PASS ServerWorkshopTests 75 checks`.
+- Same headless UI command: exit0, `4/4 server workshop UI groups passed`.
+- `./Build-Tests.ps1 -Entry PZ3D.ModernControllerTests -Output artifacts/task6-review-controller-tests.exe`, then `./artifacts/task6-review-controller-tests.exe *> artifacts/task6-review-controller-tests.log`: exit0, 90 PASS lines. Covers existing component mutation/cancellation, dirty configuration, and network controller behavior.
+- `./Build-Tests.ps1 -Entry PZ3D.SteamLauncherServicesTests -Output artifacts/task6-review-steam-service-tests.exe`, then `./artifacts/task6-review-steam-service-tests.exe *> artifacts/task6-review-steam-service-tests.log`: exit0, 57 PASS lines, including synthetic transport workers and cancellation. No real Steam service was used.
+- `git diff --check`: exit0. No full-native repeat, visual changes, recapture, deployment, or unrelated modifications in this fix round. Controller independently owns final integration verification/re-review.

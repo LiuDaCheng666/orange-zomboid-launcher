@@ -6,6 +6,34 @@ namespace PZ3D {static class ServerWorkshopTests {
  static void Reject(Action a,string name){try{a();}catch(Exception e){Check(!e.Message.Contains("secret"),"input not echoed");checks++;return;}throw new Exception("FAIL "+name);}
  static Dictionary<string,object> Manifest(ModernController c){var list=D(c.Execute("serverList",null));var saved=D(c.Execute("serverUpsert",new Dictionary<string,object>{{"stamp",list["stamp"]},{"id",""},{"name","Job fixture"},{"host","job.test"},{"port",16261},{"queryPort",0},{"username",""},{"useSteamRelay",false}}));var rows=(System.Collections.IList)saved["servers"];string id=(string)((Dictionary<string,object>)rows[rows.Count-1])["id"];var view=D(c.Execute("serverWorkshopGet",new Dictionary<string,object>{{"id",id}}));return D(c.Execute("serverWorkshopImport",new Dictionary<string,object>{{"id",id},{"stamp",view["stamp"]},{"text","123;456;789"},{"confirmed",true}}));}
  static Dictionary<string,object> Wait(ModernController c){var limit=DateTime.UtcNow.AddSeconds(5);while(DateTime.UtcNow<limit){var s=D(c.Execute("serverWorkshopStatus",new Dictionary<string,object>()));if((string)s["state"]!="running")return s;Thread.Sleep(10);}throw new Exception("FAIL job did not drain");}
+ static void SharedSteamLane(string root,string action){
+  string game=Path.Combine(root,action,"steamapps","common","game"),user=Path.Combine(root,action,"user"),data=Path.Combine(root,action,"data");
+  Directory.CreateDirectory(game);File.WriteAllText(Path.Combine(game,"ProjectZomboid64.json"),"{\"vmArgs\":[]}");
+  using(var preparationEntered=new ManualResetEventSlim(false))using(var releasePreparation=new ManualResetEventSlim(false))using(var competingEntered=new ManualResetEventSlim(false)){
+   int inSdk=0,overlap=0;Exception competingError=null;
+   using(var c=new ModernController(game,user,data,true,(e,ids,progress,token,update)=>{
+    if(Interlocked.Increment(ref inSdk)>1)Interlocked.Exchange(ref overlap,1);
+    competingEntered.Set();Interlocked.Decrement(ref inSdk);throw new IOException("controlled component boundary reached");
+   },(e,a,p,progress,token,batch)=>{
+    if(Interlocked.Increment(ref inSdk)>1)Interlocked.Exchange(ref overlap,1);
+    try{if((string)p["id"]=="999"){competingEntered.Set();return new{id="999",message="verified"};}
+     preparationEntered.Set();releasePreparation.Wait(token);return new{id=p["id"],message="verified"};
+    }finally{Interlocked.Decrement(ref inSdk);}
+   })){
+    var m=Manifest(c);c.Execute("serverWorkshopPrepare",new Dictionary<string,object>{{"id",m["id"]},{"stamp",m["stamp"]},{"confirmed",true}});
+    Check(preparationEntered.Wait(2000),"shared lane preparation entered");
+    var settings=D(c.Execute("settingsGet",new Dictionary<string,object>()));Check(settings.ContainsKey("stamp"),"unrelated settings remain usable during preparation");
+    var thread=new Thread(()=>{try{c.Execute(action,action=="steamDownload"?new Dictionary<string,object>{{"id","999"},{"confirmed",true}}:new Dictionary<string,object>{{"component","buddy"},{"operation","install"}});}catch(Exception e){competingError=e;}});
+    thread.Start();
+    bool enteredWhileOwned=false;
+    try{Check(SpinWait.SpinUntil(()=>c.Busy||competingEntered.IsSet,2000),"competing controller action started");enteredWhileOwned=competingEntered.Wait(200);}
+    finally{releasePreparation.Set();Check(thread.Join(5000),"competing controller action drained");}
+    Check(!enteredWhileOwned&&overlap==0,action+" cannot overlap preparation SDK worker");
+    Check(competingEntered.IsSet,action+" reaches fake boundary after lane release");
+    Check(action=="steamDownload"?competingError==null:competingError!=null&&competingError.Message.Contains("controlled component"),"controlled competing result preserved");
+   }
+  }
+ }
  public static int Main(){string root=Path.Combine(LauncherTestPaths.Root,"server-workshop-"+Guid.NewGuid().ToString("N"));try{
   var type=typeof(ServerWorkshopTests).Assembly.GetType("PZ3D.ServerWorkshopCatalog");Check(type!=null,"catalog available");
   string localItem=Path.Combine(root,"steamapps","workshop","content","108600","123","mods","Example","42");Directory.CreateDirectory(localItem);File.WriteAllText(Path.Combine(localItem,"mod.info"),"id=Example\nname=Known local title\n");
@@ -33,6 +61,7 @@ namespace PZ3D {static class ServerWorkshopTests {
   string jobFolder=Path.Combine(root,"complete-data","server-workshop-jobs");Check(Directory.Exists(jobFolder),"job snapshots survive launcher restart");string jobFile=Directory.GetFiles(jobFolder).Single();var envelope=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(jobFile));envelope["ownerPid"]=-1;((Dictionary<string,object>)envelope["snapshot"])["state"]="running";File.WriteAllText(jobFile,json.Serialize(envelope));using(var recovered=new ServerWorkshopPreparation(Path.Combine(root,"complete-data"),null)){Check((string)D(recovered.Status())["state"]=="interrupted","abandoned owned job explicitly interrupted");}
   using(var entered=new ManualResetEventSlim(false)){int calls=0;using(var c=new ModernController(Path.Combine(root,"steamapps","common","game"),Path.Combine(root,"user"),Path.Combine(root,"launch-data"),true,null,(e,a,p,progress,token,batch)=>{Interlocked.Increment(ref calls);entered.Set();token.WaitHandle.WaitOne();token.ThrowIfCancellationRequested();return null;})){var m=Manifest(c);c.Execute("serverWorkshopPrepare",new Dictionary<string,object>{{"id",m["id"]},{"stamp",m["stamp"]},{"confirmed",true}});Check(entered.Wait(2000),"launch drain worker entered");Reject(()=>c.Execute("launch",new Dictionary<string,object>()),"fixture prohibits real launch");Check((string)Wait(c)["state"]=="cancelled"&&calls==1,"explicit launch drains only owned preparation before dispatch");}}
   string badData=Path.Combine(root,"bad-data");Directory.CreateDirectory(badData);File.WriteAllText(Path.Combine(badData,"server-workshop"),"occupied");Reject(()=>ServerWorkshopCatalog.Capture(badData,"example.test:16261",nonce,capture),"actual capture write errors remain visible to diagnostic caller");
+  int laneFailures=0;foreach(string action in new[]{"componentsAction","steamDownload"})try{SharedSteamLane(root,action);}catch(Exception e){laneFailures++;Console.WriteLine(e.Message);}Check(laneFailures==0,"all download entry points share the SDK lane");
   Console.WriteLine("PASS ServerWorkshopTests "+checks+" checks");return 0;
  }catch(Exception e){Console.WriteLine(e);return 1;}finally{if(Directory.Exists(root))Directory.Delete(root,true);}}
 }}
