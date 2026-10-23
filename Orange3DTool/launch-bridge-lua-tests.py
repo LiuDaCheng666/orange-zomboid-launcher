@@ -64,6 +64,22 @@ def status(lua):
 
 def run():
     lua = fixture()
+    lua.execute("items={size=function() return 2 end,get=function(self,i) return ({'123','456'})[i+1] end};emit('OnServerWorkshopItems','Required',items)")
+    assert lua.globals().files['OrangeLauncherWorkshop.txt'] == 'ORANGE_WORKSHOP_1\n' + 'a'*32 + '\n127.0.0.1:1\n2\n123\n456\nEND\n', 'complete Java string list captured with nonce and endpoint'
+    assert 'synthetic' not in lua.globals().files['OrangeLauncherWorkshop.txt']
+    for size, value in [(0, '123'), (2001, '123'), (1, 'bad'), (1, '0')]:
+        lua = fixture()
+        lua.globals().bad_size, lua.globals().bad_value = size, value
+        lua.execute("emit('OnServerWorkshopItems','Required',{size=function() return bad_size end,get=function(self,i) return bad_value end})")
+        assert lua.globals().files['OrangeLauncherWorkshop.txt'] is None
+        assert lua.globals().connectArgs is not None
+    lua = fixture()
+    lua.execute("getFileWriter=function() error('fixture writer failure') end;emit('OnServerWorkshopItems','Required',{size=function() return 1 end,get=function() return '123' end})")
+    assert lua.globals().connectArgs is not None
+    lua = fixture()
+    assert lua.globals().files['OrangeLauncherWorkshop.txt'] is None, 'no event cannot prove an empty server'
+    print('PASS: Workshop Required Java-list observer captures bounded complete records; malformed/no-event/writer failures preserve connection')
+    lua = fixture()
     args = lua.globals().connectArgs
     assert args is not None, "main-menu render event must submit the request without an in-world OnTick"
     assert lua.globals().connectAutoOrder is False, "server connect must not retain Buddy's local pin-to-front policy"

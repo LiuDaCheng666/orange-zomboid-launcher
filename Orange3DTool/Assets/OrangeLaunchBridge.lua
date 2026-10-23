@@ -1,6 +1,8 @@
 -- Owned one-shot launcher bridge. Never approves Java mods or bypasses game checks.
 local finished=false
 local sessionKind=nil
+local captureNonce=nil
+local captureEndpoint=nil
 local function write(name,value)
     local out=getFileWriter(name,true,false)
     if not out then error('bridge file unavailable') end
@@ -86,6 +88,8 @@ local function tick()
         -- This API persists that order preference, but does not approve JARs or disable checksums.
         serverOrder()
         sessionKind='server'
+        captureNonce=lines[2]
+        captureEndpoint=lines[7]..':'..lines[8]
         status('submitted-server')
         ok=pcall(function()
             ConnectToServer.instance:connect(menu,'',lines[9],lines[10],lines[7],'',lines[8],lines[11],lines[12]=='1',true,1)
@@ -95,6 +99,26 @@ local function tick()
     lines=nil
 end
 Events.OnTick.Add(tick)
+-- Observe the original Required event only; vanilla confirmation remains untouched.
+if Events.OnServerWorkshopItems and Events.OnServerWorkshopItems.Add then
+    Events.OnServerWorkshopItems.Add(function(kind,items)
+        if kind~='Required' or sessionKind~='server' or not captureNonce then return end
+        pcall(function()
+            local count=items:size()
+            if type(count)~='number' or count<1 or count>2000 or count~=math.floor(count) then return end
+            local rows={'ORANGE_WORKSHOP_1',captureNonce,captureEndpoint,tostring(count)}
+            local seen={}
+            for i=1,count do
+                local id=items:get(i-1)
+                if type(id)~='string' or #id>20 or not id:match('^[1-9][0-9]*$') or seen[id] then return end
+                seen[id]=true;rows[#rows+1]=id
+            end
+            rows[#rows+1]='END'
+            local record=table.concat(rows,'\n')..'\n'
+            if #record<=65536 then write('OrangeLauncherWorkshop.txt',record) end
+        end)
+    end)
+end
 Events.OnMainMenuEnter.Add(tick)
 -- OnTick does not run in the main menu; its initial delay ends after menu entry.
 Events.OnRenderTick.Add(tick)

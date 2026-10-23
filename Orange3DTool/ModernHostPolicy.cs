@@ -12,6 +12,7 @@ namespace PZ3D {
    var request=new JavaScriptSerializer{MaxJsonLength=262144,RecursionLimit=24}.Deserialize<Dictionary<string,object>>(text);object id,action,payload;
    if(request==null||!request.TryGetValue("id",out id)||!(id is string)||!Regex.IsMatch((string)id,@"^[A-Za-z0-9_-]{1,96}$")||!request.TryGetValue("action",out action)||!(action is string)||(!Actions.Contains((string)action)&&!CoreAction((string)action)&&!BuddyAction((string)action)&&!PlayProfiles.Action((string)action)))throw new Exception("未知或无效的界面操作。");
    if(!request.TryGetValue("payload",out payload)||!(payload is Dictionary<string,object>))throw new Exception("操作参数必须是对象。");
+   if(ModernController.ServerWorkshopAction((string)action))ValidateWorkshopPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="openContact")LauncherContact.Resolve((Dictionary<string,object>)payload);
    if(PlayProfiles.Action((string)action))PlayProfiles.ValidatePayload((string)action,(Dictionary<string,object>)payload);
    if(CoreAction((string)action)) {
@@ -27,7 +28,10 @@ namespace PZ3D {
    if((string)action=="saveDeletePreview"||(string)action=="saveDelete")ValidateSaveDeletionPayload((string)action,(Dictionary<string,object>)payload);
    return request;
   }
-  static ModernHostPolicy(){Actions.Add("openContact");Actions.Add("gameDiagnostics");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");}
+  static ModernHostPolicy(){Actions.Add("openContact");Actions.Add("gameDiagnostics");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");foreach(string action in new[]{"serverWorkshopGet","serverWorkshopImport","serverWorkshopPrepare","serverWorkshopStatus","serverWorkshopCancel"})Actions.Add(action);}
+  internal static void ValidateWorkshopPayload(string action,Dictionary<string,object> p){
+   if(p==null)throw new Exception("缺少清单参数。");string[] fields=action=="serverWorkshopStatus"?new string[0]:action=="serverWorkshopCancel"?new[]{"jobId"}:action=="serverWorkshopGet"?new[]{"id"}:action=="serverWorkshopImport"?new[]{"id","stamp","text","confirmed"}:new[]{"id","stamp","confirmed"};if(p.Count!=fields.Length||fields.Any(k=>!p.ContainsKey(k)))throw new Exception("清单操作参数无效。");foreach(string field in fields){if(field=="confirmed"){if(!(p[field] is bool)||!(bool)p[field])throw new Exception("操作需要明确确认。");}else if(!(p[field] is string)||((string)p[field]).Length>(field=="text"?65536:field=="stamp"?64:32))throw new Exception("清单操作参数无效。");}
+  }
   internal static void ValidateSaveDeletionPayload(string action,Dictionary<string,object> p){object id,stamp,confirmed;bool preview=action=="saveDeletePreview";if(p.Count!=(preview?1:3)||!p.TryGetValue("id",out id)||!(id is string)||!SaveDeletion.ValidId((string)id))throw new InvalidOperationException("删除存档只接受本机存档标识，不能提供路径。");if(!preview&&(!p.TryGetValue("stamp",out stamp)||!(stamp is string)||!SaveDeletion.ValidStamp((string)stamp)||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed))throw new InvalidOperationException("删除存档需要有效预览凭据和明确确认。");}
   internal static bool BuddyAction(string action){return action=="buddyPreview"||action=="buddyTakeover"||action=="buddyRecover";}
   internal static void ValidateAutoSortPayload(Dictionary<string,object> p){object confirmed;if(p.Count!=1||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed)throw new Exception("自动排序需要明确确认，且只调整当前默认清单的顺序。");}

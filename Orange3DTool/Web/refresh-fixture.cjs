@@ -27,7 +27,7 @@ async function setup(browser,options={}){
     case'coreUpdateStatus':data=core;break;
     case'coreUpdateCheck':
      data={...core,revision:2,state:'Checking'};
-     window.completeCoreCheck=(overrides={})=>reply({data:{event:'coreUpdateProgress',data:{...core,revision:3,state:options.update||'Latest',latestVersion:options.update==='Available'?'1.2.1':'',...overrides}}});
+     window.completeCoreCheck=(overrides={})=>reply({data:{event:'coreUpdateProgress',data:{...core,revision:3,state:options.update||'Latest',latestVersion:options.update==='Available'?(options.capture?'1.2.14':'1.2.1'):'',...overrides}}});
      if(options.coreProgressBeforeReply)queueMicrotask(()=>completeCoreCheck());
      else if(!options.holdCoreProgress)setTimeout(()=>completeCoreCheck(),20);
      break;

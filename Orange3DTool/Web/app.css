@@ -128,3 +128,8 @@ button{border:1px solid transparent;border-radius:9px;padding:8px 13px;min-heigh
 .cover-missing small{font-size:12px;white-space:nowrap}
 .contact-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;padding:12px 0;margin-bottom:12px;border-bottom:1px solid var(--line);font-size:13px}
 .contact-row .actions{margin:0}.contact-row [role=status]{color:var(--muted);font-size:12px}
+#server-workshop-panel{position:fixed;z-index:20;right:18px;top:80px;width:min(480px,calc(100vw - 36px));max-height:calc(100vh - 100px);overflow:auto;padding:22px;background:var(--panel,#152322);color:var(--text);border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 60px #0006}
+.light #server-workshop-panel{background:#f7faf8}
+#server-workshop-panel h2{margin:0}#server-workshop-panel details{margin-top:18px}#server-workshop-panel textarea{width:100%;min-height:96px;margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:13px/1.6 Consolas,monospace;resize:vertical}#server-workshop-panel progress{width:100%}
+.server-workshop-items{padding:0;list-style:none;max-height:220px;overflow:auto}.server-workshop-items li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.server-workshop-items small{color:var(--muted);white-space:nowrap}
+@media(max-width:800px){#server-workshop-panel{top:110px;max-height:calc(100vh - 130px)}}

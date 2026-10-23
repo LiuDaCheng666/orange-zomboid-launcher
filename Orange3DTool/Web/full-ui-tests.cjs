@@ -151,4 +151,5 @@ module.exports={setup,route,playwright};
 if(require.main===module)tests.push(...require('./retire-aim-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./product-refresh-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./copy-contact-ui-tests.cjs').tests);
+if(require.main===module)tests.push(...require('./server-workshop-ui-tests.cjs').tests);
 if(require.main===module)(async()=>{const browser=await playwright.chromium.launch({channel:process.env.ORANGE_BROWSER_CHANNEL||'msedge',headless:true});let failed=0;try{for(const {name,fn} of tests){try{await fn(browser);console.log('PASS '+name);}catch(e){failed++;console.error('FAIL '+name+'\n'+e.stack);}}}finally{await browser.close();}console.log(`${tests.length-failed}/${tests.length} full UI test groups passed`);if(failed)process.exitCode=1;})().catch(e=>{console.error(e);process.exitCode=1});
