@@ -57,7 +57,7 @@ controller.Execute("componentsAction", new Dictionary<string,object>{{"component
 
 - [ ] Compile/run focused tests and observe missing-ID or forced-Viewpoint-dependency failure; retain the existing `componentsAction` protocol.
 - [ ] Implement independent framework and Viewpoint operations by extracting shared file/argument handling from Engine, not copy-pasting the combined installer. Preserve source validation, existing backups, rollback and actual I/O error reporting; no process-running restrictions. Add new evidence item mappings and version detection, migrate/display old receipts without silently marking unrelated files as verified.
-- [ ] Document author URLs, read date, installed runtime versions (Buddy 2.3.4, Viewpoint 0.1.6.1, Chinese 1.19.0), latest published information where verified, current paths/IDs/approval names, and query limitations. Buddy installer `windows_installer_4.4` is not runtime 4.4. No live install/update/download during audit.
+- [ ] Document author URLs, read date, installed runtime versions (Buddy 2.3.4, Viewpoint 0.1.6.1, Chinese 1.19.0), latest published information where verified, current paths/IDs/approval names, and query limitations. Include all optional catalog items in a concise audit table; clearly distinguish author mod.info version, public changelog label, and unverified remote manifest. Buddy installer `windows_installer_4.4` is not runtime 4.4. The model pack uses a `42.20.4` version folder; check existing dynamic resolver rather than assuming `42/`. No live install/update/download during audit.
 - [ ] Run focused and full native regression; commit and report RED/GREEN, compatibility and any upstream uncertainty.
 
 ## Task 3: Launcher hierarchy and startup update notification
