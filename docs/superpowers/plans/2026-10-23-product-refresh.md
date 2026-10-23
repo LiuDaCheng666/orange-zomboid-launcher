@@ -49,18 +49,18 @@ File.WriteAllText(infoPath, "id=fixture\nname=Changed\n");
 
 ```csharp
 // Test consumer-observable state, not source strings.
-controller.Execute("component", new Dictionary<string,object>{{"id","buddy"},{"op","install"},{"confirmed",true}});
+controller.Execute("componentsAction", new Dictionary<string,object>{{"component","buddy"},{"operation","install"},{"confirmed",true}});
 // Expect framework configured, Viewpoint absent from temporary default mods.
 ```
 
-- [ ] Compile/run focused tests and observe missing-ID or forced-Viewpoint-dependency failure; adjust the action name in this example to the actual existing native dispatch name, without inventing a new protocol.
+- [ ] Compile/run focused tests and observe missing-ID or forced-Viewpoint-dependency failure; retain the existing `componentsAction` protocol.
 - [ ] Implement independent framework and Viewpoint operations by extracting shared file/argument handling from Engine, not copy-pasting the combined installer. Preserve source validation, existing backups, rollback and actual I/O error reporting; no process-running restrictions. Add new evidence item mappings and version detection, migrate/display old receipts without silently marking unrelated files as verified.
 - [ ] Document author URLs, read date, installed runtime versions (Buddy 2.3.4, Viewpoint 0.1.6.1, Chinese 1.19.0), latest published information where verified, current paths/IDs/approval names, and query limitations. Buddy installer `windows_installer_4.4` is not runtime 4.4. No live install/update/download during audit.
 - [ ] Run focused and full native regression; commit and report RED/GREEN, compatibility and any upstream uncertainty.
 
 ## Task 3: Launcher hierarchy and startup update notification
 
-**Files:** modify `Orange3DTool/Web/app.js`, `style.css`, `index.html` as needed, create focused UI modules only if embedded/deployment resources are also updated; extend headless tests in `Web/` and existing full suite. Keep user-facing feature routes/actions intact.
+**Files:** modify `Orange3DTool/Web/app.js`, `app.css`, `index.html` as needed, create focused UI modules only if embedded/deployment resources are also updated; extend headless tests in `Web/` and existing full suite. Keep user-facing feature routes/actions intact.
 
 **Interfaces:** consume Task 2 native cards/IDs and existing `coreUpdateCheck`, `coreUpdateStatus`, `coreUpdateProgress` protocol. Preserve legacy fixture compatibility if useful but primary UI shows exactly three core cards. Optional addons stay separated. Do not modify update signature/transport.
 
