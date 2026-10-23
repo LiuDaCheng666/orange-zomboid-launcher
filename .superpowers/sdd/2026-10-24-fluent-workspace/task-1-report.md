@@ -34,4 +34,4 @@ Inspected original baseline `artifacts/product-refresh-ui/dark-home-1440.png` an
 
 Reviewed HTML and JS diffs: route selectors and native handlers unchanged; only two existing DOM placement statements changed in JS. Reviewed captures and test failures to correct the utility-overlay issue. Feature-page density is intentionally left to Task2. No known Task1 blocker. Short windows require vertical scrolling to reach the strip, by design; persistent navigation and toolbar remain accessible.
 
-Commit: recorded by parent from the scoped Task1 implementation commit (report committed with implementation).
+Implementation commit: `d334b21` — Redesign Fluent navigation and cover-first launch workspace. This report's final commit reference is recorded in the following report-only commit.
