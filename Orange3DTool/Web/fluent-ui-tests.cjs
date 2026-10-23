@@ -61,6 +61,48 @@ test('Short server editor exposes return and save without scrolling past fields'
  for(const selector of ['[data-server-close]','[data-server-write]']){const r=await page.locator(selector).boundingBox();assert.ok(r.y>=0&&r.y+r.height<=507,selector+' '+JSON.stringify(r));}
  await page.locator('[data-server-close]').click();assert.equal(await page.locator('#server-editor').count(),0);await page.close();
 });
+test('Long server workshop panel keeps import and running-job cancellation reachable',async browser=>{
+ for(const theme of ['dark','light'])for(const [width,height] of [[1440,900],[733,507],[500,760]]){
+  const {page,errors}=await setup(browser,{theme});
+  try{
+   await page.setViewportSize({width,height});await route(page,'servers');
+   await page.evaluate(()=>{
+    const original=chrome.webview.postMessage;
+    let manifest={id:'demo',endpoint:'play.example.invalid:16261',stamp:'manifest-1',source:'connection',capturedUtc:'2026-10-23T08:00:00Z',items:Array.from({length:20},(_,i)=>({id:String(1234567890+i),title:'合成工坊项目 '+i,localPresent:false}))};
+    let job={protocol:1,jobId:'synthetic-workshop-job',revision:1,serverId:'demo',endpoint:manifest.endpoint,manifestStamp:'manifest-2',state:'running',completedItems:0,totalItems:20,currentItem:'1234567890',progress:5,message:'正在准备合成清单',items:[]};
+    chrome.webview.postMessage=m=>{
+     if(!['serverWorkshopGet','serverWorkshopStatus','serverWorkshopImport','serverWorkshopPrepare','serverWorkshopCancel'].includes(m.action))return original(m);
+     sent.push(m);let data={};
+     if(m.action==='serverWorkshopGet')data=manifest;
+     if(m.action==='serverWorkshopImport')data=manifest={...manifest,stamp:'manifest-2',source:'imported'};
+     if(m.action==='serverWorkshopPrepare')data=job;
+     if(m.action==='serverWorkshopCancel')data=job={...job,revision:2,state:'cancelled',message:'已取消合成任务'};
+     queueMicrotask(()=>reply({data:{id:m.id,ok:true,data:structuredClone(data)}}));
+    };
+   });
+   await page.locator('[data-server-workshop="demo"]').click();await page.locator('[data-server-workshop-item]').last().waitFor();
+   const panel=page.locator('#server-workshop-panel');
+   const box=await panel.boundingBox();
+   await panel.locator('summary').click();
+   assert.ok(box.y>=0&&box.y+box.height<=height-16,`${theme} ${width}x${height}: ${JSON.stringify(box)}`);
+   await page.locator('#server-workshop-import').fill('WorkshopItems=1234567890;1234567891');
+   await page.locator('[data-server-workshop-import]').click();
+   await page.waitForFunction(()=>orange.state.serverWorkshopManifest.stamp==='manifest-2');
+   assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='serverWorkshopImport').payload),{id:'demo',stamp:'manifest-1',text:'WorkshopItems=1234567890;1234567891',confirmed:true});
+   assert.equal(await page.locator('#server-workshop-import').inputValue(),'');
+   await page.locator('[data-server-workshop-prepare]').click();await page.locator('#confirm-yes').click();await page.locator('[data-server-workshop-cancel]').waitFor();
+   assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='serverWorkshopPrepare').payload),{id:'demo',stamp:'manifest-2',confirmed:true});
+   if(process.env.OZL_CAPTURE_WORKSHOP_PANEL){
+    const fs=require('node:fs'),path=require('node:path'),folder=path.resolve(__dirname,'../../artifacts/fluent-ui');fs.mkdirSync(folder,{recursive:true});
+    await page.locator('[data-server-workshop-cancel]').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(folder,`${theme}-server-workshop-${width}x${height}.png`),animations:'disabled'});
+   }
+   await page.locator('[data-server-workshop-cancel]').click();
+   await page.waitForFunction(()=>orange.state.serverWorkshopJob.state==='cancelled');
+   assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='serverWorkshopCancel').payload),{jobId:'synthetic-workshop-job'});
+   assert.equal(await page.locator('[data-server-workshop-cancel]').count(),0);assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+ }
+});
 test('Reorganized component and profile actions retain bridge payloads',async browser=>{
  const {page}=await setup(browser);await route(page,'components');await page.locator('[data-component="buddy"][data-operation="uninstall"]').click();if(await page.locator('#confirm').isVisible())await page.locator('#confirm-yes').click();
  await page.waitForFunction(()=>sent.some(m=>m.action==='componentsAction'));assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='componentsAction').payload),{component:'buddy',operation:'uninstall',confirmed:true});

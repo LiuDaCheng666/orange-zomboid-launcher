@@ -6,6 +6,15 @@ const path = require('node:path');
 const { chromium } = require('../Orange3DTool/Web/playwright-runtime.cjs');
 const root = path.resolve(__dirname, '../website');
 let server, browser, base;
+function assertPreviewExposure(shot, viewportHeight) {
+  assert.ok(shot && Math.min(shot.y + shot.height, viewportHeight) - Math.max(shot.y, 0) >= 180, `desktop first screen exposes at least 180px of the launcher preview; got ${JSON.stringify(shot)}`);
+}
+test('preview exposure rejects collapsed, undersized and clipped images', () => {
+  for (const shot of [{ y: 300, height: 0 }, { y: 300, height: 179 }, { y: -100, height: 200 }]) {
+    assert.throws(() => assertPreviewExposure(shot, 900), /at least 180px/);
+  }
+  assertPreviewExposure({ y: 720, height: 180 }, 900);
+});
 before(async () => {
   server = http.createServer(async (req, res) => {
     try {
@@ -48,7 +57,7 @@ test('responsive navigation and preview controls have usable targets without cro
         }
         if (width === 1440) {
           const shot = await page.locator('[data-feature-image]').boundingBox();
-          assert.ok(shot.y + 180 <= 900, `desktop first screen exposes at least 180px of the launcher preview; image starts at ${shot.y}`);
+          assertPreviewExposure(shot, 900);
         }
       }
     } finally { await page.close(); }

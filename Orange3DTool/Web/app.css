@@ -913,7 +913,8 @@ button{transition:transform 140ms ease,opacity 140ms ease}
 .server-metrics strong{font-variant-numeric:tabular-nums}
 #page button{font-size:max(12px,.9em);min-height:32px}
 #page .launch-target #launch{font-size:17px;min-height:50px}
-dialog,#server-workshop-panel{border-radius:12px;box-shadow:0 24px 80px #0005;border:1px solid var(--line);padding:20px;max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;overflow-wrap:anywhere}
+dialog,#server-workshop-panel{border-radius:12px;box-shadow:0 24px 80px #0005;border:1px solid var(--line);padding:20px;overflow:auto;overscroll-behavior:contain;overflow-wrap:anywhere}
+dialog{max-height:calc(100dvh - 32px)}
 dialog h2{font-size:21px;line-height:1.4}
 dialog p{font-size:14px;line-height:1.8}
 dialog .actions{padding-top:12px;border-top:1px solid var(--line)}
