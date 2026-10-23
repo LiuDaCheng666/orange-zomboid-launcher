@@ -22,12 +22,12 @@
 
 **Interfaces:** Preserve `data-feature`, `data-feature-image`, the five screenshot IDs and current download metadata attributes. Add `data-feature-points` to the selected detail list and `.feature-summary` to each tab. Accessible names must match the visible headings through `aria-labelledby`; summaries use `aria-describedby`. Update keyboard and screenshot tests to those names.
 
-- [ ] Add browser tests requiring all five feature summaries to be visible and nonempty, selected detail bullets to update, and a real panel animation after tab selection.
-- [ ] Run `node --test tests/website.test.cjs`; observe the new tests fail while baseline tests pass.
-- [ ] Replace the feature layout and public copy. Make `selectFeature(id)` populate title, description, three bullet items and the matching screenshot, using textContent and existing local assets.
-- [ ] Animate each user selection with `panel.animate([{opacity:.45,transform:'translateY(8px)'},{opacity:1,transform:'translateY(0)'}],{duration:260,easing:'ease-out'})`; cancel previous transition on rapid selections; bypass on reduced-motion preference.
-- [ ] Add one-shot IntersectionObserver entrances using visible-by-default content. Update shared navigation to the descriptive “功能介绍”. Keep release data in downloads only.
-- [ ] Run the entire website suite, inspect full-page desktop/mobile and selected feature screenshots, and correct observed overflow, whitespace or image proportions.
+- [x] Add browser tests requiring all five feature summaries to be visible and nonempty, selected detail bullets to update, and a real panel animation after tab selection.
+- [x] Run `node --test tests/website.test.cjs`; observe the new tests fail while baseline tests pass.
+- [x] Replace the feature layout and public copy. Make `selectFeature(id)` populate title, description, three bullet items and the matching screenshot, using textContent and existing local assets.
+- [x] Animate each user selection with `panel.animate([{opacity:.45,transform:'translateY(8px)'},{opacity:1,transform:'translateY(0)'}],{duration:260,easing:'ease-out'})`; cancel previous transition on rapid selections; bypass on reduced-motion preference.
+- [x] Add one-shot IntersectionObserver entrances using visible-by-default content. Update shared navigation to the descriptive “功能介绍”. Keep release data in downloads only.
+- [x] Run the entire website suite, inspect full-page desktop/mobile and selected feature screenshots, and correct observed overflow, whitespace or image proportions.
 
 ### Task 2: Deploy the existing site and verify
 
@@ -35,8 +35,8 @@
 
 **Interfaces:** Existing `deploy/deploy_site.py` CLI, existing mirror v1.2.13 and fixed SSH host key; no new published assets or setup files.
 
-- [ ] Review the source diff and run `git diff --check`, website suite and deployment tests.
-- [ ] Commit only the reviewed website, tests and docs.
-- [ ] Run existing `deploy/deploy_site.py --site website --mirror artifacts/website-mirror/v1.2.13 --release-metadata artifacts/publication-1.2.13/github-published.json --handover <existing external document>` without printing credentials.
-- [ ] Run `OZL_SITE_URL=https://orangezl.com node --test tests/website.test.cjs`; confirm real HTTPS, no-store metadata, unchanged download version/hash and all feature interactions.
+- [x] Review the source diff and run `git diff --check`, website suite and deployment tests.
+- [x] Commit only the reviewed website, tests and docs.
+- [x] Run existing `deploy/deploy_site.py --site website --mirror artifacts/website-mirror/v1.2.13 --release-metadata artifacts/publication-1.2.13/github-published.json --handover <existing external document>` without printing credentials.
+- [x] Run `OZL_SITE_URL=https://orangezl.com node --test tests/website.test.cjs`; confirm real HTTPS, no-store metadata, unchanged download version/hash and all feature interactions.
 - [ ] Record actual site ID, results and screenshot paths; sync source to the authorized GitHub repository and report the deployed URL.
