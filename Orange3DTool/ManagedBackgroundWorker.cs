@@ -31,7 +31,7 @@ namespace PZ3D {
   }
 #if OZL_VELOPACK
   static Process StartDistribution(string source,string role,string first,string second){
-   string target=PrepareDistribution(source,CoreUpdateTrust.PublicKeyXml,DistributionPaths.RuntimeRoot);
+   string target=PrepareDistribution(source,CoreUpdateTrust.PublicKeyXml,DistributionPaths.ExecutingRoot(DistributionPaths.InstallationRoot,Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)));
    string root=Path.GetDirectoryName(source);var file=DistributionBootstrap.Read(root,CoreUpdateTrust.PublicKeyXml).Single(f=>f.path==Launcher);
    using(var original=new FileStream(source,FileMode.Open,FileAccess.Read,FileShare.Read))
    using(var cached=new FileStream(target,FileMode.Open,FileAccess.Read,FileShare.Read)){

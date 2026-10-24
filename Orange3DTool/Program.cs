@@ -23,6 +23,9 @@ namespace PZ3D {
  static class Program {
   public static bool PreviewMode;
   [STAThread] internal static int Main(string[] args) {
+#if OZL_VELOPACK
+   if(args.Length==3&&args[0]=="--velopack-lease"){int parent;if(!int.TryParse(args[2],out parent))return 2;return ApplyLeaseWorker.Run(args[1],parent);}
+#endif
    string[] diagnosticFlags={"--buddy-crash","--buddy-steam-crash","--check-workshop","--subscribe-workshop","--verify-bundle","--verify-cache","--prepare-dlss","--fetch-workshop","--self-test","--preview","--preview-help"};
    if(args.Any(arg=>diagnosticFlags.Contains(arg))){Console.Error.WriteLine("Diagnostic commands require a diagnostic build.");return 2;}
    LauncherRuntime.Initialize();
@@ -45,9 +48,13 @@ namespace PZ3D {
    }
 #if OZL_VELOPACK
    DistributionPaths.Bootstrap(args);
+   using(NativeApplyGuard.Instance(DistributionPaths.InstallationRoot)){
 #endif
    Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
    return ModernBootstrap.Run(args);
+#if OZL_VELOPACK
+   }
+#endif
   }
  }
  static class Links {

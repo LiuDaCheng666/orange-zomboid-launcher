@@ -7,7 +7,8 @@ using System.Runtime.CompilerServices;
 namespace PZ3D {
  // This type has no SDK references: cached monitor images must run with just the EXE.
  internal static class DistributionPaths {
-  internal static string RuntimeRoot;
+  internal static string RuntimeRoot,InstallationRoot;
+  internal static string ExecutingRoot(string root,string local){string path=Path.Combine(local,"PZ3DManager","WorkerImages",CoreReleaseProtocol.Hash(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(root).ToUpperInvariant())));if(NativeApplyGuard.Within(root,path)||CoreDeployment.SamePath(root,path))throw new IOException("启动器目录包含用户工作缓存，请将便携包移到独立目录。");LauncherMaintenance.NoReparse(path);return path;}
   internal static bool Enabled{get{return typeof(DistributionPaths).Assembly.GetManifestResourceInfo("Launcher.Distribution.Velopack")!=null;}}
   internal static string Resolve(string root,string current,bool portable,string local){
    string path=Path.GetFullPath(portable?Path.Combine(root,"OrangeLauncherRuntime"):Path.Combine(local,"PZ3DManager","Velopack"));

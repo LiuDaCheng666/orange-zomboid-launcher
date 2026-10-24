@@ -28,28 +28,28 @@ namespace PZ3D {
    if(f.FileName!=AppId+"-"+f.Version+"-full.nupkg"||f.Length<=0||f.Length>1073741824||f.Hash==null||!Regex.IsMatch(f.Hash,@"\A[0-9a-fA-F]{64}\z")||f.Notes==null)throw new InvalidDataException("Invalid full package metadata.");
    return f;
   }
-  internal VelopackAsset Asset(){return new VelopackAsset{PackageId=AppId,Version=SemanticVersion.Parse(Version),Type=VelopackAssetType.Full,FileName=FileName,Size=Length,SHA256=Hash,NotesMarkdown=Notes};}
  }
  internal sealed class AuthenticatedVelopackSource:IUpdateSource {
   internal const string Primary="https://orangezl.com/updates/velopack/latest/velopack-manifest.json";
   const string GithubLatest="https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest/download/velopack-manifest.json";
   readonly string key,current,checkpoint;readonly Func<string,CancellationToken,Stream> open;
-  VelopackFeed accepted; internal CancellationToken CheckToken;
+  VelopackFeed accepted;byte[] acceptedRaw,acceptedSignature; internal CancellationToken CheckToken;
   internal AuthenticatedVelopackSource(string key,string current,Func<string,CancellationToken,Stream> open,string checkpoint=null){this.key=key;this.current=current;this.open=open;this.checkpoint=checkpoint;
-   if(checkpoint!=null){LauncherMaintenance.NoReparse(checkpoint);if(File.Exists(checkpoint)){using(var reader=new BinaryReader(new MemoryStream(CoreDeployment.ReadBytes(checkpoint,1050000)))){int a=reader.ReadInt32(),b=reader.ReadInt32();if(a<=0||a>1048576||b<=0||b>1024||reader.BaseStream.Length!=8L+a+b)throw new InvalidDataException("Invalid release checkpoint.");var old=VelopackFeed.Verify(reader.ReadBytes(a),reader.ReadBytes(b),key,"0.0.0");if(CoreReleaseProtocol.IsNewer(old.Version,current))accepted=old;}}}
+   using(ReleaseCheckpoint.Acquire(checkpoint))ReleaseCheckpoint.Floor(checkpoint,key,current);
   }
-  void SaveCheckpoint(byte[] raw,byte[] signature){if(checkpoint==null)return;LauncherMaintenance.NoReparse(checkpoint);Directory.CreateDirectory(Path.GetDirectoryName(checkpoint));string temp=checkpoint+"."+Guid.NewGuid().ToString("N");try{using(var stream=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None))using(var writer=new BinaryWriter(stream)){writer.Write(raw.Length);writer.Write(signature.Length);writer.Write(raw);writer.Write(signature);writer.Flush();stream.Flush(true);}LauncherMaintenance.NoReparse(checkpoint);if(File.Exists(checkpoint))File.Replace(temp,checkpoint,null);else File.Move(temp,checkpoint);}finally{if(File.Exists(temp))File.Delete(temp);}}
   byte[] Read(string url,int max,CancellationToken token){using(var stream=open(url,token))return CoreReleaseNetwork.ReadBounded(stream,max,token);}
   public Task<VelopackAssetFeed> GetReleaseFeed(IVelopackLogger logger,string appId,string channel,Guid? stagingId=null,VelopackAsset latestLocalRelease=null){
    var token=CheckToken;token.ThrowIfCancellationRequested();if(appId!=VelopackFeed.AppId||channel!="win")throw new InvalidDataException("Unexpected framework package identity.");
    byte[] raw,signature;
    try{raw=Read(Primary,1048576,token);string version=VelopackFeed.RoutingVersion(raw);signature=Read("https://orangezl.com/releases/v"+version+"/velopack-manifest.sig",1024,token);}
    catch(Exception e){token.ThrowIfCancellationRequested();if(!CoreReleaseSources.TransportFailure(e))throw;CoreReleaseSources.DisposeResponse(e);raw=Read(GithubLatest,1048576,token);string version=VelopackFeed.RoutingVersion(raw);signature=Read(CoreReleaseProtocol.ReleaseBase+"v"+version+"/velopack-manifest.sig",1024,token);}
-   token.ThrowIfCancellationRequested();var verified=VelopackFeed.Verify(raw,signature,key,accepted==null?current:accepted.Version);token.ThrowIfCancellationRequested();SaveCheckpoint(raw,signature);accepted=verified;
-   return Task.FromResult(new VelopackAssetFeed{Assets=new[]{verified.Asset()}});
+   using(ReleaseCheckpoint.Acquire(checkpoint)){token.ThrowIfCancellationRequested();var verified=VelopackFeed.Verify(raw,signature,key,ReleaseCheckpoint.Floor(checkpoint,key,accepted==null?current:accepted.Version));token.ThrowIfCancellationRequested();ReleaseCheckpoint.Write(checkpoint,raw,signature);accepted=verified;acceptedRaw=(byte[])raw.Clone();acceptedSignature=(byte[])signature.Clone();
+    return Task.FromResult(new VelopackAssetFeed{Assets=new[]{new VelopackAsset{PackageId=VelopackFeed.AppId,Version=SemanticVersion.Parse(verified.Version),Type=VelopackAssetType.Full,FileName=verified.FileName,Size=verified.Length,SHA256=verified.Hash.ToUpperInvariant(),NotesMarkdown=verified.Notes}}});
+   }
   }
-  void Require(VelopackAsset a){if(accepted==null||a==null||a.PackageId!=VelopackFeed.AppId||a.Type!=VelopackAssetType.Full||a.FileName!=accepted.FileName||a.Version.ToString()!=accepted.Version||a.Size!=accepted.Length||!string.Equals(a.SHA256,accepted.Hash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Package differs from authenticated feed.");}
+  void Require(VelopackAsset a){if(accepted==null||a==null||a.PackageId!=VelopackFeed.AppId||a.Type!=VelopackAssetType.Full||a.FileName!=accepted.FileName||a.Version.ToString()!=accepted.Version||a.Size!=accepted.Length||!string.Equals(a.SHA256,accepted.Hash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Package differs from authenticated feed.");using(ReleaseCheckpoint.Acquire(checkpoint))VelopackFeed.Verify(acceptedRaw,acceptedSignature,key,ReleaseCheckpoint.Floor(checkpoint,key,current));}
   internal void VerifyPackage(string path,VelopackAsset a){Require(a);LauncherMaintenance.NoReparse(path);if(!File.Exists(path)||new FileInfo(path).Length!=accepted.Length||!string.Equals(CoreReleaseProtocol.HashFile(path),accepted.Hash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("更新包长度或 SHA-256 校验失败。");}
+  internal ApplyLeaseRequest LeaseRequest(string root,string content,string packages,string updater,bool portable){if(accepted==null||checkpoint==null)throw new InvalidOperationException("Missing authenticated release checkpoint.");return new ApplyLeaseRequest{Root=root,Current=content,Package=Path.Combine(packages,accepted.FileName),Updater=updater,Checkpoint=checkpoint,Portable=portable,Raw=Convert.ToBase64String(acceptedRaw),Signature=Convert.ToBase64String(acceptedSignature)};}
   public Task DownloadReleaseEntry(IVelopackLogger logger,VelopackAsset releaseEntry,string localFile,Action<int> progress,CancellationToken cancelToken){
    Require(releaseEntry);string tail="v"+accepted.Version+"/"+accepted.FileName;string[] urls={"https://orangezl.com/releases/"+tail,CoreReleaseProtocol.ReleaseBase+tail};
    LauncherMaintenance.NoReparse(localFile);
