@@ -23,17 +23,32 @@ namespace PZ3D {
   readonly string root,key;readonly Func<CancellationToken,byte[][]> lookup;readonly Func<string,CancellationToken,Stream> open;readonly Func<string,string[]> sources;
   readonly object gate=new object();CoreUpdateStatus status=new CoreUpdateStatus();CoreManifest candidate;Task worker;CancellationTokenSource cancellation;Timer healthPoll;bool disposed;
   public Action<CoreUpdateStatus> Progress;
+#if OZL_VELOPACK
+  readonly VelopackUpdateBackend native;
+  internal bool NativeDistribution{get{return native!=null;}}
+  internal void ApplyNative(){if(native==null)throw new InvalidOperationException();native.Apply();}
+  public CoreUpdateService(string root){if(!DistributionPaths.Enabled)throw new InvalidDataException("Missing distribution marker.");this.root=root;native=new VelopackUpdateBackend();native.Progress=s=>{var p=Progress;if(p!=null)p(s);};}
+#else
   public CoreUpdateService(string root):this(root,EmbeddedKey(),token=>CoreReleaseSources.Lookup(token,CoreReleaseNetwork.Open,CoreReleaseNetwork.Lookup,EmbeddedKey(),AppVersion.Current),CoreReleaseNetwork.Open,CoreReleaseSources.AssetUrls){}
+#endif
   static string EmbeddedKey(){try{return CoreUpdateTrust.PublicKeyXml;}catch{return null;}}
   internal CoreUpdateService(string root,string key,Func<CancellationToken,byte[][]> lookup,Func<string,CancellationToken,Stream> open):this(root,key,lookup,open,url=>new[]{url}){}
   internal CoreUpdateService(string root,string key,Func<CancellationToken,byte[][]> lookup,Func<string,CancellationToken,Stream> open,Func<string,string[]> sources){this.root=CoreDeployment.Root(root);this.key=key;this.lookup=lookup;this.open=open;this.sources=sources;if(key==null){status.state="Unavailable";status.message="此旧版构建没有内置更新信任，请安装完整签名版本。";}else{RefreshHistory();if(status.state=="PendingHealth")healthPoll=new Timer(ObserveHealth,null,250,250);}}
   void ObserveHealth(object unused){CoreUpdateStatus snapshot=null;lock(gate){if(disposed)return;long revision=status.revision;try{RefreshHistory();}catch(Exception e){status.state="Conflicted";status.message=e.Message;status.revision++;}if(status.revision!=revision)snapshot=Clone();if(status.state!="PendingHealth"&&healthPoll!=null){healthPoll.Dispose();healthPoll=null;}}var callback=Progress;if(snapshot!=null&&callback!=null)try{callback(snapshot);}catch{}}
   void RefreshHistory(){if(key==null||!File.Exists(CoreDeployment.Safe(root,CoreDeployment.RecordName)))return;var history=CoreUpdateTransaction.History(root,key);bool changed=CoreDeployment.Json.Serialize(history)!=CoreDeployment.Json.Serialize(status.history);status.history=history;if(history.Count>0&&new[]{"Idle","PendingHealth","Applying","RollingBack","Succeeded","RolledBack","Conflicted"}.Contains(status.state)){var last=history[0];status.taskId=last.TaskId;status.state=last.State;status.latestVersion=last.Version;status.message=last.State=="Succeeded"?"启动器更新成功，健康验证已完成。":last.State=="RolledBack"?"更新已回退，上一版本已恢复。 "+last.Message:last.State=="Conflicted"?"更新恢复受阻，已保留恢复文件。 "+last.Message:"更新正在完成健康验证或恢复。 "+last.Message;}if(changed)status.revision++;}
-  public CoreUpdateStatus Status(){lock(gate){RefreshHistory();return Clone();}}
+  public CoreUpdateStatus Status(){
+#if OZL_VELOPACK
+   if(native!=null)return native.Status();
+#endif
+   lock(gate){RefreshHistory();return Clone();}}
   CoreUpdateStatus Clone(){return new JavaScriptSerializer().Deserialize<CoreUpdateStatus>(new JavaScriptSerializer().Serialize(status));}
   void Publish(Action<CoreUpdateStatus> change){CoreUpdateStatus copy;lock(gate){change(status);status.revision++;copy=Clone();}var callback=Progress;if(callback!=null)try{callback(copy);}catch{}}
   void Log(string phase,string message){CoreUpdateDiagnostics.Write(root,status.taskId,phase,message);}
-  public CoreUpdateStatus Check(){return Start("Checking",token=>{
+  public CoreUpdateStatus Check(){
+#if OZL_VELOPACK
+   if(native!=null)return native.Check();
+#endif
+   return Start("Checking",token=>{
    Publish(s=>{s.latestVersion="";s.notes="";s.taskId="";s.message="正在检查已签名的正式发布";});candidate=null;Log("check","Started");
    var publication=lookup(token);token.ThrowIfCancellationRequested();
    if(publication==null){Publish(s=>{s.state="Unavailable";s.checkedUtc=DateTime.UtcNow.ToString("o");s.message="官方更新渠道暂未发布可用版本。";});Log("check","Unavailable");return;}
@@ -41,7 +56,11 @@ namespace PZ3D {
    var verified=CoreReleaseProtocol.Verify(publication[0],publication[1],key,AppVersion.Current);token.ThrowIfCancellationRequested();candidate=verified;
    Publish(s=>{s.latestVersion=verified.version;s.notes=verified.notes;s.checkedUtc=DateTime.UtcNow.ToString("o");s.state=CoreReleaseProtocol.IsNewer(verified.version,AppVersion.Current)?"Available":"Latest";s.message=s.state=="Available"?"可更新至 "+verified.version:"已验证当前正式版本";});Log("check","Verified "+verified.version);
   });}
-  public CoreUpdateStatus Download(){lock(gate){if(status.state=="Ready")return Clone();if(candidate==null)throw new InvalidOperationException("请先检查并验证正式发布。");}return Start("Downloading",token=>{
+  public CoreUpdateStatus Download(){
+#if OZL_VELOPACK
+   if(native!=null)return native.Download();
+#endif
+   lock(gate){if(status.state=="Ready")return Clone();if(candidate==null)throw new InvalidOperationException("请先检查并验证正式发布。");}return Start("Downloading",token=>{
    // A Windows mutex is thread-affine: this entire synchronous delegate,
    // including nested Plan/Stage and disposal, stays on one worker thread.
    using(CoreDeployment.Acquire(root)) {
@@ -79,10 +98,22 @@ namespace PZ3D {
    throw new InvalidDataException("没有可用的更新文件来源。");
   }
   CoreUpdateStatus Start(string phase,Action<CancellationToken> action){lock(gate){if(disposed)throw new ObjectDisposedException("CoreUpdateService");if(worker!=null&&!worker.IsCompleted)return Clone();if(status.state=="Ready"||status.state=="Restarting")return Clone();if(key==null)return Clone();if(cancellation!=null)cancellation.Dispose();cancellation=new CancellationTokenSource();var token=cancellation.Token;status.state=phase;status.revision++;worker=Task.Run(()=>{try{action(token);}catch(OperationCanceledException){Log("cancel","Cancelled");Publish(s=>{s.state="Cancelled";s.message="已取消，当前启动器文件未改变。";});}catch(Exception e){if(token.IsCancellationRequested){Log("cancel","Cancelled");Publish(s=>{s.state="Cancelled";s.message="已取消，当前启动器文件未改变。";});}else{Log("error",e.Message);Publish(s=>{s.state="Error";s.message=e.Message;});}}});return Clone();}}
-  public CoreUpdateStatus Cancel(){lock(gate){if(cancellation!=null)cancellation.Cancel();return Clone();}}
-  internal string PreparedTask(){lock(gate){if(status.state!="Ready"||worker!=null&&!worker.IsCompleted)throw new InvalidOperationException("更新尚未准备完成。");return status.taskId;}}
+  public CoreUpdateStatus Cancel(){
+#if OZL_VELOPACK
+   if(native!=null)return native.Cancel();
+#endif
+   lock(gate){if(cancellation!=null)cancellation.Cancel();return Clone();}}
+  internal string PreparedTask(){
+#if OZL_VELOPACK
+   if(native!=null)return native.PreparedTask();
+#endif
+   lock(gate){if(status.state!="Ready"||worker!=null&&!worker.IsCompleted)throw new InvalidOperationException("更新尚未准备完成。");return status.taskId;}}
   internal void HandoffStarted(){Publish(s=>{s.state="Restarting";s.message="正在安全重启启动器";});Log("apply","Handoff");}
-  public void Dispose(){lock(gate){disposed=true;if(cancellation!=null)cancellation.Cancel();if(healthPoll!=null){healthPoll.Dispose();healthPoll=null;}}}
+  public void Dispose(){
+#if OZL_VELOPACK
+   if(native!=null){native.Dispose();return;}
+#endif
+   lock(gate){disposed=true;if(cancellation!=null)cancellation.Cancel();if(healthPoll!=null){healthPoll.Dispose();healthPoll=null;}}}
  }
  internal static class CoreUpdateDiagnostics {
   static readonly object gate=new object();

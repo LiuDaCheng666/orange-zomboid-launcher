@@ -14,3 +14,5 @@
 - [老余汉化](https://steamcommunity.com/sharedfiles/filedetails/?id=3810637496)
 
 具体扩展来源在组件卡片“原作者工坊”中列出。作者更新、合并扩展或调整规则后，本工具不自动假定仍可用；应检查版本、文件状态和游戏日志。
+
+本地安装及自动更新使用 [Velopack 1.2.161](https://github.com/velopack/velopack/tree/1.2.161)（MIT；Copyright © 2021 Caelan Sayler，© 2024 Velopack Ltd.），.NET Framework SDK 依赖 [Newtonsoft.Json 13.0.4](https://www.nuget.org/packages/Newtonsoft.Json/13.0.4)（MIT；Copyright © 2007 James Newton-King）。对应发行包在 `ThirdPartyNotices/Velopack.txt` 与 `ThirdPartyNotices/Newtonsoft.Json.txt` 保留完整许可证。构建工具 vpk 仅在本地打包阶段使用；更新渠道仍为启动器自己的服务器及官方 GitHub 仓库。

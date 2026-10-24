@@ -43,6 +43,9 @@ namespace PZ3D {
     Console.SetError(new StreamWriter(Console.OpenStandardError(),new UTF8Encoding(false)){AutoFlush=true});
     return WorkshopWorker.Run(args[1],args[2],args.Contains("--force"));
    }
+#if OZL_VELOPACK
+   DistributionPaths.Bootstrap(args);
+#endif
    Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
    return ModernBootstrap.Run(args);
   }

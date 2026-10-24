@@ -102,6 +102,16 @@ function Get-OzlProductionSources {
     }
 }
 
+function Get-OzlVelopackSources {
+    param([Parameter(Mandatory=$true)][string]$ProjectDirectory)
+    Get-OzlProductionSources -ProjectDirectory $ProjectDirectory
+    foreach ($name in @('DistributionRuntime.cs','VelopackRuntime.cs','VelopackFeed.cs','VelopackUpdateBackend.cs')) {
+        $source = Join-Path $ProjectDirectory $name
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing Velopack production source: $name" }
+        $source
+    }
+}
+
 function Get-OzlDiagnosticSources {
     param([Parameter(Mandatory=$true)][string]$ProjectDirectory)
     Get-OzlProductionSources -ProjectDirectory $ProjectDirectory

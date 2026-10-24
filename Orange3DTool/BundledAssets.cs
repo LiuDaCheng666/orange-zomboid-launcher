@@ -7,7 +7,11 @@ namespace PZ3D {
  static class BundledAssets {
   const string Resource="Orange3D.Bundle.zip";
   static readonly object sync=new object();
-  public static byte[] ReadOwnAsset(string name){if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua")throw new InvalidDataException("Unknown bridge asset.");if(Assembly.GetExecutingAssembly().GetManifestResourceInfo("Launcher.UpdatePublicKey.xml")!=null){string root=CoreDeployment.Root(AppDomain.CurrentDomain.BaseDirectory),path="Assets/"+name;var record=CoreDeployment.ReadAuthenticated(root);var file=record.files.Find(f=>f.path==path);if(file==null)throw new InvalidDataException("Missing owned bridge asset.");CoreDeployment.RequireFile(root,path,file);return File.ReadAllBytes(CoreReleaseProtocol.Target(root,path));}using(var input=Assembly.GetExecutingAssembly().GetManifestResourceStream(name)){if(input==null)throw new InvalidDataException("Missing bridge resource.");using(var output=new MemoryStream()){input.CopyTo(output);return output.ToArray();}}}
+  public static byte[] ReadOwnAsset(string name){if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua")throw new InvalidDataException("Unknown bridge asset.");
+#if OZL_VELOPACK
+ if(DistributionPaths.Enabled)return DistributionBootstrap.Asset("Assets/"+name);
+#endif
+if(Assembly.GetExecutingAssembly().GetManifestResourceInfo("Launcher.UpdatePublicKey.xml")!=null){string root=CoreDeployment.Root(AppDomain.CurrentDomain.BaseDirectory),path="Assets/"+name;var record=CoreDeployment.ReadAuthenticated(root);var file=record.files.Find(f=>f.path==path);if(file==null)throw new InvalidDataException("Missing owned bridge asset.");CoreDeployment.RequireFile(root,path,file);return File.ReadAllBytes(CoreReleaseProtocol.Target(root,path));}using(var input=Assembly.GetExecutingAssembly().GetManifestResourceStream(name)){if(input==null)throw new InvalidDataException("Missing bridge resource.");using(var output=new MemoryStream()){input.CopyTo(output);return output.ToArray();}}}
   public static bool Embedded{get{return Assembly.GetExecutingAssembly().GetManifestResourceInfo(Resource)!=null;}}
   public static string PresetPath{get{return Path.Combine(CurrentRoot,"PresetShaders");}}
   public static string NoticePath{get{return Path.Combine(CurrentRoot,"ThirdPartyNotices");}}

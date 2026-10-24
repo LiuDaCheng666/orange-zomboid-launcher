@@ -12,6 +12,9 @@ namespace PZ3D {
    Validate(role,first,second);
    string source=Path.GetFullPath(typeof(ManagedBackgroundWorker).Assembly.Location);
    using(var current=Process.GetCurrentProcess())if(!CoreDeployment.SamePath(source,current.MainModule.FileName))throw new IOException("后台监控程序来源与当前进程不一致。");
+   #if OZL_VELOPACK
+   if(DistributionPaths.Enabled)return StartDistribution(source,role,first,second);
+#endif
    bool trusted=typeof(ManagedBackgroundWorker).Assembly.GetManifestResourceInfo("Launcher.UpdatePublicKey.xml")!=null;
    string key=trusted?CoreUpdateTrust.PublicKeyXml:null,image=Prepare(source,key),root=Path.GetDirectoryName(source);
    if(!CoreDeployment.SamePath(image,source))using(CoreDeployment.Acquire(root)){
@@ -26,6 +29,26 @@ namespace PZ3D {
    }
    return Launch(image,root,role,first,second);
   }
+#if OZL_VELOPACK
+  static Process StartDistribution(string source,string role,string first,string second){
+   string target=PrepareDistribution(source,CoreUpdateTrust.PublicKeyXml,DistributionPaths.RuntimeRoot);
+   string root=Path.GetDirectoryName(source);var file=DistributionBootstrap.Read(root,CoreUpdateTrust.PublicKeyXml).Single(f=>f.path==Launcher);
+   using(var original=new FileStream(source,FileMode.Open,FileAccess.Read,FileShare.Read))
+   using(var cached=new FileStream(target,FileMode.Open,FileAccess.Read,FileShare.Read)){
+    DistributionBootstrap.Require(root,file);if(!CoreDeployment.Matches(target,file))throw new IOException("后台监控缓存校验失败。");return Launch(target,Path.GetDirectoryName(target),role,first,second);
+   }
+  }
+  internal static string PrepareDistribution(string source,string key,string runtimeRoot){
+   if(Path.GetFileName(source)!=Launcher)throw new IOException("后台监控源不是自有启动器程序。");
+   string root=Path.GetDirectoryName(source);var file=DistributionBootstrap.Read(root,key).Single(f=>f.path==Launcher);
+   string target=Path.Combine(runtimeRoot,"BackgroundWorkers",file.sha256.ToLowerInvariant(),Launcher);LauncherMaintenance.NoReparse(target);
+   using(var original=new FileStream(source,FileMode.Open,FileAccess.Read,FileShare.Read)){
+    DistributionBootstrap.Require(root,file);Directory.CreateDirectory(Path.GetDirectoryName(target));
+    if(!File.Exists(target)){string temp=target+"."+Guid.NewGuid().ToString("N");try{using(var output=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None)){original.CopyTo(output);output.Flush(true);}if(!CoreDeployment.Matches(temp,file))throw new IOException("后台监控副本校验失败。");File.Move(temp,target);}finally{if(File.Exists(temp))File.Delete(temp);}}
+    if(!CoreDeployment.Matches(target,file))throw new IOException("后台监控缓存校验失败。");return target;
+   }
+  }
+#endif
   static Process Launch(string image,string root,string role,string first,string second){
    int trailing=first.Length-first.TrimEnd('\\').Length;
    return Process.Start(new ProcessStartInfo(image,role+" \""+first+new string('\\',trailing)+"\" "+second){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden,WorkingDirectory=root});
