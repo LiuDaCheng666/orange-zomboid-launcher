@@ -12,12 +12,13 @@ namespace PZ3D {
   static Dictionary<string,object> D(object value){return Json.Deserialize<Dictionary<string,object>>(Json.Serialize(value));}
   static object Call(object c,string action,Dictionary<string,object> payload=null){try{return c.GetType().GetMethod("Execute").Invoke(c,new object[]{action,payload??new Dictionary<string,object>()});}catch(TargetInvocationException ex){throw ex.InnerException;}}
   static void Reject(Action work,string name){bool denied=false;try{work();}catch{denied=true;}Assert(denied,name);}
-  public static int Main(string[] args){try{if(args.Length>=3&&args[0]=="--workshop-worker"){Console.SetError(new StreamWriter(Console.OpenStandardError(),new System.Text.UTF8Encoding(false)){AutoFlush=true});Console.SetOut(new StreamWriter(Console.OpenStandardOutput(),new System.Text.UTF8Encoding(false)){AutoFlush=true});return WorkshopWorker.Run(args[1],args[2],args.Contains("--force"));}if(args.Contains("--legacy-tail")){LauncherWorkshopRebuildTests.Run();LauncherUiTests.Run();ComponentBatchTests.Run();ReticleSettingsTests.Run();Test.Run();Test.Extras();Test.Audit();FeatureTests.Run();ChinesePatchTests.Run();UiUpdateTests.Run();PortableTests.Run();WorkshopSubscriptionTests.Run();StatusTests.Run();SettingsTests.Run();ShaderTests.Run();UpdateTests.Run();DiscoveryTests.Run();ShootClientTests.Run();PresentationBridgeTests.Run();return 0;}Run();return 0;}catch(Exception ex){Console.WriteLine("FAIL: "+ex.Message);return 1;}}
+  public static int Main(string[] args){try{if(args.Contains("--memory-independence")){MemoryIndependence();ScopedLaunchStamp();return 0;}if(args.Length>=3&&args[0]=="--workshop-worker"){Console.SetError(new StreamWriter(Console.OpenStandardError(),new System.Text.UTF8Encoding(false)){AutoFlush=true});Console.SetOut(new StreamWriter(Console.OpenStandardOutput(),new System.Text.UTF8Encoding(false)){AutoFlush=true});return WorkshopWorker.Run(args[1],args[2],args.Contains("--force"));}if(args.Contains("--legacy-tail")){LauncherWorkshopRebuildTests.Run();LauncherUiTests.Run();ComponentBatchTests.Run();ReticleSettingsTests.Run();Test.Run();Test.Extras();Test.Audit();FeatureTests.Run();ChinesePatchTests.Run();UiUpdateTests.Run();PortableTests.Run();WorkshopSubscriptionTests.Run();StatusTests.Run();SettingsTests.Run();ShaderTests.Run();UpdateTests.Run();DiscoveryTests.Run();ShootClientTests.Run();PresentationBridgeTests.Run();return 0;}Run();return 0;}catch(Exception ex){Console.WriteLine("FAIL: "+ex.Message);return 1;}}
   public static void Run(){
    LauncherContactTests.Run();
    SaveRecycling();
    BuddyWorkflow();
    ScopedLaunchStamp();
+   MemoryIndependence();
    Type type=typeof(Program).Assembly.GetType("PZ3D.ModernController");Assert(type!=null,"modern bridge exists");
    string root=Path.Combine(LauncherTestPaths.Root,"orange-modern-test-"+Guid.NewGuid().ToString("N"));string game=Path.Combine(root,"steamapps","common","ProjectZomboid"),user=Path.Combine(root,"User"),data=Path.Combine(root,"Data");Directory.CreateDirectory(game);Directory.CreateDirectory(Path.Combine(user,"mods"));
    string config=Path.Combine(game,"ProjectZomboid64.json"),mods=Path.Combine(user,"mods","default.txt"),props=Path.Combine(user,"viewpoint-live.properties");
@@ -85,7 +86,20 @@ namespace PZ3D {
     typeof(ModernController).GetField("engine",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(c,new Engine(game,Path.Combine(root,"user"),Path.Combine(root,"data"),true,()=>SteamLaunchOptions.Read(steam,42)));
     SteamLaunchOptionsTests.Fixture(steam,42,SteamLaunchOptionsTests.Wrap("\"108600\" { \"LaunchOptions\" \"-nosteam\" } \"999\" { \"LaunchOptions\" \"other\" }"));var before=D(Call(c,"memoryGet"));
     SteamLaunchOptionsTests.Fixture(steam,42,SteamLaunchOptionsTests.Wrap("\"108600\" { \"LaunchOptions\" \"-nosteam\" } \"999\" { \"LaunchOptions\" \"refresh\" }"));SteamLaunchOptionsTests.Fixture(steam,7,"malformed other account");Assert(before["stamp"].Equals(D(Call(c,"memoryGet"))["stamp"]),"unrelated Steam updates keep memory snapshot current");
-    SteamLaunchOptionsTests.Fixture(steam,42,SteamLaunchOptionsTests.Wrap("\"108600\" { \"LaunchOptions\" \"-debug\" }"));Assert(!before["stamp"].Equals(D(Call(c,"memoryGet"))["stamp"]),"own Steam options invalidate memory snapshot");Reject(()=>Call(c,"memorySave",new Dictionary<string,object>{{"value",2},{"stamp",before["stamp"]}}),"old memory consent cannot pass changed own Steam options");
+    SteamLaunchOptionsTests.Fixture(steam,42,SteamLaunchOptionsTests.Wrap("\"108600\" { \"LaunchOptions\" \"-debug\" }"));Assert(before["stamp"].Equals(D(Call(c,"memoryGet"))["stamp"]),"Steam launch options do not invalidate a game JSON memory snapshot");Call(c,"memorySave",new Dictionary<string,object>{{"value",2},{"stamp",before["stamp"]}});Assert(Convert.ToInt32(D(Call(c,"memoryGet"))["currentGiB"])==2,"memory saves and rereads after unrelated Steam launch changes");
+   }
+  }
+  static void MemoryIndependence(){
+   string root=Path.Combine(LauncherTestPaths.Root,"memory-independent-"+Guid.NewGuid().ToString("N")),game=Path.Combine(root,"game"),user=Path.Combine(root,"user"),data=Path.Combine(root,"data");Directory.CreateDirectory(game);
+   foreach(var state in new[]{SteamLaunchOptionsState.Invalid,SteamLaunchOptionsState.UnknownIdentity}){
+    File.WriteAllText(Path.Combine(game,"ProjectZomboid64.json"),"{\"vmArgs\":[\"-Xmx12g\",\"-Dkeep=unchanged\"]}");int steamReads=0;
+    using(var c=new ModernController(game,user,data,true)){
+     typeof(ModernController).GetField("engine",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(c,new Engine(game,user,data,true,()=>{steamReads++;return new SteamLaunchOptionsSnapshot(null,0,null,state);}));
+     var before=D(Call(c,"memoryGet"));Assert(steamReads==0,"memory read does not inspect Steam "+state);
+     Call(c,"memorySave",new Dictionary<string,object>{{"value",2},{"stamp",before["stamp"]}});
+     Assert(steamReads==0&&Convert.ToInt32(D(Call(c,"memoryGet"))["currentGiB"])==2,"memory save and reread work independently of Steam "+state);
+     Assert(File.ReadAllText(Path.Combine(game,"ProjectZomboid64.json")).Contains("-Dkeep=unchanged"),"memory save preserves unrelated JVM arguments");
+    }
    }
   }
   static void NetworkResponsiveness(string game,string user,string data){

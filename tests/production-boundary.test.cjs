@@ -58,7 +58,10 @@ test('dispatcher order, embedded Test class, workers and ordinary UI remain inta
  assert.match(program,/return ModernBootstrap.Run\(args\)/);
  for(const name of ['Links','Engine','MainForm'])assert.ok(program.includes('class '+name));
  assert.ok(program.includes('public static bool PreviewMode;'));
- assert.equal(program.slice(program.indexOf(' static class Links'),program.lastIndexOf('\n}')).trimEnd(),baseline.slice(baseline.indexOf(' static class Links'),baseline.indexOf(' static class Test {')).trimEnd());
+ // This isolation regression freezes the moved UI/worker code, not future
+ // Engine behavior: 1.2.15 deliberately separates heap writes from Steam.
+ assert.equal(program.slice(program.indexOf(' static class Links'),program.indexOf(' sealed class Engine')),baseline.slice(baseline.indexOf(' static class Links'),baseline.indexOf(' sealed class Engine')));
+ assert.equal(program.slice(program.indexOf(' sealed partial class MainForm'),program.lastIndexOf('\n}')).trimEnd(),baseline.slice(baseline.indexOf(' sealed partial class MainForm'),baseline.indexOf(' static class Test {')).trimEnd());
  assert.match(diag,/Application.EnableVisualStyles\(\); Application.SetCompatibleTextRenderingDefault\(false\);/);
  assert.match(diag,/Program.PreviewMode=true/);
  for(const s of [diag,self]){assert.match(s,/#if OZL_DIAGNOSTICS/);assert.match(s,/#endif/);}

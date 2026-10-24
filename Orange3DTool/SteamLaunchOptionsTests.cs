@@ -8,9 +8,21 @@ namespace PZ3D {
   internal static void Reject(Action action,string message){bool failed=false;try{action();}catch{failed=true;}Check(failed,message);}
   internal static string Wrap(string apps){return "\"UserLocalConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"apps\" { "+apps+" } } } } }";}
   internal static string Fixture(string root,uint account,string text,Encoding encoding=null){string file=Path.Combine(root,"userdata",account.ToString(),"config","localconfig.vdf");Directory.CreateDirectory(Path.GetDirectoryName(file));File.WriteAllText(file,text,encoding??new UTF8Encoding(false));return file;}
-  public static int Main(string[] args){try{if(Array.IndexOf(args,"--discovery")>=0){Discovery();return 0;}Run();BuddyLaunchArgumentsTests.Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
+  public static int Main(string[] args){try{if(Array.IndexOf(args,"--literal-whitespace")>=0){LiteralWhitespace();return 0;}if(Array.IndexOf(args,"--discovery")>=0){Discovery();return 0;}Run();BuddyLaunchArgumentsTests.Run();return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
+  static void LiteralWhitespace(){
+   string root=Path.Combine(LauncherTestPaths.Root,"steam-text-"+Guid.NewGuid().ToString("N"));
+   foreach(string whitespace in new[]{"\t","\r\n","\n"}){
+    string original="\"UserLocalConfigStore\" { \"OrdinaryText\" \"before"+whitespace+"after\" \"Software\" { \"Valve\" { \"Steam\" { \"apps\" { \"108600\" { \"LaunchOptions\" \"-Xmx12g\" } } } } } }";
+    string file=Fixture(root,42,original);byte[] before=File.ReadAllBytes(file);var snapshot=SteamLaunchOptions.Read(root,42);
+    Check(snapshot.State==SteamLaunchOptionsState.Ready&&snapshot.LaunchOptions=="-Xmx12g","literal quoted whitespace in unrelated Steam text preserves target read");
+    Check(SteamLaunchOptions.Replace(snapshot,"-Xmx8g").SequenceEqual(Encoding.UTF8.GetBytes(original.Replace("-Xmx12g","-Xmx8g"))),"target replacement preserves literal whitespace and all unrelated bytes");
+    Check(before.SequenceEqual(File.ReadAllBytes(file)),"Steam parser never rewrites source configuration");
+   }
+   Fixture(root,42,Wrap("\"108600\" { \"LaunchOptions\" \"bad\0value\" }"));Check(SteamLaunchOptions.Read(root,42).State==SteamLaunchOptionsState.Invalid,"raw NUL remains invalid");
+  }
   public static void Run(){
    Discovery();
+   LiteralWhitespace();
    string root=Path.Combine(LauncherTestPaths.Root,"steam-options-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
    string original=Wrap("\"999\" { \"LaunchOptions\" \"-javaagent:ZombieBuddy.jar\" } \"108600\" { \"LaunchOptions\" \"-Xmx28g -javaagent:ZombieBuddy.jar -Dkeep=yes\" }");
    string expected="\"UserLocalConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"apps\" { \"999\" { \"LaunchOptions\" \"-javaagent:ZombieBuddy.jar\" } \"108600\" { \"LaunchOptions\" \"-Xmx28g -Dkeep=yes\" } } } } } }";

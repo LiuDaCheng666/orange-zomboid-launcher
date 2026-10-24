@@ -48,11 +48,11 @@ namespace PZ3D {
    if(value<1||value>policy.MaximumHeapGiB)throw new Exception("内存超出按总物理内存计算的设置上限；需为系统保留至少 4 GiB 或 25%。");
   }
   internal static string SetHeapGiB(Engine e,int value,Func<LauncherMemoryInfo> memoryProvider){
-   e.Guard();ValidateHeapBudget(value,memoryProvider);NoReparse(e.Config);byte[] before=File.ReadAllBytes(e.Config);var config=Read(e);
+   e.GuardHeap();ValidateHeapBudget(value,memoryProvider);NoReparse(e.Config);byte[] before=File.ReadAllBytes(e.Config);var config=Read(e);
    if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");
    Normalize(config,value);NoReparse(e.Data);string backupDir=Path.Combine(e.Data,"backups","heap-"+DateTime.UtcNow.ToString("yyyyMMddHHmmss")+"-"+Guid.NewGuid().ToString("N"));NoReparse(backupDir);Directory.CreateDirectory(backupDir);
    string backup=Path.Combine(backupDir,"ProjectZomboid64.json"),temp=e.Config+".heap-"+Guid.NewGuid().ToString("N")+".tmp";
-   try{File.WriteAllText(temp,new JavaScriptSerializer().Serialize(config),new UTF8Encoding(false));if(e.Progress!=null)e.Progress(-1,"准备原子写入堆内存配置");e.Guard();NoReparse(e.Config);if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");ValidateHeapBudget(value,memoryProvider);File.Replace(temp,e.Config,backup);e.LastBackup=backupDir;}
+   try{File.WriteAllText(temp,new JavaScriptSerializer().Serialize(config),new UTF8Encoding(false));if(e.Progress!=null)e.Progress(-1,"准备原子写入堆内存配置");e.GuardHeap();NoReparse(e.Config);if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");ValidateHeapBudget(value,memoryProvider);File.Replace(temp,e.Config,backup);e.LastBackup=backupDir;}
    finally{if(File.Exists(temp))File.Delete(temp);}
    return "最大堆内存已设为 "+value+" GiB；已备份启动配置："+backup;
   }

@@ -85,16 +85,17 @@ namespace PZ3D {
   public bool Enabled {get{try{return Args(ReadConfig()).Any(Agent) && File.Exists(Mods) && Regex.IsMatch(File.ReadAllText(Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}catch{return false;}}}
   internal bool FrameworkConfigured {get{try{return Args(ReadConfig()).Any(Agent);}catch{return false;}}}
   public void Guard(){GuardCore(false);}
+  internal void GuardHeap(){GuardCore(false,false,false);}
   public void GuardLaunch(){GuardCore(false,true);}
   internal void GuardMaintenance(){GuardCore(false);if(!TestMode&&RuntimeRunning())throw new Exception("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后清理缓存或重建工坊。");}
   internal void GuardPlayProfile(){GuardCore(true);}
-  void GuardCore(bool ownProfileTransaction,bool launch=false){
+  void GuardCore(bool ownProfileTransaction,bool launch=false,bool checkSteam=true){
    if(!ownProfileTransaction&&PlayProfileTransaction.Pending(this))throw new Exception(PlayProfileTransaction.PendingMessage);
    BuddyTakeover.Guard(this);
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
    if(launch&&!TestMode&&RuntimeRunning(true))throw new Exception("客户端或无法核实用途的游戏 Java 进程仍在运行，请退出后再启动。");
    foreach(string name in new[]{"ProjectZomboid64.bat","ProjectZomboid32.bat"}){string bat=Path.Combine(Game,name);LauncherMaintenance.NoReparse(bat);if(File.Exists(bat)){if(new FileInfo(bat).Length>2097152)throw new Exception("备用启动 BAT 过大，无法核实。");var cleanup=BuddyLaunchArguments.CleanBat(File.ReadAllText(bat));if(!cleanup.Safe)throw new Exception("备用启动 BAT 参数不明确，请人工检查 Buddy 启动语法。");if(cleanup.Changed)throw new Exception("备用启动 BAT 有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
-   var options=ReadSteamOptions();options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}
+   if(checkSteam){var options=ReadSteamOptions();options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
   }
   public static string FindSteam(){using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){return k==null?null:(k.GetValue("SteamPath") as string);}}
   public static string DetectGame(){
