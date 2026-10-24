@@ -311,16 +311,42 @@ try{const data=JSON.parse($('#home-scene-data')?.textContent||'{}');for(const id
 const sceneIds=Object.keys(sceneSources),sceneMotion=matchMedia('(prefers-reduced-motion: reduce)');
 // The persistent page node owns one finite navigation presentation. Refreshes
 // replace its contents without taking ownership or restarting the entrance.
-let pageEntrance=null;
+let pageEntrance=null,navEntrance=null,lastPresentedRoute=null;
+const presentationEffects=new Set();
+function ownPresentation(element,keyframes,options){
+ if(sceneMotion.matches||document.hidden)return null;
+ const effect=element.animate(keyframes,options);presentationEffects.add(effect);
+ effect.finished.then(()=>presentationEffects.delete(effect),()=>presentationEffects.delete(effect));return effect;
+}
+function cancelPresentation(){cancelPageEntrance();for(const effect of presentationEffects)effect.cancel();presentationEffects.clear();navEntrance=null;alignNavigation(false);}
 function cancelPageEntrance(){if(pageEntrance){pageEntrance.cancel();pageEntrance=null;}}
+function alignNavigation(animate=true){
+ const nav=$('nav[aria-label="主导航"]'),target=nav?.querySelector('button.active');if(!target)return;
+ let indicator=nav.querySelector('.nav-glass');
+ if(!indicator){indicator=document.createElement('i');indicator.className='nav-glass';indicator.setAttribute('aria-hidden','true');nav.prepend(indicator);animate=false;}
+ const from=indicator.getBoundingClientRect(),to=target.getBoundingClientRect(),parent=nav.getBoundingClientRect();
+ const unchanged=Math.abs(parseFloat(indicator.style.top)-(to.top-parent.top))<.5&&Math.abs(parseFloat(indicator.style.left)-(to.left-parent.left))<.5&&Math.abs(parseFloat(indicator.style.width)-to.width)<.5&&Math.abs(parseFloat(indicator.style.height)-to.height)<.5;
+ if(unchanged)return;
+ navEntrance?.cancel();
+ Object.assign(indicator.style,{top:to.top-parent.top+'px',left:to.left-parent.left+'px',width:to.width+'px',height:to.height+'px'});
+ if(animate)navEntrance=ownPresentation(indicator,[{transform:`translate(${from.left-to.left}px,${from.top-to.top}px) scale(${from.width/to.width},${from.height/to.height})`},{transform:'translate(0,0) scale(1)'}],{duration:380,easing:'cubic-bezier(.22,.72,.18,1)'});
+}
+window.addEventListener('resize',()=>alignNavigation(false));
 function presentPage(){
- cancelPageEntrance();if(sceneMotion.matches||document.hidden)return;
- const entrance=$('#page').animate([{opacity:.65,transform:'translateY(7px)'},{opacity:1,transform:'translateY(0)'}],{duration:220,easing:'cubic-bezier(.2,.7,.2,1)'});
+ cancelPageEntrance();const order=Object.keys(titles),direction=order.indexOf(state.route)>=order.indexOf(lastPresentedRoute)?1:-1;lastPresentedRoute=state.route;
+ if(sceneMotion.matches||document.hidden)return;
+ // Relative displacement stays inside the inset created by scaling at every width.
+ const entrance=ownPresentation($('#page'),[{opacity:.28,transform:`translate(${direction}%,10px) scale(.972)`},{opacity:1,transform:'translate(0,0) scale(1)'}],{duration:380,easing:'cubic-bezier(.22,.72,.18,1)'});
  pageEntrance=entrance;
  entrance.finished.then(()=>{if(pageEntrance===entrance)pageEntrance=null;},()=>{});
 }
-sceneMotion.addEventListener('change',e=>{if(e.matches)cancelPageEntrance();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelPageEntrance();});
+sceneMotion.addEventListener('change',e=>{if(e.matches)cancelPresentation();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelPresentation();});
+// Dialogs and disclosure panels share the same cancellable finite presentation.
+new MutationObserver(records=>{for(const record of records){if(record.type==='attributes'&&record.target.matches('dialog[open],details[open]')){
+ const target=record.target.matches('details')?record.target.querySelector(':scope > :not(summary)'):record.target;
+ if(target)ownPresentation(target,[{opacity:.35,transform:'translateY(12px) scale(.975)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:220,easing:'cubic-bezier(.2,.75,.2,1)'});
+ }}}).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
 $('#notice').setAttribute('role','status');$('#notice').setAttribute('aria-live','polite');
 $('#task').setAttribute('role','status');$('#task').setAttribute('aria-live','polite');
 let sceneId='original',scenePaused=sceneMotion.matches,sceneTimer=null,sceneNode=null,sceneLoadTicket=0,sceneAutoEpoch=0;
@@ -437,6 +463,7 @@ render=function(){
  const group=Object.keys(experienceGroups).find(k=>experienceGroups[k].includes(state.route))||'home',tabs=experienceGroups[group];
  $('#secondary-navigation').innerHTML=group==='home'?launcherTools():tabs.length>1?`<div class="secondary-tabs">${tabs.map(n=>`<button data-page="${n}" ${n===state.route?'aria-current="page"':''}>${esc(titles[n])}</button>`).join('')}</div>`:'';
  document.querySelectorAll('nav[aria-label="主导航"]>button').forEach(b=>{b.classList.toggle('active',b.dataset.page===group);if(b.dataset.page===group)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+ alignNavigation(!same);
  if(state.route==='maintenance')$('#page .heading')?.insertAdjacentHTML('afterend',diagnosticsPanel());
  if(state.route==='help'){$('#page').insertAdjacentHTML('beforeend',diagnosticsPanel());const heading=$('#page .heading');if(heading)$('#core-update-panel')?.before(heading);}
  if(state.route==='home')arrangeHome();
