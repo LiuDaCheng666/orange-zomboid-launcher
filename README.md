@@ -1,6 +1,6 @@
 # OZL / Orange zombiod launcher
 
-**当前公开正式版为 1.2.14；源码 1.2.15 正在准备 Velopack 安装与自动更新发行。** 本文的 1.2.15 说明不代表已经公开发布；准确交付与验证状态见[发布验证记录](docs/releases/1.2.15-velopack-validation.md)。[1.2.14 发布记录](docs/releases/1.2.14-github-release.md)及更早记录作为历史保留。
+**当前公开正式版为 1.2.15，已于北京时间 2026-10-25 在官网与 GitHub 发布。** 安装版、免安装 ZIP 和签名更新资源同时交付，更新优先使用自己的官网服务器。准确交付与验证状态见[发布验证记录](docs/releases/1.2.15-velopack-validation.md)。[1.2.14 发布记录](docs/releases/1.2.14-github-release.md)及更早记录作为历史保留。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 

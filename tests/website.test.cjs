@@ -5,6 +5,17 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('../Orange3DTool/Web/playwright-runtime.cjs');
 const root = path.resolve(__dirname, '../website');
+const approvedStaticDownloads = {
+  setup: '/releases/v1.2.15/OrangeZomboidLauncher-win-Setup.exe',
+  portable: '/releases/v1.2.15/OrangeZomboidLauncher-win-Portable.zip'
+};
+async function assertApprovedStaticDownloads(page) {
+  for (const [kind, href] of Object.entries(approvedStaticDownloads)) {
+    const links = page.locator(`[data-download="${kind}"]`);
+    assert.ok(await links.count() > 0);
+    for (const link of await links.all()) assert.equal(await link.getAttribute('href'), href);
+  }
+}
 let server, browser, base;
 function assertPreviewExposure(shot, viewportHeight) {
   assert.ok(shot && Math.min(shot.y + shot.height, viewportHeight) - Math.max(shot.y, 0) >= 180, `desktop first screen exposes at least 180px of the launcher preview; got ${JSON.stringify(shot)}`);
@@ -468,12 +479,11 @@ test('superseded screenshot recovery cannot overwrite the latest selection or er
   } finally { await pending?.abort().catch(() => {}); await page.close(); }
 });
 
-test('failed metadata retains a usable official GitHub fallback', async () => {
+test('failed metadata retains the approved current own-server downloads', async () => {
   const page = await browser.newPage();
   await page.route('**/release.json', route => route.abort());
-  await page.goto(base); await page.locator('[data-release-status]').filter({ hasText: 'GitHub' }).waitFor();
-  assert.equal(await page.locator('[data-download="setup"]').first().getAttribute('href'), 'https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest');
-  assert.ok(await page.getByRole('link', { name: /GitHub 备用/ }).count() > 0);
+  await page.goto(base); await page.locator('[data-release-status]').filter({ hasText: '暂不可用' }).waitFor();
+  await assertApprovedStaticDownloads(page);
   await page.close();
 });
 
@@ -519,10 +529,10 @@ test('untrusted metadata cannot inject markup or send downloads to a foreign hos
   const page = await browser.newPage();
   const hostile = { version: '<img src=x onerror="window.injected=1">', setup: { url: 'https://evil.example/a.exe' } };
   await page.route('**/release.json', route => route.fulfill({ json: hostile }));
-  await page.goto(base); await page.locator('[data-release-status]').filter({ hasText: 'GitHub' }).waitFor();
+  await page.goto(base); await page.locator('[data-release-status]').filter({ hasText: '暂不可用' }).waitFor();
   assert.equal(await page.evaluate(() => window.injected), undefined);
   assert.equal(await page.locator('a[href^="https://evil.example"]').count(), 0);
-  assert.equal(await page.locator('[data-download="setup"]').first().getAttribute('href'), 'https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest');
+  await assertApprovedStaticDownloads(page);
   await page.close();
 });
 
@@ -541,7 +551,16 @@ test('Velopack metadata retains both exact versioned delivery links and rejects 
     data.distribution = 'unknown';
     await page.reload();
     await page.waitForFunction(() => document.querySelector('[data-release-status]').textContent.includes('暂不可用'));
-    assert.equal(await page.locator('[data-download="setup"]').first().getAttribute('href'), 'https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest');
+    await assertApprovedStaticDownloads(page);
+  } finally { await page.close(); }
+});
+
+test('static downloads without JavaScript point to both current Velopack artifacts', async () => {
+  const page = await browser.newPage({ javaScriptEnabled: false });
+  try {
+    await page.goto(base);
+    await assertApprovedStaticDownloads(page);
+    assert.equal(await page.locator('[data-version]').textContent(), 'v1.2.15');
   } finally { await page.close(); }
 });
 

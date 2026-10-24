@@ -2,7 +2,7 @@
 
 ## 1.2.15 Velopack 发行
 
-当前公开正式版为1.2.14；1.2.15使用本地Velopack框架，提供安装版、完整免安装ZIP和软件内自动更新。公开发布与准确生命周期验收状态见[1.2.15验证记录](releases/1.2.15-velopack-validation.md)，本指南不代表已经发布。
+当前公开正式版为1.2.15，已于北京时间2026-10-25同步发布至orangezl.com与GitHub。使用本地Velopack框架，提供安装版、完整免安装ZIP和软件内自动更新。公开发布与准确生命周期验收状态见[1.2.15验证记录](releases/1.2.15-velopack-validation.md)。
 
 ### 构建
 
