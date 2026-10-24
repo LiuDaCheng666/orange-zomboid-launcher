@@ -32,6 +32,13 @@ const {setup,route,routes,chromium}=require('./refresh-fixture.cjs');
     const heights=await page.evaluate(()=>[document.querySelector('nav .active'),document.querySelector('nav [aria-hidden="true"]')].map(e=>e.getBoundingClientRect().height));assert.equal(heights[0],heights[1],'height-only resize lost navigation alignment');
    }finally{await page.close();}
   });
+  await test('pointer hover click and leave keeps selection aligned with Settings',async()=>{
+   const {page}=await setup(browser);try{
+    const settings=page.locator('nav [data-page="settings"]');await settings.hover();await page.waitForTimeout(280);await settings.click();await page.waitForTimeout(500);await page.mouse.move(1200,850);await page.waitForTimeout(300);
+    const deltas=await page.evaluate(()=>{const a=document.querySelector('nav .active').getBoundingClientRect(),b=document.querySelector('nav [aria-hidden="true"]').getBoundingClientRect();return [a.x-b.x,a.y-b.y,a.width-b.width,a.height-b.height];});
+    assert.ok(deltas.every(d=>Math.abs(d)<1),'pointer navigation left selection offset: '+JSON.stringify(deltas));
+   }finally{await page.close();}
+  });
   await test('all presentation cancels for reduced motion and hidden documents',async()=>{
    for(const mode of ['reduced','hidden']){const {page}=await setup(browser);try{
     await page.evaluate(()=>document.querySelector('nav [data-page="components"]').click());

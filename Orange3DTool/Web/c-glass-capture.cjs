@@ -6,8 +6,10 @@ const before=process.argv.includes('--before'),folder=before?path.join(root,'bef
 async function settled(page){await page.waitForFunction(()=>!Object.values(orange.state.loading).some(Boolean));await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().map(a=>a.finished.catch(()=>{})));document.querySelector('main').scrollTo(0,0);});await page.waitForTimeout(100);}
 async function recording(browser){
  const context=await browser.newContext({viewport:{width:1440,height:900},recordVideo:{dir:path.join(root,'video'),size:{width:1440,height:900}}});
- const start=Date.now(),events=[];const {page,errors}=await setup({newPage:()=>context.newPage()},{capture:true});
- async function at(seconds,name,fn){await page.waitForTimeout(Math.max(0,start+seconds*1000-Date.now()));events.push({name,time:(Date.now()-start)/1000});await fn();}
+ const events=[];let recordingOrigin, pageReady;
+ const {page,errors}=await setup({newPage:async()=>{recordingOrigin=Date.now();const page=await context.newPage();pageReady=Date.now();return page;}},{capture:true});
+ const start=Date.now();
+ async function at(seconds,name,fn){await page.waitForTimeout(Math.max(0,start+seconds*1000-Date.now()));events.push({name,time:(Date.now()-recordingOrigin)/1000});await fn();}
  const click=selector=>page.evaluate(s=>document.querySelector(s).click(),selector);
  await at(1.5,'components',()=>click('nav [data-page="components"]'));
  await at(3,'optional components',()=>click('[data-optional-components]>summary'));
@@ -22,16 +24,19 @@ async function recording(browser){
  await at(15.5,'end',async()=>{});assert.deepEqual(errors,[]);
  const video=page.video();await page.close();await context.close();await video.saveAs(path.join(root,'software-motion.webm'));
  fs.writeFileSync(path.join(root,'video-events.json'),JSON.stringify(events,null,2));
- await decode(browser);
+ await decode(browser,events,{pageCreationSeconds:(pageReady-recordingOrigin)/1000,fixtureReadySeconds:(start-recordingOrigin)/1000,note:'Origin is page creation request, not an exposed encoder first-frame timestamp; bounded early samples require visual validation.'});
 }
-async function decode(browser){
+async function decode(browser,events,origin){
  const http=require('node:http'),crypto=require('node:crypto'),bytes=fs.readFileSync(path.join(root,'software-motion.webm'));
  const server=http.createServer((request,response)=>{const range=/^bytes=(\d+)-(\d*)$/.exec(request.headers.range||'');if(range){const start=+range[1],end=range[2]?Math.min(+range[2],bytes.length-1):bytes.length-1;response.writeHead(206,{'Content-Type':'video/webm','Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${bytes.length}`,'Content-Length':end-start+1});response.end(bytes.subarray(start,end+1));}else{response.writeHead(200,{'Content-Type':'video/webm','Accept-Ranges':'bytes','Content-Length':bytes.length});response.end(bytes);}});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const page=await browser.newPage({viewport:{width:1440,height:900}});
  try{await page.setContent('<style>body{margin:0}video{width:1440px;height:900px;display:block}</style><video muted preload="auto"></video>');await page.locator('video').evaluate((v,url)=>v.src=url,`http://127.0.0.1:${server.address().port}/video.webm`);await page.waitForFunction(()=>document.querySelector('video').readyState>=2);
   const metadata=await page.locator('video').evaluate(v=>({width:v.videoWidth,height:v.videoHeight,duration:v.duration}));assert.ok(metadata.duration>=12&&metadata.duration<=18,JSON.stringify(metadata));
   metadata.frames=[];
-  for(const time of [1.4,1.52,4.35,6.9,12.15]){await page.locator('video').evaluate((v,t)=>new Promise(r=>{v.addEventListener('seeked',r,{once:true});v.currentTime=t;}),time);const file=path.join(root,`video-frame-${time}.png`);await page.locator('video').screenshot({path:file});metadata.frames.push({time,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')});}
+  async function seek(time){await page.locator('video').evaluate((v,t)=>new Promise(r=>{v.addEventListener('seeked',r,{once:true});v.currentTime=t;}),time);}
+  metadata.origin=origin;metadata.events=events;
+  const samples=[['components',-.2],['components',-.08],['components',.04],['components',.16],['component restore dialog',.12],['light theme',.2],['memory',.12]];
+  for(const [event,offset] of samples){const time=+(events.find(e=>e.name===event).time+offset).toFixed(3);assert.ok(time>0&&time<metadata.duration);await seek(time);const file=path.join(root,`video-frame-${time}.png`);await page.locator('video').screenshot({path:file});metadata.frames.push({event,offset,time,file:path.basename(file),sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')});}
   assert.notEqual(metadata.frames[0].sha256,metadata.frames[1].sha256,'intermediate video frames must differ');fs.writeFileSync(path.join(root,'video-review.json'),JSON.stringify(metadata,null,2));console.log('PASS actual video decoded '+JSON.stringify(metadata));
  }finally{await page.close();await new Promise(r=>server.close(r));}
 }
