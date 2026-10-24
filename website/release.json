@@ -1,21 +1,26 @@
 {
-  "version": "1.2.13",
-  "date": "2026-10-20",
+  "version": "1.2.14",
+  "date": "2026-10-24",
   "setup": {
-    "url": "/releases/v1.2.13/orange-launcher-setup-v1.2.13.exe",
-    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.13/orange-launcher-setup-v1.2.13.exe",
-    "length": 15315968,
-    "sha256": "E3088234AFE5F8C8188CB162B74482AC0DD868774BC67D01E1FA3195CF96EF7B"
+    "url": "/releases/v1.2.14/orange-launcher-setup-v1.2.14.exe",
+    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.14/orange-launcher-setup-v1.2.14.exe",
+    "length": 13782016,
+    "sha256": "3FD26A0D69E7175E24266B883E29D1E9168E9CA4BF391357A371C4E12E90902F"
   },
   "portable": {
-    "url": "/releases/v1.2.13/orange-launcher-v1.2.13-win-x64.zip",
-    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.13/orange-launcher-v1.2.13-win-x64.zip",
-    "length": 13567819,
-    "sha256": "C008632CFFBAAA7F7BA8B2040D202FF82B1561A640D9EF669CAAFF60CADF8309"
+    "url": "/releases/v1.2.14/orange-launcher-v1.2.14-win-x64.zip",
+    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.14/orange-launcher-v1.2.14-win-x64.zip",
+    "length": 12837946,
+    "sha256": "B1BC55084887C199009BA356BC781E90F78B9F1E8001BDDBB2CBFC62FA16A46D"
   },
   "notes": [
-    "整理首页、组件、设置和帮助中的界面文案。",
-    "移除重复说明，保留有用的状态、操作要求和实际错误。",
-    "现有功能不变，支持从程序内更新。"
+    "重排深色／浅蓝界面，保留原封面与轮换，导航、启动区和封面状态层采用轻量玻璃效果；缩紧组件卡片，模组保持列表＋详情，减少动态效果时关闭动画。",
+    "ZombieBuddy、Viewpoint 3D、老余汉化分别安装与管理。中文自动补齐 Buddy，不再连带安装 Viewpoint；移除 Viewpoint 保留 Buddy，旧版组合操作和已有配置继续兼容。",
+    "模组目录与封面共用有界缓存，组件展示减少重复扫描；来源变化、安装卸载与手动刷新会更新展示，实际写入和来源记录不使用旧快照。",
+    "启动就绪后静默检查一次启动器更新，发现新版显示可关闭提示；检查失败不弹窗，不自动下载、安装或重启，也不覆盖正在编辑的配置。",
+    "服务器“模组清单”支持连接记录和工坊ID导入，明确订阅后在后台逐项下载，显示真实进度与完成／部分失败／取消结果；不修改服务器，不自动启用子模组或启动游戏。",
+    "删除页面重复操作空话，优化无封面图标；软件帮助与官网加入QQ群1124858561的官方邀请和复制群号入口。",
+    "程序内检查更新与更新文件下载优先使用 `https://orangezl.com`，官网连接失败时自动切到原 GitHub 正式发布渠道。旧版先通过原渠道升级一次，即可使用官网更新源。",
+    "官网签名按不可变版本路径获取，避免发布切换时读到不同版本；下载中途连接失败时从头重试当前文件，继续复用已完整验证的文件。"
   ]
 }

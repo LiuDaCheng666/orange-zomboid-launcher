@@ -151,16 +151,18 @@ test('responsive navigation and preview controls have usable targets without cro
 });
 
 test('desktop and mobile expose real downloads without horizontal overflow', async () => {
+  const release = JSON.parse(await fs.readFile(path.join(root, 'release.json'), 'utf8'));
   for (const width of [1440, 1280, 768, 390]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const response = await page.goto(base);
     assert.equal(response.status(), 200, 'website must serve an actual page');
-    await page.locator('[data-version]').filter({ hasText: '1.2.13' }).waitFor();
+    await page.locator('[data-version]').filter({ hasText: `v${release.version}` }).waitFor();
+    assert.equal(await page.locator('[data-version]').textContent(), `v${release.version}`);
     assert.ok(await page.getByRole('heading', { level: 1 }).isVisible());
     assert.ok(await page.locator('[data-download="setup"]').first().isVisible());
-    assert.equal(await page.locator('[data-download="setup"]').first().getAttribute('href'), '/releases/v1.2.13/orange-launcher-setup-v1.2.13.exe');
-    assert.equal(await page.locator('[data-download="portable"]').getAttribute('href'), '/releases/v1.2.13/orange-launcher-v1.2.13-win-x64.zip');
+    assert.equal(await page.locator('[data-download="setup"]').first().getAttribute('href'), release.setup.url);
+    assert.equal(await page.locator('[data-download="portable"]').getAttribute('href'), release.portable.url);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     if (width === 1440) assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= 2700), 'homepage stays compact');
     assert.equal(errors.length, 0);
