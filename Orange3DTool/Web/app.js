@@ -305,18 +305,20 @@ const baseRender=render;let renderedRoute='';
 const disclosureStates=new Map();
 function disclosureKey(el){return el.dataset.disclosure||[el.closest('[data-card]')?.dataset.card||'',el.id,el.querySelector('summary')?.textContent].join('|');}
 function rememberDisclosures(){if(!renderedRoute)return;disclosureStates.set(renderedRoute,[...document.querySelectorAll('#page details')].map(el=>({key:disclosureKey(el),open:el.open})));}
-function restoreDisclosures(){const saved=disclosureStates.get(state.route)||[];for(const el of document.querySelectorAll('#page details')){const entry=saved.find(s=>s.key===disclosureKey(el));if(entry)el.open=entry.open;}}
+function restoreDisclosures(){const saved=disclosureStates.get(state.route)||[];for(const el of document.querySelectorAll('#page details')){const entry=saved.find(s=>s.key===disclosureKey(el));if(entry&&el.open!==entry.open){restoredDisclosures.add(el);el.open=entry.open;}}}
 const sceneNames={original:'原封面',crossroads:'小镇路口',riverside:'雨后河畔',safehouse:'林间安全屋'},sceneSources={original:'home.png'},sceneLoaded=new Set(['original']),sceneFailed=new Set();
 try{const data=JSON.parse($('#home-scene-data')?.textContent||'{}');for(const id of ['crossroads','riverside','safehouse'])if(typeof data[id]==='string'&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data[id]))sceneSources[id]=data[id];}catch{}
 const sceneIds=Object.keys(sceneSources),sceneMotion=matchMedia('(prefers-reduced-motion: reduce)');
 // The persistent page node owns one finite navigation presentation. Refreshes
 // replace its contents without taking ownership or restarting the entrance.
 let pageEntrance=null,navEntrance=null,lastPresentedRoute=null;
-const presentationEffects=new Set();
+const presentationEffects=new Set(),targetPresentations=new WeakMap(),restoredDisclosures=new WeakSet();
+function cancelTargetPresentation(element){const effect=targetPresentations.get(element);if(effect){effect.cancel();presentationEffects.delete(effect);targetPresentations.delete(element);}}
 function ownPresentation(element,keyframes,options){
- if(sceneMotion.matches||document.hidden)return null;
- const effect=element.animate(keyframes,options);presentationEffects.add(effect);
- effect.finished.then(()=>presentationEffects.delete(effect),()=>presentationEffects.delete(effect));return effect;
+ cancelTargetPresentation(element);if(sceneMotion.matches||document.hidden||!element.isConnected)return null;
+ const effect=element.animate(keyframes,options);presentationEffects.add(effect);targetPresentations.set(element,effect);
+ const release=()=>{presentationEffects.delete(effect);if(targetPresentations.get(element)===effect)targetPresentations.delete(element);};
+ effect.finished.then(release,release);return effect;
 }
 function cancelPresentation(){cancelPageEntrance();for(const effect of presentationEffects)effect.cancel();presentationEffects.clear();navEntrance=null;alignNavigation(false);}
 function cancelPageEntrance(){if(pageEntrance){pageEntrance.cancel();pageEntrance=null;}}
@@ -343,10 +345,16 @@ function presentPage(){
 sceneMotion.addEventListener('change',e=>{if(e.matches)cancelPresentation();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelPresentation();});
 // Dialogs and disclosure panels share the same cancellable finite presentation.
-new MutationObserver(records=>{for(const record of records){if(record.type==='attributes'&&record.target.matches('dialog[open],details[open]')){
- const target=record.target.matches('details')?record.target.querySelector(':scope > :not(summary)'):record.target;
- if(target)ownPresentation(target,[{opacity:.35,transform:'translateY(12px) scale(.975)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:220,easing:'cubic-bezier(.2,.75,.2,1)'});
- }}}).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
+new MutationObserver(records=>{
+ for(const effect of presentationEffects)if(!effect.effect?.target?.isConnected){effect.cancel();presentationEffects.delete(effect);}
+ // Coalesce rapid toggles; only the final state of each panel owns presentation.
+ const panels=new Set(records.filter(r=>r.type==='attributes'&&r.target.matches('dialog,details')).map(r=>r.target));
+ for(const panel of panels){const target=panel.matches('details')?panel.querySelector(':scope > :not(summary)'):panel;
+  if(target)cancelTargetPresentation(target);
+  const restored=restoredDisclosures.delete(panel);
+  if(target&&panel.open&&!restored)ownPresentation(target,[{opacity:.35,transform:'translateY(12px) scale(.975)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:220,easing:'cubic-bezier(.2,.75,.2,1)'});
+ }
+}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open']});
 $('#notice').setAttribute('role','status');$('#notice').setAttribute('aria-live','polite');
 $('#task').setAttribute('role','status');$('#task').setAttribute('aria-live','polite');
 let sceneId='original',scenePaused=sceneMotion.matches,sceneTimer=null,sceneNode=null,sceneLoadTicket=0,sceneAutoEpoch=0;

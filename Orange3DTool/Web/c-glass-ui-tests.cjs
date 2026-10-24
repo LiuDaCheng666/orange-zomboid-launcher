@@ -45,6 +45,19 @@ const {setup,route,routes,chromium}=require('./refresh-fixture.cjs');
     for(const sample of samples)assert.ok(sample.scroll<=sample.client,width+' '+JSON.stringify(sample));
    }}finally{await page.close();}
   });
+  await test('same-route rendering restores open disclosure without replaying its entrance',async()=>{
+   const {page}=await setup(browser);try{await route(page,'components');await page.locator('[data-optional-components]>summary').click();await page.waitForTimeout(450);
+    await page.evaluate(()=>document.querySelector('nav [data-page="components"]').click());
+    const result=await page.locator('[data-optional-components]').evaluate(e=>({open:e.open,effects:e.querySelector(':scope > :not(summary)').getAnimations().length}));
+    assert.equal(result.open,true,'restored disclosure must remain open');assert.equal(result.effects,0,'restoration replayed disclosure entrance');
+   }finally{await page.close();}
+  });
+  await test('rapid disclosure toggles cancel closed and superseded content effects',async()=>{
+   const {page}=await setup(browser);try{await route(page,'components');
+    const result=await page.evaluate(async()=>{const details=document.querySelector('[data-optional-components]'),target=details.querySelector(':scope > :not(summary)');details.open=true;await Promise.resolve();const first=target.getAnimations();first.forEach(a=>a.pause());details.open=false;await Promise.resolve();const closed=first.map(a=>a.playState);details.open=true;await Promise.resolve();const second=target.getAnimations();second.forEach(a=>a.pause());details.open=false;details.open=true;await Promise.resolve();return {firstCount:first.length,closed,secondStates:second.map(a=>a.playState),live:target.getAnimations().length,open:details.open};});
+    assert.equal(result.firstCount,1,'initial opening should animate');assert.ok(result.closed.every(s=>s==='idle'),'closing left an owned effect');assert.ok(result.secondStates.every(s=>s==='idle'),'reopening kept obsolete effect');assert.equal(result.live,1,'rapid reopening accumulated effects');assert.equal(result.open,true);
+   }finally{await page.close();}
+  });
   for(const theme of ['dark','light'])await test(theme+' all routes and dialogs fit 733×507 and 500×760',async()=>{
    const {page,errors}=await setup(browser,{theme});try{await page.emulateMedia({reducedMotion:'reduce'});
     for(const [width,height] of [[733,507],[500,760]]){await page.setViewportSize({width,height});for(const name of routes){await route(page,name);assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,name+' horizontal overflow');}
