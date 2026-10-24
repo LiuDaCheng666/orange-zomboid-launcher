@@ -1,34 +1,34 @@
 # OZL 官网与下载镜像
 
-## 1.2.15 Velopack：官网主渠道
+## 1.2.16 Velopack：官网主渠道
 
-官网继续使用 [orangezl.com](https://orangezl.com/)。1.2.15已于北京时间2026-10-25先部署至自己的服务器，再正式发布到GitHub备用渠道，10个公开附件均已匿名下载核对哈希。当前站点为`20261024T191501Z-77d6ce4d`，保留此前网站内容及旧版更新入口。新发行保留安装版、完整免安装ZIP，以及程序内检查、下载和明确确认后的一步更新／重启。Velopack仅作为本地安装与更新框架；不使用Flow或其他云托管，也不要求先上传GitHub才能准备官网发布。
+官网继续使用 [orangezl.com](https://orangezl.com/)。1.2.16已于北京时间2026-10-25先部署至自己的服务器，再正式发布到GitHub备用渠道，10个公开附件均已匿名下载核对哈希。当前站点为`20261024T194730Z-a36191ee`，保留此前网站内容及旧版更新入口。新发行保留安装版、完整免安装ZIP，以及程序内检查、下载和明确确认后的一步更新／重启。Velopack仅作为本地安装与更新框架；不使用Flow或其他云托管，也不要求先上传GitHub才能准备官网发布。
 
 ### 从认证的本地交付物准备
 
 ```powershell
-$releaseRoot = Join-Path $PWD 'dist/1.2.15-velopack-candidate'
+$releaseRoot = Join-Path $PWD 'dist/1.2.16-velopack-candidate'
 ./Build-VelopackRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory $releaseRoot
-python deploy/prepare_release.py --distribution velopack --source "$releaseRoot/release" --preserved-legacy artifacts/velopack-preserved-legacy-1.2.14 --output artifacts/website-mirror/1.2.15-velopack
+python deploy/prepare_release.py --distribution velopack --source "$releaseRoot/release" --preserved-legacy artifacts/velopack-preserved-legacy-1.2.14 --output artifacts/website-mirror/1.2.16-velopack
 ```
 
-输出必须全新；现有私钥只按路径传给构建，不打印或复制内容。构建默认.NET Framework 4.8及Desktop、StartMenuRoot快捷方式，返回app/release两个子目录。release的10项是安装EXE、portable ZIP、full.nupkg、releases.win.json、assets.win.json、RELEASES，以及velopack-manifest和velopack-artifacts各自的JSON／二进制签名。详细文件名与签名职责见[核心发布指南](../docs/core-release.md)。
+输出必须全新；现有私钥只按路径传给构建，不打印或复制内容。构建恢复中文目录选择向导，默认优先推荐非系统固定盘，声明.NET Framework 4.8及中文Desktop、StartMenuRoot快捷方式，返回app/release两个子目录。release的10项是安装EXE、portable ZIP、full.nupkg、releases.win.json、assets.win.json、RELEASES，以及velopack-manifest和velopack-artifacts各自的JSON／二进制签名。详细文件名与签名职责见[核心发布指南](../docs/core-release.md)。
 
 `--source`必须是使用既有发布身份签名的完整本地release目录。准备工具使用跟踪的公钥验证 `velopack-artifacts.json/.sig` 和更新清单，检查准确集合、版本、长度与SHA-256；拒绝夹带文件和伪造本地断言。新lane不需要伪造公开GitHub API元数据。`--preserved-legacy`必须提供已认证的旧版原始update-manifest.json／.sig，不能只复制未经验证的额外文件，也不需要下载或重建旧辅助EXE。
 
 ### 部署与备用渠道
 
 ```powershell
-python deploy/deploy_site.py --distribution velopack --site website --mirror artifacts/website-mirror/1.2.15-velopack --version 1.2.15 --handover <仓库外交接文档的绝对路径>
+python deploy/deploy_site.py --distribution velopack --site website --mirror artifacts/website-mirror/1.2.16-velopack --version 1.2.16 --handover <仓库外交接文档的绝对路径>
 ```
 
 这是显式发布命令，准备本地候选不会执行它。部署从镜像的不可变release交付物及保留的旧latest重新生成认证输入；凭据仍通过仓库外交接文件读取，SSH固定指纹、TLS验证和失败回退保持。不会把密码填入命令或Git。
 
-待切换站点必须同时包含旧 `/updates/latest/` 和新 `/updates/velopack/latest/`；不可变下载置于 `/releases/v1.2.15/`。旧latest和历史v1.2.14附件保持原字节，不能因切换current丢失。新可变feed使用no-store，版本目录保留不可变缓存策略。发布前确认版本/tag未被其他发布占用，不覆盖历史同名文件。
+待切换站点必须同时包含旧 `/updates/latest/` 和新 `/updates/velopack/latest/`；不可变下载置于 `/releases/v1.2.16/`。旧latest和历史v1.2.14附件保持原字节，不能因切换current丢失。新可变feed使用no-store，版本目录保留不可变缓存策略。发布前确认版本/tag未被其他发布占用，不覆盖历史同名文件。
 
 客户端首先获取本站 `updates/velopack/latest/velopack-manifest.json`，通过不可变版本路径获取签名与完整包；仅传输失败时使用 `LiuDaCheng666/orange-zomboid-launcher` 的canonical GitHub release路径。签名、长度、哈希、格式或版本错误直接失败，不以换源绕过。GitHub备用渠道随后上传本次同一份原始交付字节；不能重新构建另一份包冒充相同版本。安装EXE／ZIP的文件名为 `OrangeZomboidLauncher-win-Setup.exe` 和 `OrangeZomboidLauncher-win-Portable.zip`，由版本目录保证不可变性。
 
-1.2.14及更早客户端第一次迁移仍需手动安装或完整解压新版到新的独立目录，保留原 `%LOCALAPPDATA%/PZ3DManager` 设置；新feed本身不能给旧客户端增加Velopack协议。完成迁移后，安装版和portable都使用新版程序内更新。实际安装／更新／重启与部署结果见[1.2.15验证记录](../docs/releases/1.2.15-velopack-validation.md)，未执行的验收不宣称通过。
+1.2.14及更早客户端第一次迁移仍需手动安装或完整解压新版到新的独立目录，保留原 `%LOCALAPPDATA%/PZ3DManager` 设置；新feed本身不能给旧客户端增加Velopack协议。完成迁移后，安装版和portable都使用新版程序内更新。实际安装／更新／重启与部署结果见[1.2.16验证记录](../docs/releases/1.2.16-validation.md)，未执行的验收不宣称通过。
 
 ## 1.2.14及更早的部署历史
 

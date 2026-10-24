@@ -1,23 +1,23 @@
 # 核心发布与签名
 
-## 1.2.15 Velopack 发行
+## 1.2.16 Velopack 发行
 
-当前公开正式版为1.2.15，已于北京时间2026-10-25同步发布至orangezl.com与GitHub。使用本地Velopack框架，提供安装版、完整免安装ZIP和软件内自动更新。公开发布与准确生命周期验收状态见[1.2.15验证记录](releases/1.2.15-velopack-validation.md)。
+当前公开正式版为1.2.16，已于北京时间2026-10-25同步发布至orangezl.com与GitHub。使用本地Velopack框架，提供安装版、完整免安装ZIP和软件内自动更新。公开发布与准确生命周期验收状态见[1.2.16验证记录](releases/1.2.16-validation.md)。
 
 ### 构建
 
 ```powershell
 ./Prepare-Velopack.ps1
-$releaseRoot = Join-Path $PWD 'dist/1.2.15-velopack-candidate'
+$releaseRoot = Join-Path $PWD 'dist/1.2.16-velopack-candidate'
 ./Build-VelopackRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory $releaseRoot
 ```
 
-输出必须是全新目录，返回 PackDirectory 为 `<输出>/app`、ReleaseDirectory 为 `<输出>/release`。只编译主启动器；不调用旧 Build-CoreRelease.ps1、Build-Setup.ps1 或旧安装器CI，不生成自制更新助手／卸载器。固定本地SDK/CLI经哈希认证后使用，运行要求.NET Framework 4.8，vpk声明 `--framework net48`。正常安装包创建 Desktop、StartMenuRoot 入口；隔离验收才用无快捷方式的独立fixture。
+输出必须是全新目录，返回 PackDirectory 为 `<输出>/app`、ReleaseDirectory 为 `<输出>/release`。编译主启动器及中文安装目录选择前端，底层安装、更新和卸载继续使用官方 Velopack；不调用旧 Build-CoreRelease.ps1、Build-Setup.ps1 或旧安装器CI，不生成自制更新助手／卸载器。固定本地SDK/CLI经哈希认证后使用，运行要求.NET Framework 4.8，vpk声明 `--framework net48`。正常安装包创建 Desktop、StartMenuRoot 入口；隔离验收才用无快捷方式的独立fixture。
 
 release目录的准确10项为：
 
 - `OrangeZomboidLauncher-win-Setup.exe`、`OrangeZomboidLauncher-win-Portable.zip`。
-- `OrangeZomboidLauncher-1.2.15-full.nupkg`。
+- `OrangeZomboidLauncher-1.2.16-full.nupkg`。
 - `releases.win.json`、`assets.win.json`、`RELEASES`。
 - `velopack-manifest.json`、`velopack-manifest.sig`。
 - `velopack-artifacts.json`、`velopack-artifacts.sig`。
@@ -32,7 +32,7 @@ bootstrap签名覆盖主EXE、SDK、Web/桥接资源与许可等20个应用文�
 
 元数据首选 `https://orangezl.com/updates/velopack/latest/velopack-manifest.json`，签名和包位于本站不可变 `/releases/v{version}/`。只有传输失败才回退同一项目的canonical GitHub release路径；签名、哈希、版本或格式错误不换源。无Velopack Flow或云托管依赖。
 
-免安装包根目录包含 `.portable`、`OrangeZomboidLauncher.exe`、`Update.exe` 与 `current/`，真正的主程序在 `current/橙子启动器.exe`。更新替换current。免安装运行数据保存在根目录OrangeLauncherRuntime；安装版运行数据在 `%LOCALAPPDATA%/PZ3DManager/Velopack`。执行中的计时／会话监控副本放在 `%LOCALAPPDATA%/PZ3DManager/WorkerImages`，位于应用根目录之外。现有PZ3DManager个人配置继续使用，不迁移游戏、存档或工坊文件。安装版登记Windows应用与卸载信息，使用Windows“设置→应用”卸载；不能沿用旧“安装不写注册表”说明。
+免安装包根目录包含 `.portable`、`橙子启动器.exe`、`Update.exe` 与 `current/`，真正的主程序在 `current/橙子启动器.exe`。更新替换current。免安装运行数据保存在根目录OrangeLauncherRuntime；安装版运行数据在 `%LOCALAPPDATA%/PZ3DManager/Velopack`。执行中的计时／会话监控副本放在 `%LOCALAPPDATA%/PZ3DManager/WorkerImages`，位于应用根目录之外。现有PZ3DManager个人配置继续使用，不迁移游戏、存档或工坊文件。安装版登记Windows应用与卸载信息，使用Windows“设置→应用”卸载；不能沿用旧“安装不写注册表”说明。
 
 ### 首次迁移与发布
 
