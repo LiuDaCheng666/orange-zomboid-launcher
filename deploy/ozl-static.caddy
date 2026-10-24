@@ -6,11 +6,11 @@ header {
 	Permissions-Policy "camera=(), microphone=(), geolocation=()"
 	Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 }
-@pages not path /assets/* /releases/* /release.json /updates/latest/*
+@pages not path /assets/* /releases/* /release.json /updates/latest/* /updates/velopack/*
 header @pages Cache-Control no-cache
 @assets path /assets/*
 header @assets Cache-Control "public, max-age=86400"
-@metadata path /release.json /updates/latest/*
+@metadata path /release.json /updates/latest/* /updates/velopack/*
 header @metadata Cache-Control "no-cache, no-store, must-revalidate"
 handle /releases/* {
 	root * /var/www/ozl

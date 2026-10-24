@@ -526,6 +526,25 @@ test('untrusted metadata cannot inject markup or send downloads to a foreign hos
   await page.close();
 });
 
+test('Velopack metadata retains both exact versioned delivery links and rejects unknown formats', async () => {
+  const version = '1.2.15';
+  const data = { distribution: 'velopack', version, date: '2026-10-25', notes: ['Full package updates'] };
+  for (const [kind, name] of Object.entries({ setup: 'OrangeZomboidLauncher-win-Setup.exe', portable: 'OrangeZomboidLauncher-win-Portable.zip' })) {
+    data[kind] = { url: `/releases/v${version}/${name}`, github: `https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v${version}/${name}`, length: 100, sha256: 'A'.repeat(64) };
+  }
+  const page = await browser.newPage();
+  try {
+    await page.route('**/release.json', route => route.fulfill({ json: data }));
+    await page.goto(base);
+    await page.waitForFunction(() => document.querySelector('[data-version]').textContent === 'v1.2.15');
+    for (const kind of ['setup', 'portable']) assert.equal(await page.locator(`[data-download="${kind}"]`).first().getAttribute('href'), data[kind].url);
+    data.distribution = 'unknown';
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('[data-release-status]').textContent.includes('暂不可用'));
+    assert.equal(await page.locator('[data-download="setup"]').first().getAttribute('href'), 'https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest');
+  } finally { await page.close(); }
+});
+
 test('deployed metadata cannot be cached while versioned downloads are immutable', { skip: !process.env.OZL_SITE_URL }, async () => {
   const metadata = await fetch(base + '/updates/latest/update-manifest.json', { method: 'HEAD' });
   assert.equal(metadata.status, 200);

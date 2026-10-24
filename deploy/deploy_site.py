@@ -98,16 +98,38 @@ def prepare_mirror(metadata, original, checked, public_key):
     from prepare_release import prepare_release
     return prepare_release(metadata, Path(original) / 'releases' / metadata['tag_name'], checked, public_key)
 
+
+def prepare_velopack_mirror(version, original, checked, public_key):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from prepare_release import prepare_velopack_release
+    if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version or ''):
+        raise ValueError('Explicit stable --version is required for Velopack')
+    return prepare_velopack_release(Path(original)/'releases'/('v'+version),checked,public_key,Path(original)/'updates/latest')
+
+
+def mutable_feed_files(mirror):
+    names=['updates/latest/update-manifest.json','updates/latest/update-manifest.sig']
+    if (Path(mirror)/'updates/velopack/latest').is_dir():
+        names += ['updates/velopack/latest/velopack-manifest.json','updates/velopack/latest/velopack-manifest.sig','updates/velopack/latest/releases.win.json']
+    return {name:Path(mirror)/name for name in names}
+
 def deploy(args):
     files = validate_site(args.site)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from prepare_release import load_json
     import tempfile
     with tempfile.TemporaryDirectory(prefix='ozl-deploy-check-') as temp:
-        metadata = load_json(args.release_metadata.read_bytes())
         checked = Path(temp) / 'checked'
-        prepare_mirror(metadata, args.mirror.resolve(), checked, args.public_key.read_bytes())
-        deploy_checked(args, files, checked, metadata['tag_name'])
+        if args.distribution == 'velopack':
+            if args.release_metadata: raise ValueError('Velopack uses the signed local candidate inventory')
+            prepare_velopack_mirror(args.version,args.mirror.resolve(),checked,args.public_key.read_bytes())
+            tag='v'+args.version
+        else:
+            if not args.release_metadata or args.version: raise ValueError('Legacy deployment requires --release-metadata')
+            metadata = load_json(args.release_metadata.read_bytes())
+            prepare_mirror(metadata, args.mirror.resolve(), checked, args.public_key.read_bytes())
+            tag=metadata['tag_name']
+        deploy_checked(args, files, checked, tag)
 
 def deploy_checked(args, files, mirror, version):
     import paramiko
@@ -133,8 +155,8 @@ caddy version
                 if relative == 'release.json': file = mirror / 'release.json'
                 target = site_root + '/' + relative
                 upload(sftp, file, target); proof[target] = hashlib.sha256(file.read_bytes()).hexdigest()
-            for name in ['update-manifest.json', 'update-manifest.sig']:
-                file = mirror / 'updates/latest' / name; target = site_root + '/updates/latest/' + name
+            for relative, file in mutable_feed_files(mirror).items():
+                target = site_root + '/' + relative
                 upload(sftp, file, target); proof[target] = hashlib.sha256(file.read_bytes()).hexdigest()
             immutable = mirror / 'releases' / version
             for file in sorted(immutable.iterdir()):
@@ -219,7 +241,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--site', type=Path, required=True)
     parser.add_argument('--mirror', type=Path, required=True)
-    parser.add_argument('--release-metadata', type=Path, required=True)
+    parser.add_argument('--distribution', choices=['legacy','velopack'], default='legacy')
+    parser.add_argument('--version', help='Exact authenticated local Velopack candidate version')
+    parser.add_argument('--release-metadata', type=Path)
     parser.add_argument('--public-key', type=Path, default=Path(__file__).resolve().parents[1] / 'release-public-key.xml')
     parser.add_argument('--handover', type=Path, required=True)
     parser.add_argument('--bootstrap', action='store_true')

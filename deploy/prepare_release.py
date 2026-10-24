@@ -140,17 +140,139 @@ def prepare_release(release, source, destination, public_key):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--release-metadata', required=True, type=Path)
+    parser.add_argument('--distribution', choices=['legacy', 'velopack'], default='legacy')
+    parser.add_argument('--release-metadata', type=Path)
+    parser.add_argument('--preserved-legacy', type=Path, help='Authenticated old latest JSON/signature directory; required for Velopack')
     parser.add_argument('--source', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--public-key', type=Path, default=Path(__file__).resolve().parents[1] / 'release-public-key.xml')
     args = parser.parse_args()
     try:
-        data = prepare_release(load_json(args.release_metadata.read_bytes()), args.source, args.output, args.public_key.read_bytes())
+        if args.distribution == 'velopack':
+            if args.release_metadata or not args.preserved_legacy:
+                raise ValueError('Velopack requires --preserved-legacy and uses its signed local inventory, not GitHub metadata')
+            data = prepare_velopack_release(args.source, args.output, args.public_key.read_bytes(), args.preserved_legacy)
+        else:
+            if not args.release_metadata or args.preserved_legacy:
+                raise ValueError('Legacy mode requires --release-metadata')
+            data = prepare_release(load_json(args.release_metadata.read_bytes()), args.source, args.output, args.public_key.read_bytes())
     except (ValueError, OSError, ET.ParseError) as error:
         print('Preparation failed: ' + str(error), file=sys.stderr); return 1
     print(json.dumps(dict(version=data['version'], output=str(args.output.resolve()), verified=True)))
     return 0
+
+def velopack_names(version):
+    return {f'OrangeZomboidLauncher-{version}-full.nupkg', 'OrangeZomboidLauncher-win-Setup.exe',
+            'OrangeZomboidLauncher-win-Portable.zip', 'releases.win.json', 'assets.win.json', 'RELEASES',
+            'velopack-manifest.json', 'velopack-manifest.sig'}
+
+
+def preserved_legacy(source, public_key, new_version):
+    source = Path(source)
+    raw = (source / 'update-manifest.json').read_bytes()
+    signature = (source / 'update-manifest.sig').read_bytes()
+    verify_signature(raw, signature, public_key)
+    manifest = load_json(raw)
+    version = manifest.get('version', '')
+    if (manifest.get('schema') != 1 or manifest.get('platform') != 'win-x64'
+            or not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version)
+            or tuple(map(int, version.split('.'))) >= tuple(map(int, new_version.split('.')))):
+        raise ValueError('Invalid preserved legacy metadata')
+    files = manifest.get('files')
+    if not isinstance(files, list) or len(files) != len(OWNED) or {f.get('path') for f in files} != OWNED:
+        raise ValueError('Preserved legacy inventory must be exact')
+    prefix = f'{REPOSITORY}/releases/download/v{version}/'
+    for file in files:
+        sha = file.get('sha256', '')
+        if (not re.fullmatch('[A-Fa-f0-9]{64}', sha) or type(file.get('length')) is not int
+                or not 0 < file['length'] <= MAX_FILE or file.get('url') != prefix + sha.lower() + '.bin'):
+            raise ValueError('Invalid preserved legacy resource origin or integrity')
+    return raw, signature
+
+
+def prepare_velopack_release(source, destination, public_key, legacy):
+    """Authenticate a local candidate with the existing RSA identity; no public release prerequisite."""
+    source, destination = Path(source).resolve(), Path(destination).resolve()
+    if destination.exists():
+        raise ValueError('Output already exists; immutable release trees are never overwritten')
+    raw = (source / 'velopack-artifacts.json').read_bytes()
+    signature = (source / 'velopack-artifacts.sig').read_bytes()
+    verify_signature(raw, signature, public_key)
+    inventory = load_json(raw)
+    if set(inventory) != {'schema','distribution','appId','channel','version','date','files'}:
+        raise ValueError('Invalid artifact inventory fields')
+    version = inventory.get('version', '')
+    if (type(inventory.get('schema')) is not int or inventory.get('schema') != 1 or inventory.get('distribution') != 'velopack'
+            or inventory.get('appId') != 'OrangeZomboidLauncher' or inventory.get('channel') != 'win'
+            or not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version)
+            or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', inventory.get('date',''))):
+        raise ValueError('Invalid artifact identity')
+    expected = velopack_names(version)
+    files = inventory.get('files')
+    if not isinstance(files,list) or len(files) != len(expected) or {f.get('name') for f in files} != expected:
+        raise ValueError('Artifact inventory must contain exactly the approved delivery files')
+    extras = {'velopack-artifacts.json','velopack-artifacts.sig'}
+    if {f.name for f in source.iterdir()} != expected | extras or any(f.is_symlink() or not f.is_file() for f in source.iterdir()):
+        raise ValueError('Unexpected candidate file or directory')
+    blobs = {}; total = 0
+    for file in files:
+        if set(file) != {'name','length','sha256'} or type(file['length']) is not int or not 0 < file['length'] <= 1024**3:
+            raise ValueError('Invalid artifact record')
+        name = file['name']; path = source/name
+        if path.stat().st_size != file['length']:
+            raise ValueError('Artifact length mismatch: '+name)
+        total += file['length']
+        if total > 2*1024**3: raise ValueError('Candidate too large')
+        content = path.read_bytes()
+        if not isinstance(file['sha256'],str) or file['sha256'].upper() != digest(content):
+            raise ValueError('Artifact hash mismatch: '+name)
+        blobs[name] = content
+    feedraw, feedsig = blobs['velopack-manifest.json'], blobs['velopack-manifest.sig']
+    verify_signature(feedraw, feedsig, public_key)
+    feed = load_json(feedraw)
+    package = f'OrangeZomboidLauncher-{version}-full.nupkg'; payload = blobs[package]
+    if (set(feed) != {'schema','appId','channel','version','fileName','length','sha256','notes'}
+            or type(feed['schema']) is not int or feed['schema'] != 1 or feed['appId'] != 'OrangeZomboidLauncher' or feed['channel'] != 'win'
+            or feed['version'] != version or feed['fileName'] != package or type(feed['length']) is not int
+            or feed['length'] != len(payload) or feed['sha256'].upper() != digest(payload) or not isinstance(feed['notes'],str)):
+        raise ValueError('Signed feed does not match candidate')
+    index = load_json(blobs['releases.win.json'])
+    entries = index.get('Assets')
+    if not isinstance(entries,list) or len(entries) != 1:
+        raise ValueError('Framework index must contain one full package')
+    entry=entries[0]
+    if (entry.get('PackageId') != 'OrangeZomboidLauncher' or entry.get('Version') != version or entry.get('Type') != 'Full'
+            or entry.get('FileName') != package or entry.get('Size') != len(payload)
+            or entry.get('SHA256','').upper() != digest(payload) or entry.get('SHA1','').upper() != hashlib.sha1(payload).hexdigest().upper()):
+        raise ValueError('Framework release index mismatch')
+    assets = load_json(blobs['assets.win.json'])
+    required_assets = {(package,'Full'),('OrangeZomboidLauncher-win-Setup.exe','Installer'),('OrangeZomboidLauncher-win-Portable.zip','Portable')}
+    if not isinstance(assets,list) or len(assets)!=3 or {(a.get('RelativeFileName'),a.get('Type')) for a in assets} != required_assets:
+        raise ValueError('Framework asset index mismatch')
+    if blobs['RELEASES'].decode('utf-8-sig').strip().upper() != f'{hashlib.sha1(payload).hexdigest()} {package} {len(payload)}'.upper():
+        raise ValueError('Framework RELEASES mismatch')
+    oldraw, oldsig = preserved_legacy(legacy, public_key, version)
+    notes = re.split(r'(?m)^## ',feed['notes'])[1:2]
+    bullets=[line[2:].strip()[:1000] for line in (notes[0] if notes else feed['notes']).splitlines() if line.startswith('- ')][:8]
+    display=dict(distribution='velopack',version=version,date=inventory['date'],notes=bullets)
+    for kind,name in [('setup','OrangeZomboidLauncher-win-Setup.exe'),('portable','OrangeZomboidLauncher-win-Portable.zip')]:
+        display[kind]=dict(url=f'/releases/v{version}/{name}',github=f'{REPOSITORY}/releases/download/v{version}/{name}',length=len(blobs[name]),sha256=digest(blobs[name]))
+    blobs.update({'velopack-artifacts.json':raw,'velopack-artifacts.sig':signature})
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    staging=Path(tempfile.mkdtemp(prefix='.ozl-mirror-',dir=destination.parent))
+    try:
+        immutable=staging/'releases'/('v'+version); immutable.mkdir(parents=True)
+        for name,content in blobs.items(): (immutable/name).write_bytes(content)
+        for lane,contents in [('updates/latest',{'update-manifest.json':oldraw,'update-manifest.sig':oldsig}),('updates/velopack/latest',{'velopack-manifest.json':feedraw,'velopack-manifest.sig':feedsig,'releases.win.json':blobs['releases.win.json']})]:
+            folder=staging/lane; folder.mkdir(parents=True)
+            for name,content in contents.items(): (folder/name).write_bytes(content)
+        (staging/'release.json').write_text(json.dumps(display,ensure_ascii=False,indent=2),encoding='utf-8')
+        (staging/'release-proof.json').write_text(json.dumps(inventory,indent=2),encoding='utf-8')
+        staging.rename(destination)
+    finally:
+        if staging.exists(): shutil.rmtree(staging)
+    return display
+
 
 if __name__ == '__main__':
     sys.exit(main())

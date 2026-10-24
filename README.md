@@ -1,12 +1,12 @@
 # OZL / Orange zombiod launcher
 
-**当前正式版 1.2.13；1.2.14 新界面、独立核心组件、服务器清单和官网更新源码已完成回归与审查，但最终安装器被实时防护隔离，尚未公开发布。** [候选验证记录](docs/releases/1.2.14-github-release.md)与[准确检测记录](docs/security/2026-10-23-product-refresh-candidate.md)保留交付状态；[1.2.13](docs/releases/1.2.13-github-release.md)及更早记录作为历史保留。
+**当前公开正式版为 1.2.14；源码 1.2.15 正在准备 Velopack 安装与自动更新发行。** 本文的 1.2.15 说明不代表已经公开发布；准确交付与验证状态见[发布验证记录](docs/releases/1.2.15-velopack-validation.md)。[1.2.14 发布记录](docs/releases/1.2.14-github-release.md)及更早记录作为历史保留。
 
 面向 Project Zomboid Build 42 的非官方免费辅助启动器。核心用途是管理 Viewpoint 与中文适配；其他扩展由玩家独立选择。
 
 ## 官网与源码
 
-官网：[orangezl.com](https://orangezl.com/)，提供产品介绍、使用说明、安装版／免安装版下载、更新日志和备案信息。`www` 与旧 IP 地址跳转官网。待 1.2.14 正式发布后，程序内更新优先使用官网，连接失败时自动使用 GitHub；1.2.13 及更早版先通过 GitHub 升级一次。域名上线不会自动改变旧客户端代码。
+官网：[orangezl.com](https://orangezl.com/)，提供产品介绍、使用说明、安装版／免安装版下载、更新日志和备案信息。`www` 与旧 IP 地址跳转官网。1.2.15 的更新元数据和包优先使用本站，仅传输失败时回退项目官方 GitHub；签名、哈希或版本错误直接报错。Velopack 是本地安装与更新框架，不使用其云托管服务。
 
 [项目源码](https://github.com/LiuDaCheng666/orange-zomboid-launcher) · [工作目录说明](docs/workspace.md) · [官网部署与下载镜像](deploy/README.md) · [v1.2.13 安全复核记录](docs/security/2026-10-23-defender-review.md)
 
@@ -18,23 +18,29 @@
 
 - Windows x64、C#/.NET Framework、WinForms + 本地 WebView2 页面。
 - `Orange3DTool/` 为启动器源码；`docs/` 为设计、实施与验证记录。
-- `Build-CoreRelease.ps1` 为正式核心包入口，`Build-Tests.ps1` 为测试入口；缺失依赖从 Microsoft NuGet/作者 GitHub 下载并校验固定版本。需要 Windows x64、.NET Framework 4.8、JDK17+；运行界面需要 WebView2 Runtime。
+- `Build-VelopackRelease.ps1` 为 1.2.15 发行入口，`Build-Tests.ps1` 保留既有诊断入口；Velopack SDK、CLI 和 Newtonsoft.Json 使用固定版本与哈希，工具仅在项目内准备。运行需要 Windows x64、.NET Framework 4.8 和 WebView2 Runtime；重编 Java 桥接另需 JDK17+。
 - 不请求 Steam 密码；使用玩家已登录的 Steam 客户端。Java 文件授权逐哈希确认，不自动信任作者。
 - 指定存档/服务器直达功能为实验：不绕过游戏授权、存档转换、服务器规则或角色验证。
 
 ## 下载和在线更新
 
-从[官网下载](https://orangezl.com/#download)安装版或完整免安装 ZIP，也可使用 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest)。首次安装选择新的独立目录，默认创建可取消的当前用户桌面快捷方式；ZIP 完整解压后运行“橙子启动器.exe”，不要只复制 EXE。界面和新快捷方式名为 OZL，旧内部文件名保留以兼容更新。已有正式可信核心用户可保留原安装，通过程序内更新升级，无需先卸载组件。
+从[官网下载](https://orangezl.com/#download)安装版或完整免安装 ZIP，也可使用 [GitHub 最新版](https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/latest)。1.2.15 安装版由 Velopack 管理 Windows 应用与卸载登记；通过 Windows“设置 → 应用”卸载。ZIP 完整解压到新的独立目录后运行根目录 `OrangeZomboidLauncher.exe`；保留官方 `Update.exe`、`.portable` 和整个 `current`，不要只复制 EXE。
 
-已安装可信核心版本的玩家，可点顶部“启动器更新”→检查→下载。运行1.2.3后，当前下载校验完成会弹出一次确认，同意后自动更新并重新打开启动器；选择稍后则保留“重启并更新”，不会反复弹窗。游戏运行本身不再一律拦截核心更新，但未保存编辑、文件修改、配置事务或待恢复会话仍须先处理。更新只下载变化的自有文件并校验签名及哈希；重启后完成界面健康检查，失败保留恢复资料并回退。更新启动器不等于更新或启用第三方模组，不要求退出 Steam，也不要求输入 Steam 密码。网络必须能访问 GitHub 及其官方资源下载域名。
+新版仍在顶部“启动器更新”中检查、下载，明确确认后一步更新并重新打开；选择稍后则保留“重启并更新”。更新下载经过 RSA 签名、长度、SHA-256 和版本验证的完整应用 nupkg，由官方框架替换应用，发行包不再包含自制更新助手或卸载器。未保存编辑、文件修改、配置事务或待恢复会话仍须先处理；更新启动器不等于更新或启用第三方模组。
+
+**1.2.14 及更早版首次迁移需手动安装或完整解压新版到新的独立目录，不覆盖旧目录。** 原有 `%LOCALAPPDATA%/PZ3DManager` 设置继续使用，不改游戏、存档和工坊文件。旧版不能只靠服务器发布新 feed 获得 Velopack 协议；这一次迁移后，安装版和免安装版均继续支持软件内自动更新。
+
+免安装运行数据位于根目录 `OrangeLauncherRuntime`，与 `current` 并列；安装版运行数据位于 `%LOCALAPPDATA%/PZ3DManager/Velopack`。执行中的监控副本单独使用 `%LOCALAPPDATA%/PZ3DManager/WorkerImages`，位于应用根目录之外。个人文件不要存入更新时被替换的 `current`。
+
+### 旧版更新记录（1.2.14 及更早）
 
 1.2.1 遇 GitHub API 403／429 时使用同仓库官方最新下载地址回退，信任校验不变。旧版本尚无这段回退代码时需等待限流恢复或手动安装完整新版。内置组件的版本、更新说明和物件贴图问题边界见[2026-10-15 组件核查](docs/releases/2026-10-15-component-compatibility-audit.md)；不把“文件已下载”当成“游戏内效果正常”。
 
 没有内置更新信任的早期单EXE，或缺少官方回退且受API限流影响的历史测试构建，可能需要手动安装一次完整新版。**1.2.1／1.2.2首次升级仍受旧版代码限制，可能需要退出游戏，再手动点“重启并更新”。**历史1.2.8发布验证：原始正式1.2.7通过默认渠道查到1.2.8，实际下载并校验5,393,323字节后达到Ready；新1.2.8返回Latest。均使用隔离目录，未改写原18个文件，不冒充玩家已完成重启。早期版本升级验证作为各版本历史记录保留。 1.2.9发布时，原始正式1.2.8通过默认渠道查到1.2.9并下载至Ready。本次原始正式1.2.9通过默认渠道查到1.2.11，下载并验证5,498,333字节后达到Ready；新1.2.11返回Latest。测试未应用更新或替换真实安装。
 
-## 开发状态
+## 既有功能与历史开发记录
 
-1.2.14 开发分支保留顶部导航、左侧启动区和原封面，重新整理深色／浅蓝两套主题，以少量玻璃材质与短动效改善层级。核心组件拆为 ZombieBuddy、Viewpoint 和老余汉化三个独立入口；中文只依赖 Buddy，移除 Viewpoint 保留 Buddy。可选扩展和既有配置继续兼容。目录与封面共享有界展示缓存，变化和手动刷新会使其失效；真实写入和来源记录继续读取当前文件。启动后静默检查一次程序更新，发现新版后提示，不自动下载或安装。[上游组件核查](docs/components/2026-10-23-upstream-audit.md)区分本机版本、作者更新说明与查询失败的条目。
+1.2.14 已发布版本保留顶部导航、左侧启动区和原封面，重新整理深色／浅蓝两套主题，以少量玻璃材质与短动效改善层级。核心组件拆为 ZombieBuddy、Viewpoint 和老余汉化三个独立入口；中文只依赖 Buddy，移除 Viewpoint 保留 Buddy。可选扩展和既有配置继续兼容。目录与封面共享有界展示缓存，变化和手动刷新会使其失效；真实写入和来源记录继续读取当前文件。启动后静默检查一次程序更新，发现新版后提示，不自动下载或安装。[上游组件核查](docs/components/2026-10-23-upstream-audit.md)区分本机版本、作者更新说明与查询失败的条目。
 
 服务器卡片和首页选中的服务器新增“模组清单”：显示上次连接记录或导入的工坊项目，粘贴`WorkshopItems=...`或工坊ID列表后，可明确订阅并逐项下载，查看进度与取消结果。只记录原版连接过程中实际下发的完整清单；没有记录时可导入，不从大厅摘要猜测。准备任务不改默认模组、不自动启动游戏；进服继续使用服务器下发的Mod顺序及已有3D／汉化保留策略，不修改服务端、不增加Java桥。
 
@@ -52,31 +58,27 @@
 
 首页选择完整游玩配置与当前实际设置分开；变化先预览、明确应用，再按普通／存档／服务器目标重新体检。便携 JSON 由原生导出和校验，导入仅新建；有界日志诊断保留脱敏原文证据和未核实时间，不自动修复或上传。六个一级分类保留全部原有路由，模组多选只编辑草稿；组件 ID 的批量资格由原生分类，不按作者名字或来源猜测。全局内存／光影／Viewpoint 设置不表示每个配置拥有隔离游戏或工坊版本。
 
-已实现：核心 Viewpoint/中文与可选扩展、富模组目录、命名配置、独立存档清单和依赖排序预览、原版存档/角色截图、原版服务器收藏只读导入、公共大厅、Steam 搜索/订阅列表与确认下载、中文参数、可追踪任务/脱敏日志、独立游玩计时及休息提醒、两套主题及无注册表写入的安装卸载。原版收藏正在写入时拒绝读取/导入。Java 更新需逐文件重新授权；所有“已配置”与“本次已加载”严格区分。
+已实现：核心 Viewpoint/中文与可选扩展、富模组目录、命名配置、独立存档清单和依赖排序预览、原版存档/角色截图、原版服务器收藏只读导入、公共大厅、Steam 搜索/订阅列表与确认下载、中文参数、可追踪任务/脱敏日志、独立游玩计时及休息提醒、两套主题；历史自制安装器的无注册表行为仅适用于1.2.14及更早版本。原版收藏正在写入时拒绝读取/导入。Java 更新需逐文件重新授权；所有“已配置”与“本次已加载”严格区分。
 
 真实只读验证成功获取 Steam 搜索、完整订阅列表和服务器大厅；未在测试中订阅/下载条目，也未执行真实进服/读档。直达存档/服务器和扩展的纯客户端联机效果仍需游戏内验证，不把进程启动冒充进服成功。
 
 ## 构建与测试
 
+1.2.15 发行入口只编译主启动器，并用固定版本的本地 vpk 生成安装版、免安装 ZIP 和完整更新包。需要 .NET Framework 4.8；不使用旧 Build-CoreRelease/Build-Setup 或旧安装器 CI 来生成新发行包。
+
 ```powershell
-./Build-Tests.ps1
-./artifacts/regression.exe --self-test
-./Build-Tests.ps1 -Entry PZ3D.SteamLauncherServicesTests -Output ./artifacts/steam-tests.exe
-./artifacts/steam-tests.exe
-./Build-Tests.ps1 -Entry PZ3D.InstallerExperienceTests -Output ./artifacts/installer-tests.exe
-./artifacts/installer-tests.exe
-npm install
-npx playwright install chromium
+./Prepare-Velopack.ps1
+$releaseRoot = Join-Path $PWD 'dist/1.2.15-velopack-candidate'
+./Build-VelopackRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory $releaseRoot
+node --test tests/license-guide.test.cjs
 npm test
-./Build-CoreRelease.ps1 -VersionOnly
-./Test-CorePackageBuild.ps1
-# 使用明确的仓库外私钥路径和新的输出目录打包：
-./Build-CoreRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory E:/Projects/OrangeLauncher/dist/1.2.8-local-build
 ```
 
-正式核心包严格包含允许清单中的18个文件，不打包第三方光影 ZIP 或作者封面，也不自动选择光影。图标和首页背景是本工具自有资源；组件只使用原作者封面/本地 poster，没有自行生成替代图。`Build-Setup.ps1` 无参数以及 `Build-Modern.ps1` 无参数保留旧单 EXE 测试/截图构建；私人资源开关仅适用于这些旧本机测试，不可上传公开 Release。
+输出目录必须全新。私钥只通过路径参数传入，不能打印、复制到包内或提交 Git。发布包包含安装 EXE、完整 ZIP、full.nupkg、框架索引、RSA 签名更新元数据及完整交付物清单；对应源码、版本和说明冻结后再构建最终包。说明通过 Build-Guide.ps1 附带完整 GPL 和第三方许可。SDK、工具及编译用依赖留在忽略目录，不进入 Git。
 
-正式输出包含 `core/`、完整 ZIP、安装 EXE、签名更新清单及内容寻址资源。1.2.6公开发布采用全新 `dist/1.2.6-github-release`；正式1.2.5／1.2.4／1.2.3／1.2.2／1.2.1、本地候选及更早历史产物保持原样。[1.2.0历史验证与已知限制](docs/releases/1.2.0-final-verification.md)只记录当时结果，不证明当前源码成品。线上更新读取本仓库最新稳定 Release 的签名清单与内容寻址资源；没有可用渠道或网络失败会明确报错，不伪装最新版。版本元数据变化可能需要替换完整小 EXE，不提供二进制差分。构建、密钥与验证记录见 [核心发布指南](docs/core-release.md) 和 [发布验证记录](docs/core-release-verification.md)。SDK 与编译用 ZombieBuddy 不入 Git；自己的 Java 桥接 JAR 由 `BridgeSource` 编译，不包含作者框架类。
+官网可以直接从经过签名认证的本地交付包准备发布，不以 GitHub 上传成功为前提。保留旧版 latest 与历史不可变附件，新 feed 使用 `/updates/velopack/`；GitHub 备用渠道上传同一份原始字节。具体命令见[发布指南](docs/core-release.md)和[部署说明](deploy/README.md)，准确实测边界见[1.2.15 验证记录](docs/releases/1.2.15-velopack-validation.md)。本文未宣称已部署或完成旧客户端自动迁移。
+
+旧的18文件清单、自制更新助手／卸载器、稀疏文件下载和健康回退属于1.2.14及更早的历史协议，保留源码与诊断用于兼容验证，不是1.2.15的构建或更新入口。历史产物不覆盖，私人测试资源不作为公开发行包。
 
 交互方法仅概念参考 [PCL](https://github.com/Meloong-Git/PCL)（[原项目许可](https://github.com/Meloong-Git/PCL/blob/main/LICENCE)），没有复制代码、图标或分发素材。
 

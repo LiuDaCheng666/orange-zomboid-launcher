@@ -151,7 +151,11 @@
   });
   function validate(data) {
     if (!data || !/^\d+\.\d+\.\d+$/.test(data.version) || !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) throw Error('Invalid release');
-    for (const [kind, filename] of Object.entries({ setup: `orange-launcher-setup-v${data.version}.exe`, portable: `orange-launcher-v${data.version}-win-x64.zip` })) {
+    if (data.distribution !== undefined && !['legacy', 'velopack'].includes(data.distribution)) throw Error('Invalid distribution');
+    const filenames = data.distribution === 'velopack'
+      ? { setup: 'OrangeZomboidLauncher-win-Setup.exe', portable: 'OrangeZomboidLauncher-win-Portable.zip' }
+      : { setup: `orange-launcher-setup-v${data.version}.exe`, portable: `orange-launcher-v${data.version}-win-x64.zip` };
+    for (const [kind, filename] of Object.entries(filenames)) {
       const file = data[kind];
       const relative = `/releases/v${data.version}/${filename}`;
       const github = `${repository}/releases/download/v${data.version}/${filename}`;

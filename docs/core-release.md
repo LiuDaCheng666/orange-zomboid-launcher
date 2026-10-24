@@ -1,5 +1,49 @@
 # 核心发布与签名
 
+## 1.2.15 Velopack 发行
+
+当前公开正式版为1.2.14；1.2.15使用本地Velopack框架，提供安装版、完整免安装ZIP和软件内自动更新。公开发布与准确生命周期验收状态见[1.2.15验证记录](releases/1.2.15-velopack-validation.md)，本指南不代表已经发布。
+
+### 构建
+
+```powershell
+./Prepare-Velopack.ps1
+$releaseRoot = Join-Path $PWD 'dist/1.2.15-velopack-candidate'
+./Build-VelopackRelease.ps1 -SigningKey E:/Projects/OrangeLauncher-Signing/release-private.xml -OutputDirectory $releaseRoot
+```
+
+输出必须是全新目录，返回 PackDirectory 为 `<输出>/app`、ReleaseDirectory 为 `<输出>/release`。只编译主启动器；不调用旧 Build-CoreRelease.ps1、Build-Setup.ps1 或旧安装器CI，不生成自制更新助手／卸载器。固定本地SDK/CLI经哈希认证后使用，运行要求.NET Framework 4.8，vpk声明 `--framework net48`。正常安装包创建 Desktop、StartMenuRoot 入口；隔离验收才用无快捷方式的独立fixture。
+
+release目录的准确10项为：
+
+- `OrangeZomboidLauncher-win-Setup.exe`、`OrangeZomboidLauncher-win-Portable.zip`。
+- `OrangeZomboidLauncher-1.2.15-full.nupkg`。
+- `releases.win.json`、`assets.win.json`、`RELEASES`。
+- `velopack-manifest.json`、`velopack-manifest.sig`。
+- `velopack-artifacts.json`、`velopack-artifacts.sig`。
+
+版本来自VERSION，说明与CHANGELOG必须在最终构建前冻结。使用已有仓库外私钥，构建确认其匹配跟踪的公钥；不得打印、复制、上传或提交私钥。嵌入公钥是运行时信任根。原始UTF-8 JSON与二进制RSA/SHA-256分离签名一起保留，签名后不得重写JSON。RSA发布签名与Windows Authenticode是不同机制。
+
+bootstrap签名覆盖主EXE、SDK、Web/桥接资源与许可等20个应用文件；vpk生成的sq.version、执行stub和官方更新器属于框架布局。打包后必须对full.nupkg和portable中的原始应用字节重验bootstrap。安装包、ZIP、完整更新包、索引和feed还受 `velopack-artifacts.json/.sig` 的交付物清单认证。不能把旧18路径清单、无签名框架索引或自己声明的本地哈希当成新发布授权。
+
+### 软件内更新与数据布局
+
+程序保留检查→下载→明确确认→一步更新并重启，以及取消、未保存编辑和原生修改队列的保护。只下载完整nupkg，验证签名、版本、准确长度和SHA-256，再交给官方Update.exe。下载就绪不代表已经更新，框架启动失败应如实显示。`SetAutoApplyOnStartup(false)`保留显式确认。
+
+元数据首选 `https://orangezl.com/updates/velopack/latest/velopack-manifest.json`，签名和包位于本站不可变 `/releases/v{version}/`。只有传输失败才回退同一项目的canonical GitHub release路径；签名、哈希、版本或格式错误不换源。无Velopack Flow或云托管依赖。
+
+免安装包根目录包含 `.portable`、`OrangeZomboidLauncher.exe`、`Update.exe` 与 `current/`，真正的主程序在 `current/橙子启动器.exe`。更新替换current。免安装运行数据保存在根目录OrangeLauncherRuntime；安装版运行数据在 `%LOCALAPPDATA%/PZ3DManager/Velopack`。执行中的计时／会话监控副本放在 `%LOCALAPPDATA%/PZ3DManager/WorkerImages`，位于应用根目录之外。现有PZ3DManager个人配置继续使用，不迁移游戏、存档或工坊文件。安装版登记Windows应用与卸载信息，使用Windows“设置→应用”卸载；不能沿用旧“安装不写注册表”说明。
+
+### 首次迁移与发布
+
+1.2.14及更早版首次迁移需手动下载完整安装版或ZIP，安装／解压到新的独立目录，不覆盖旧安装。旧客户端不能通过服务器换feed直接认识新协议。兼容签名桥尚未作为本次能力交付；这不影响新发行包之后的软件内自动更新。保留原个人配置，无需重装游戏或组件。
+
+官网主渠道从已签名认证的本地release目录准备，保留已认证的旧 `/updates/latest/` 清单／签名和历史附件，新入口为 `/updates/velopack/`。不要求先公开GitHub；GitHub备用发布必须使用相同不可变字节。完整准备、部署参数见[deploy/README.md](../deploy/README.md)。切换站点前确认新lane和旧latest均在待部署目录，不能只部署新feed而抹掉旧客户端入口。发布前核对tag和版本占用，不覆盖同名历史附件；公开发布、真实安装／更新／重启验收与源码提交分别记录。
+
+## 1.1.0–1.2.14 自定义更新协议（历史）
+
+**以下余文保留当时的工具、状态与验证记录，仅用于追溯；其中18文件、自制辅助EXE、旧构建、GitHub优先及旧安装行为均不适用于上述1.2.15发行。**
+
 **当前正式发布为 1.2.13，源码版本为尚未发布的 1.2.14。** 公开资源与上一正式版更新验证见[1.2.13 发布记录](releases/1.2.13-github-release.md)；新版交付状态见[1.2.14 验证记录](releases/1.2.14-github-release.md)。更新签名身份和18文件路径不变。
 
 正式版本来自根目录 VERSION。发布使用新的独立输出目录，保留已验证候选的原始签名字节与历史包；不得用历史包证明新源码已交付。先前 `dist/1.2.14-verified/` 为官网传输通道阶段的早期候选，扫描记录保留，不能作为本轮界面与组件改造的交付物。原生安装向导和配置重新读取的历史本机验收见[1.2.1 验证边界](releases/1.2.1-installer-recovery.md)，其冻结目录 `dist/1.2.1-installer-verified/` 保持不变。已验收的1.2.0位于 `dist/1.2.0-experience-verified-final/`，准确门禁和哈希见[历史最终验证记录](releases/1.2.0-final-verification.md)；1.1.1、r4及其本机未发布结论同样作为历史保留。旧单 EXE 为未正式编号构建，不追称1.0.0。构建脚本拒绝覆盖输出目录，fixture不能作为正式发布产物。
@@ -24,7 +68,7 @@
 
 正式公钥规范 XML 的 SHA-256：`943D7FC795E52E9C43AD1587CEF15457C1B8153130496C47BED4EB58044C355C`。RSA 3072 位，SHA-256 签名。测试脚本生成独立 fixture 密钥，只在 artifacts/TestFixtures 内使用，不进入正式 feed。
 
-## 文件与工具接口
+## 历史：文件与工具接口
 
 `CoreReleaseTool pack <core目录> <新输出目录> <私钥XML> <公钥XML>` 对完整18文件允许清单进行检查，校验三个 EXE 的嵌入版本、公钥及无嵌入 ZIP/SDK 资源，签名未经重编码的清单原始字节。`validate <core目录> <清单目录> <公钥XML>` 重验签名、完整集合、长度及哈希。源码/成品中的意外文件、预设目录与作者封面不能被夹带进包。
 
@@ -48,7 +92,7 @@
 
 1.2.3交互安装默认勾选当前用户桌面快捷方式，可取消。只在安装认证与全部文件核验后调用，使用系统已知桌面，不写注册表、不覆盖同名文件；创建失败独立告警，不改变安装成功结果。runtime记录installationId、准确路径、link哈希及目标字段；卸载先通过核心预检，之后只删除仍匹配的自有link。相同installationId的正常签名升级不会失去清理资格；玩家修改或外部替换时保留。ZIP、普通在线更新及`--verify-setup`不静默创建真实桌面入口。
 
-## 首次启动及更新集成
+## 历史：首次启动及更新集成
 
 ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntime/CoreBootstrap/manifest.json` 和 `manifest.sig` 经嵌入公钥验证后，`CoreDeployment.AdoptPortable(root)` 校验所有现有核心文件，原位创建 installationId、owner marker 与 schema 2 安装记录。失败不会把修改的文件认领为自有文件；安装器原有“空目录”要求不受影响。
 
@@ -66,7 +110,7 @@ ZIP 的未知解压路径不能预写安装记录。包中 `OrangeLauncherRuntim
 
 初次安装中断可能留下 runtime 资料；选择新空目录重试，不自动清空旧目录。Windows 传统 .NET 长路径限制仍适用，请选择较短的独立目录。真实 WebView2 健康确认、失败页面超时回滚、旧页面重启一次及自有卸载已通过隔离测试。测试使用合成游戏/用户/数据根目录，不连接 Steam 或更改实际授权；不能证明游戏内效果。
 
-## 发布前
+## 历史：发布前
 
 ### 日常开发与误报复核
 
