@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="OZL 橙子启动器，管理《僵尸毁灭工程》的组件、模组和存档。">
-<meta name="theme-color" content="#f5f4f0">
+<meta name="description" content="了解 OZL 的使用方法：启用或卸载 3D 模组、修改内存、清除缓存、重新下载工坊模组，单独管理存档模组清单，以及首次连接服务器后在下次进服前提前下载模组。">
+<meta name="theme-color" content="#cdd8e5">
 <title>使用帮助 · OZL 橙子启动器</title>
+<link rel="canonical" href="https://orangezl.com/help">
 <link rel="icon" href="assets/orange-app.ico">
 <link rel="stylesheet" href="site.css">
 <script src="site.js" defer></script>
@@ -13,58 +14,114 @@
 <body>
 <a class="skip" href="#main">跳到正文</a>
 <header class="wrap site-header">
-<a class="brand" href="index.html">
+<a class="brand" href="/">
 <img src="assets/orange-app.png" width="40" height="40" alt="">
 <strong>OZL</strong>
 <span>橙子启动器</span>
 </a>
 <nav aria-label="主导航">
-<a href="index.html#features">功能介绍</a>
-<a href="help.html" aria-current="page">使用帮助</a>
-<a href="changes.html">更新记录</a>
-<a href="https://github.com/LiuDaCheng666/orange-zomboid-launcher">GitHub ↗</a>
+<a href="/#features">功能介绍</a>
+<a href="/3d">3D 效果</a>
+<a href="/help" aria-current="page">使用帮助</a>
+<a href="/changes">更新记录</a>
 </nav>
-<a class="button small" href="index.html#download">下载</a>
+<a class="button small" href="/#download">下载</a>
 </header>
 <main id="main">
 <article class="wrap prose help-content" data-reveal>
 <p class="eyebrow">开始使用</p>
 <h1>使用帮助</h1>
-<p class="lead">先确认游戏目录，再选择需要的组件与启动方式。</p>
+<p class="lead">从安装启动器到管理存档、连接服务器，按下面的步骤操作。3D 模组、内存设置和常用维护工具都可以在启动器内完成。</p>
 <ol class="steps">
 <li>
-<h2>下载并打开</h2>
-<p>从<a href="index.html#download">当前版本下载区</a>选择安装版或免安装版。ZIP 请完整解压，不要只取出 EXE。运行环境为 Windows x64，需 WebView2 Runtime。</p>
+<h2>安装并打开启动器</h2>
+<p>从<a href="/#download">下载区</a>选择安装版，按向导安装；或完整解压免安装版 ZIP，再运行“橙子启动器.exe”。需要 Windows x64、.NET Framework 4.8 和 WebView2 Runtime。</p>
 </li>
 <li>
-<h2>确认目录与组件</h2>
-<p>使用已安装的正版游戏与 Steam 客户端。确认启动器识别的游戏目录；在组件管理中查看版本与状态，按需安装或更新。遇到 Java 文件授权提示，先阅读说明。</p>
+<h2>确认游戏目录</h2>
+<p>登录拥有《僵尸毁灭工程》的 Steam 账号，确认游戏已安装。检查启动器识别的游戏目录；未找到时，手动选择包含 ProjectZomboid64.exe 的游戏文件夹。</p>
 </li>
 <li>
-<h2>选择启动目标</h2>
-<p>按需整理模组配置与顺序，再选择存档或服务器。维护或变更前，请保留重要存档备份。</p>
+<h2>选模组，再选启动目标</h2>
+<p>需要 3D 时，在组件页面安装并启用 Viewpoint 3D；汉化按需安装。单人游戏选择模组配置或存档；联机选择服务器。具体用法见下方说明。</p>
 </li>
 </ol>
-<section class="questions" aria-labelledby="questions-title">
-<h2 id="questions-title">常见问题</h2>
+<nav class="help-nav" aria-label="帮助分类">
+<a href="#tools">3D 与维护</a>
+<a href="#saves">存档与模组</a>
+<a href="#servers">服务器联机</a>
+<a href="#questions">下载与更新</a>
+</nav>
+<section class="questions" id="tools" aria-labelledby="tools-title">
+<h2 id="tools-title">3D、内存和常用维护</h2>
+<details>
+<summary>怎样一键启用或卸载 3D 模组？</summary>
+<p>打开组件页面，找到 Viewpoint 3D，点击安装并按提示完成所需框架和下载，下一次启动游戏时启用。出现 Java 文件授权提示时，阅读来源说明并允许所需文件。</p>
+<p>不再使用 3D 时，点击该组件的卸载按钮。中文汉化可以单独安装；卸载 Viewpoint 不会连带移除 ZombieBuddy 框架。</p>
+</details>
+<details>
+<summary>怎样一键修改游戏内存？</summary>
+<p>在首页“常用工具”中点击“修改内存”，选择游戏可用的内存大小并保存。页面会显示系统总内存、当前设置和推荐值；保存后，下次启动游戏时生效。</p>
+</details>
+<details>
+<summary>清除缓存会清除什么？</summary>
+<p>在首页“常用工具”中点击“清除缓存”，核对范围后确认。此操作清理多人地图的本地区块缓存，连接服务器时会重新获取这些区块，保留角色与车辆数据库。</p>
+</details>
+<details>
+<summary>怎样一键重新下载工坊模组？</summary>
+<p>在首页“常用工具”中点击“重下工坊模组”，核对范围后确认。启动器会清除本游戏的工坊模组文件，再通过 Steam 重新下载已订阅的模组，保留订阅关系。</p>
+<p>这项操作适合需要重新获取模组文件时使用。下载进度、完成结果和错误信息可在任务中心查看；失败或取消后，可重试下载。只想提前下载某台服务器的模组时，使用下方的服务器“模组清单”入口。</p>
+</details>
+</section>
+<section class="questions" id="saves" aria-labelledby="saves-title">
+<h2 id="saves-title">存档和模组清单</h2>
+<details>
+<summary>怎样分别管理每个存档的模组？</summary>
+<p>在存档管理中选择目标存档，打开它的模组清单，即可添加、移除模组或调整加载顺序。保存的是该存档自己的清单，不会同时改写其他存档或默认清单。</p>
+<p>存档页面也能查看封面和游玩记录，并选择存档启动。移除地图、物品等模组可能影响已有存档，修改前请备份重要存档；删除不用的存档时，确认后会移入系统回收站。</p>
+</details>
+<details>
+<summary>模组配置与存档模组清单有什么区别？</summary>
+<p>模组配置是可以命名、保存和复用的一组启用模组，适合为不同玩法准备多套组合。存档模组清单则对应某一个存档，用来管理这个存档使用哪些模组、按什么顺序加载。</p>
+<p>整理清单时，可以搜索本地模组、查看前置依赖、检查缺失项，并预览自动排序结果或手动调整。切换玩法时，选择并应用已保存的配置即可。</p>
+</details>
+</section>
+<section class="questions" id="servers" aria-labelledby="servers-title">
+<h2 id="servers-title">连接服务器与提前下载模组</h2>
+<p>在启动器中保存服务器地址、端口和所需登录信息，选中后即可启动游戏并发起连接；也可以在公开大厅按人数或延迟查找服务器。</p>
+<p>联机时，客户端必须按服务器下发的模组清单和加载顺序运行，临时排除普通单机模组，并保留已启用的 3D 和汉化。退出后恢复原来的默认清单。</p>
+<ol>
+<li>
+<h3>第一次连接：获取服务器模组清单</h3>
+<p>通过启动器连接服务器。游戏在连接过程中下发工坊模组清单时，启动器会记录完整清单，之后可在该服务器的“模组清单”中查看。</p>
+</li>
+<li>
+<h3>下次进服前：提前下载全部所需模组</h3>
+<p>打开该服务器的“模组清单”，点击“订阅并下载”，按已记录的清单提前下载全部工坊模组。可查看逐项进度和完成结果；下载完成后，再选择服务器连接。</p>
+</li>
+</ol>
+<p>清单来自上次连接记录；服务器增删或更新模组后，仍以本次连接下发的最新清单为准，可能需要补充下载。若尚未记录到清单，也可导入服主提供的 WorkshopItems 或工坊 ID 列表后提前下载。</p>
+</section>
+<section class="questions" id="questions" aria-labelledby="questions-title">
+<h2 id="questions-title">下载、更新与问题反馈</h2>
 <details>
 <summary>安装版与免安装版有什么区别？</summary>
-<p>功能相同。安装版提供目录选择、快捷方式和卸载向导；免安装版完整解压后运行。两者都需要保留配套文件。</p>
+<p>功能相同。安装版按向导安装，提供快捷方式和卸载工具；免安装版完整解压后运行，不需要安装向导。两者都要保留配套文件。</p>
 </details>
 <details>
 <summary>更新启动器后，要重新安装组件吗？</summary>
-<p>启动器更新与组件更新分别操作。更新启动器后，可在组件管理中查看当前状态，再决定是否更新组件。</p>
+<p>不需要因为更新启动器就全部重装。启动器和组件分别更新；打开组件页面查看各组件的版本与状态，有可用更新时再按需操作。</p>
 </details>
 <details>
 <summary>需要输入 Steam 密码吗？</summary>
-<p>不需要。使用电脑上已登录的 Steam 客户端。服务器角色账号与密码由服务器配置管理。</p>
+<p>不需要在启动器中输入 Steam 密码，使用电脑上已登录的 Steam 客户端即可。服务器要求的角色账号、角色密码或入服密码，在对应服务器的连接配置中填写。</p>
 </details>
 <details>
 <summary>下载失败或遇到错误怎么办？</summary>
-<p>下载区提供官方 GitHub 备用链接。反馈时请注明启动器版本、操作步骤与错误信息，分享日志前删除账号、密码等私人信息。</p>
+<p>启动器安装包下载失败时，请稍后重试，或加入 QQ 群反馈。组件或工坊下载失败时，先查看任务中心的错误信息，再重试。反馈问题请附上启动器版本、操作步骤和错误信息；分享日志前删除账号、密码等私人信息。</p>
 </details>
 <p>
-<a href="https://github.com/LiuDaCheng666/orange-zomboid-launcher/blob/main/使用说明.md">完整使用说明 ↗</a> · <a href="https://github.com/LiuDaCheng666/orange-zomboid-launcher/issues">提交问题 ↗</a>
+仍有问题？<a href="https://qm.qq.com/q/cuLGbwUx4A" target="_blank" rel="noopener noreferrer">加入 QQ 群反馈 ↗</a>，群号 1124858561。
 </p>
 </section>
 </article>
@@ -79,10 +136,9 @@
 <a href="https://qm.qq.com/q/cuLGbwUx4A" target="_blank" rel="noopener noreferrer">加入QQ群</a>
 <button class="text-link" type="button" data-copy-group>复制群号</button>
 <span role="status" data-copy-status></span>
-<a href="https://github.com/LiuDaCheng666/orange-zomboid-launcher">GitHub 源码 ↗</a>
-<a href="https://github.com/LiuDaCheng666/orange-zomboid-launcher/issues">反馈问题 ↗</a>
-<a href="https://beian.miit.gov.cn/">辽ICP备2026024866号-1</a>
+<a href="https://qm.qq.com/q/cuLGbwUx4A" target="_blank" rel="noopener noreferrer">QQ群反馈问题 ↗</a>
 </div>
+<div class="site-legal"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">辽ICP备2026024866号-1</a></div>
 </footer>
 </body>
 </html>

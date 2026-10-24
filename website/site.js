@@ -1,7 +1,6 @@
 'use strict';
 (() => {
   const repository = 'https://github.com/LiuDaCheng666/orange-zomboid-launcher';
-  const latest = repository + '/releases/latest';
   const status = document.querySelector('[data-release-status]');
   document.querySelector('[data-copy-group]')?.addEventListener('click', async () => {
     const message = document.querySelector('[data-copy-status]');
@@ -44,32 +43,34 @@
   }
   if (!status) return;
   const features = {
-    home: ['启动游戏与管理存档', '启动前选好配置和目标，不用每次重新整理模组。', [
-      '进入主菜单，或选择指定存档、服务器启动',
-      '查看存档封面、游玩记录与各存档的模组清单',
-      '删除不用的存档，移到系统回收站'
+    home: ['每个存档，都有自己的模组清单', '在启动器里选择要继续的存档，查看并修改它使用的模组。不同存档可以保留不同的模组组合。', [
+      '查看存档封面和游玩记录，选中存档后直接启动',
+      '为所选存档添加、移除模组或调整加载顺序，单独保存清单',
+      '删除不再使用的存档时，将其移入系统回收站'
     ]],
-    components: ['核心组件安装与更新', '三个核心组件放在一起，其他扩展按你的需要选择。', [
-      '安装 ZombieBuddy 框架、Viewpoint 3D 和中文汉化',
-      '查看已装版本、启用状态与可用更新',
-      '按组件安装、卸载，或一键恢复全部组件'
+    components: ['3D 模组，一键启用或卸载', '在组件页面安装并启用 Viewpoint 3D；不想使用时，点击卸载即可关闭。汉化和其他组件也能分别管理。', [
+      '一键安装并启用 Viewpoint 3D，按提示补齐所需的 ZombieBuddy 框架',
+      '一键卸载 3D 模组；中文汉化可单独安装，移除 Viewpoint 后保留 Buddy',
+      '查看各组件的安装状态和版本，按需更新或卸载'
     ]],
-    mods: ['模组配置与依赖排序', '看封面、看介绍、查依赖，为不同玩法保存不同配置。', [
-      '搜索本地模组，查看封面、作者、版本与前置依赖',
-      '检查缺失依赖，预览自动排序，也能手动调整顺序',
-      '保存多套配置，为不同存档整理各自的模组清单'
+    mods: ['保存多套模组清单，换玩法时直接选', '把常用的模组组合保存为命名配置，按玩法选择要启用的清单，并为不同存档整理各自的模组。', [
+      '搜索本地模组，查看封面、介绍、作者和前置依赖',
+      '添加或移除清单中的模组，检查缺失依赖，预览自动排序或手动调整',
+      '保存多套启用配置，切换玩法时选择并应用，不用逐个重新勾选'
     ]],
-    servers: ['服务器列表与公开大厅', '个人列表、游戏收藏与公开大厅，放在同一个地方。', [
-      '保存服务器地址、端口与角色登录信息',
-      '查看在线人数与延迟，搜索、筛选和排序公开大厅',
-      '选择服务器启动，连接时使用服务器下发的模组清单'
+    servers: ['选服直连，提前下载服务器模组', '在启动器里选择服务器即可发起连接。联机时客户端必须按服务器下发的模组清单和顺序加载，普通单机模组会临时排除。', [
+      '保存常玩的服务器和登录信息，或在公开大厅按人数、延迟筛选',
+      '第一次连接：记录服务器下发的工坊模组清单，供下次下载使用',
+      '下次进服前：打开该服务器的“模组清单”，点击“订阅并下载”，提前下载清单内的全部工坊模组',
+      '连接时保留已启用的 3D 和汉化；服务器清单有变化时，以本次连接下发的最新清单为准'
     ]],
-    maintenance: ['内存设置与工坊维护', '任务进行到哪一步、哪里出错，在进度和日志里查看。', [
-      '自动读取总内存与当前设置，调整 Java 启动内存',
-      '清理缓存，调用 Steam 重新下载工坊模组',
-      '跟踪操作进度、完成结果与详细日志'
+    maintenance: ['修改内存、清缓存、重下模组，一处完成', '首页“常用工具”集中提供三个入口。内存修改保存后在下次启动生效；清理和重下载会先说明处理范围，再确认执行。', [
+      '一键打开内存设置，选择游戏可用的内存大小并保存，可参考按系统总内存计算的推荐值',
+      '一键清除多人地图缓存，重新获取地图区块，保留角色与车辆数据库',
+      '一键重新下载工坊模组：清除本游戏的工坊模组文件后，由 Steam 重下已订阅项目，保留订阅；进度和结果可在任务中心查看'
     ]]
   };
+  const helpSections = { home: 'saves', components: 'tools', mods: 'saves', servers: 'servers', maintenance: 'tools' };
   const tabs = [...document.querySelectorAll('[role="tab"]')];
   const panel = document.querySelector('[role="tabpanel"]');
   const theme = document.querySelector('select[aria-label="预览主题"]');
@@ -105,6 +106,7 @@
     panel.setAttribute('aria-labelledby', 'tab-' + id);
     document.querySelector('[data-feature-title]').textContent = features[id][0];
     document.querySelector('[data-feature-description]').textContent = features[id][1];
+    document.querySelector('[data-feature-help]').href = '/help#' + helpSections[id];
     const points = document.querySelector('[data-feature-points]');
     points.replaceChildren(...features[id][2].map(text => {
       const item = document.createElement('li'); item.textContent = text; return item;
@@ -168,7 +170,6 @@
     for (const kind of ['setup', 'portable']) {
       const file = data[kind];
       document.querySelectorAll(`[data-download="${kind}"]`).forEach(link => { link.href = file.url; });
-      document.querySelector(`[data-github="${kind}"]`).href = file.github;
       document.querySelector(`[data-file-meta="${kind}"]`).textContent = `${(file.length / 1048576).toFixed(1)} MiB · Windows x64`;
       document.querySelector(`[data-hash="${kind}"]`).textContent = file.sha256.toUpperCase();
     }
@@ -185,8 +186,7 @@
     .then(response => { if (!response.ok) throw Error('Release unavailable'); return response.json(); })
     .then(validate).then(show)
     .catch(() => {
-      document.querySelectorAll('[data-download]').forEach(link => { link.href = latest; });
-      status.textContent = '版本信息暂不可用 · 可从 GitHub 下载';
-      document.querySelectorAll('[data-hash]').forEach(item => { item.textContent = '请在 GitHub 发布页查看 SHA-256'; });
+      status.textContent = '版本信息暂不可用，可继续下载页面提供的版本，或稍后刷新重试。';
+      document.querySelectorAll('[data-hash]').forEach(item => { item.textContent = '校验信息暂不可用，请稍后刷新重试。'; });
     }).finally(() => clearTimeout(timeout));
 })();
