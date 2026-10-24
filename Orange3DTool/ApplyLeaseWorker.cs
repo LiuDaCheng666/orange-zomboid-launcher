@@ -35,7 +35,7 @@ namespace PZ3D {
    string self=typeof(ApplyLeaseWorker).Assembly.Location;var file=DistributionBootstrap.Read(current,CoreUpdateTrust.PublicKeyXml).Single(f=>f.path=="橙子启动器.exe");
    string expected=Path.Combine(DistributionPaths.ExecutingRoot(root,local),"BackgroundWorkers",file.sha256.ToLowerInvariant(),"橙子启动器.exe");
    if(!CoreDeployment.SamePath(expected,self)||!CoreDeployment.Matches(self,file))throw new IOException("Update lease image is not authenticated.");
-   LauncherMaintenance.NoReparse(r.Package);LauncherMaintenance.NoReparse(r.Updater);NativeApplyGuard.Check(root,current,parent.Id);
+   LauncherMaintenance.NoReparse(r.Package);LauncherMaintenance.NoReparse(r.Updater);NativeApplyGuard.Activation(current);NativeApplyGuard.Check(root,current,parent.Id);
   }
   internal static void ValidateCommand(ApplyLeaseRequest r,int parent,string[] args){
    var expected=new[]{"--silent","apply","--package",r.Package,"--waitPid",parent.ToString(),"--rootDir",r.Root,"--packageDir",Path.GetDirectoryName(r.Package)};
