@@ -14,6 +14,7 @@ namespace PZ3D {
    if(!request.TryGetValue("payload",out payload)||!(payload is Dictionary<string,object>))throw new Exception("操作参数必须是对象。");
    if(ModernController.ServerWorkshopAction((string)action))ValidateWorkshopPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="openContact")LauncherContact.Resolve((Dictionary<string,object>)payload);
+   if((string)action=="maintenance")ValidateMaintenancePayload((Dictionary<string,object>)payload);
    if(PlayProfiles.Action((string)action))PlayProfiles.ValidatePayload((string)action,(Dictionary<string,object>)payload);
    if(CoreAction((string)action)) {
     var p=(Dictionary<string,object>)payload;object protocol,confirmed,drafts;
@@ -35,6 +36,7 @@ namespace PZ3D {
   internal static void ValidateSaveDeletionPayload(string action,Dictionary<string,object> p){object id,stamp,confirmed;bool preview=action=="saveDeletePreview";if(p.Count!=(preview?1:3)||!p.TryGetValue("id",out id)||!(id is string)||!SaveDeletion.ValidId((string)id))throw new InvalidOperationException("删除存档只接受本机存档标识，不能提供路径。");if(!preview&&(!p.TryGetValue("stamp",out stamp)||!(stamp is string)||!SaveDeletion.ValidStamp((string)stamp)||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed))throw new InvalidOperationException("删除存档需要有效预览凭据和明确确认。");}
   internal static bool BuddyAction(string action){return action=="buddyPreview"||action=="buddyTakeover"||action=="buddyRecover";}
   internal static void ValidateAutoSortPayload(Dictionary<string,object> p){object confirmed;if(p.Count!=1||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed)throw new Exception("自动排序需要明确确认，且只调整当前默认清单的顺序。");}
+  internal static void ValidateMaintenancePayload(Dictionary<string,object> p){object kind,confirmed;if(p==null||p.Count!=2||!p.TryGetValue("kind",out kind)||!(kind is string)||!new[]{"cache","cacheAll","workshop"}.Contains((string)kind)||!p.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed)throw new Exception("维护操作只接受已明确确认的 cache、cacheAll 或 workshop 类型，界面不能提供目标路径。");}
   internal static string ValidatePreflightPayload(Dictionary<string,object> payload){object kind;if(payload.Count==0)return "normal";if(payload.Count==1&&payload.TryGetValue("targetKind",out kind)&&kind is string&&new[]{"normal","save","server"}.Contains((string)kind))return (string)kind;throw new Exception("启动预检只接受空对象或明确的 normal/save/server 类型，界面不能提供路径、凭据或授权决定。");}
   internal static void ValidateBuddyPayload(string action,Dictionary<string,object> p){
    if(action=="buddyPreview"){if(p.Count!=0)throw new Exception("扫描旧启动参数不接受页面目标参数。");return;}

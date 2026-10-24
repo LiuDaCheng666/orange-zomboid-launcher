@@ -40,7 +40,8 @@ try {
   if($files.Count -ne 20){throw 'Fixture bootstrap inventory must remain exactly20'}
   $raw=[Text.Encoding]::UTF8.GetBytes(([ordered]@{schema=1;version=$version;files=$files}|ConvertTo-Json -Depth 5 -Compress))
   [IO.File]::WriteAllBytes("$app/velopack-bootstrap.json",$raw);[IO.File]::WriteAllBytes("$app/velopack-bootstrap.sig",$rsa.SignData($raw,'SHA256'))
-  & $deps.VpkExecutable @($deps.VpkArguments) pack --packId $appId --packVersion $version --packDir $app --outputDir $release --channel win --runtime win-x64 --mainExe '橙子启动器.exe' --framework net48 --delta None --shortcuts None --skip-updates --legacyConsole --yes *> "$evidence/pack-$version.log"
+  $displayTitle=if($version -eq '1.0.0'){$appId}else{'橙子启动器'}
+  & $deps.VpkExecutable @($deps.VpkArguments) pack --packId $appId --packTitle $displayTitle --packVersion $version --packDir $app --outputDir $release --channel win --runtime win-x64 --mainExe '橙子启动器.exe' --framework net48 --delta None --shortcuts None --skip-updates --legacyConsole --yes *> "$evidence/pack-$version.log"
   if($LASTEXITCODE){throw "Actual vpk pack failed: $version"}
  }
  $portable=Join-Path $fixture 'portable';$installed=Join-Path $fixture 'installed';$game=Join-Path $fixture 'game'
@@ -75,6 +76,7 @@ try {
  if(-not $parent.WaitForExit(30000) -or $parent.ExitCode -ne 0){throw 'Real backend parent failed; inspect runtime fixture-error.txt'}
  Wait-Lifecycle {Test-Path "$state/restarted.txt"} 45
  if([IO.File]::ReadAllText("$state/restarted.txt") -ne '1.0.1'){throw 'Actual restart did not reach target version'}
+ if(-not(Test-Path "$portable/橙子启动器.exe")){throw 'Chinese root execution stub missing after title-changing native update'}
  $monitorId=[int][IO.File]::ReadAllText("$state/monitor-pid.txt");$monitor=Get-Process -Id $monitorId -ErrorAction Stop;$monitorImage=[IO.File]::ReadAllText("$state/monitor-image.txt");$owned+=@{Process=$monitor;Image=$monitorImage}
  if($monitorImage.StartsWith($portable,[StringComparison]::OrdinalIgnoreCase) -or $gameProcess.HasExited){throw 'Monitor/game did not survive native root force-stop'}
  $before=Read-Playtime "$state/player/playtime/time.json";Start-Sleep -Milliseconds 2200;$after=Read-Playtime "$state/player/playtime/time.json"

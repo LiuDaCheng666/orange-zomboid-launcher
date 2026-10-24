@@ -45,7 +45,7 @@ namespace PZ3D {
   }
  }
  internal sealed class InstallerForm:Form {
-  readonly Func<string,Action<InstallerProgress>,InstallerInstallResult> install;
+  readonly Func<string,bool,Action<InstallerProgress>,InstallerInstallResult> install;
   readonly Action<InstallerInstallResult> openLauncher;
   readonly Func<InstallerInstallResult,InstallerShortcutResult> createShortcut;
   readonly CheckBox desktopShortcut;readonly Label shortcutOutcome;
@@ -54,7 +54,8 @@ namespace PZ3D {
   readonly TableLayoutPanel body;readonly Panel scroll;readonly LauncherTheme theme=LauncherTheme.Create(false);
   bool busy,terminal;InstallerInstallResult completed;internal int ExitCode;
   internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open):this(recommendation,backend,open,null){}
-  internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open,Func<InstallerInstallResult,InstallerShortcutResult> shortcut) {
+  internal InstallerForm(InstallerDestination recommendation,Func<string,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open,Func<InstallerInstallResult,InstallerShortcutResult> shortcut):this(recommendation,(root,desktop,progress)=>backend(root,progress),open,shortcut){}
+  internal InstallerForm(InstallerDestination recommendation,Func<string,bool,Action<InstallerProgress>,InstallerInstallResult> backend,Action<InstallerInstallResult> open,Func<InstallerInstallResult,InstallerShortcutResult> shortcut) {
    install=backend;openLauncher=open;createShortcut=shortcut;Text="安装 OZL · "+AppVersion.Current;BackColor=theme.Background;ForeColor=theme.Text;Font=new Font("Microsoft YaHei UI",10);AutoScaleMode=AutoScaleMode.Font;StartPosition=FormStartPosition.CenterScreen;
    var area=Screen.PrimaryScreen.WorkingArea;Size=new Size(Math.Min(800,Math.Max(400,area.Width-40)),Math.Min(610,Math.Max(340,area.Height-60)));
    try{Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch{}
@@ -101,7 +102,7 @@ namespace PZ3D {
    if(busy||terminal)return;string root;
    try{root=InstallerDestinationPolicy.ValidateInstallRoot(destination.Text);}catch(Exception error){ExitCode=1;status.Text="请更改安装位置："+error.Message;details.Text="安装位置校验失败（尚未创建目录）：\r\n"+error;details.Visible=true;copy.Visible=true;detailsToggle.Text="收起详情";WrapLabels();return;}
    bool wantsShortcut=desktopShortcut.Checked;busy=true;ExitCode=0;destination.Enabled=false;browse.Enabled=false;desktopShortcut.Enabled=false;installButton.Enabled=false;installButton.Text="正在安装…";status.Text="正在校验安装包";progress.Style=ProgressBarStyle.Marquee;progress.MarqueeAnimationSpeed=25;
-   Task.Run(()=>{try{var result=install(root,p=>Post(()=>{if(busy&&!terminal)ShowProgress(p);}));if(result==null||!CoreDeployment.SamePath(root,result.Root))throw new InvalidOperationException("安装结果与所选目录不一致。");InstallerShortcutResult shortcutResult=null;if(wantsShortcut&&createShortcut!=null){try{shortcutResult=createShortcut(result);if(shortcutResult==null)throw new InvalidOperationException("未返回快捷方式结果。");}catch(Exception error){shortcutResult=new InstallerShortcutResult(false,"","桌面快捷方式未创建："+error.Message);}}Post(()=>CompleteInstall(root,result,shortcutResult,wantsShortcut));}catch(Exception error){Post(()=>{busy=false;ShowFailure(error);});}});
+   Task.Run(()=>{try{var result=install(root,wantsShortcut,p=>Post(()=>{if(busy&&!terminal)ShowProgress(p);}));if(result==null||!CoreDeployment.SamePath(root,result.Root))throw new InvalidOperationException("安装结果与所选目录不一致。");InstallerShortcutResult shortcutResult=null;if(wantsShortcut&&createShortcut!=null){try{shortcutResult=createShortcut(result);if(shortcutResult==null)throw new InvalidOperationException("未返回快捷方式结果。");}catch(Exception error){shortcutResult=new InstallerShortcutResult(false,"","桌面快捷方式未创建："+error.Message);}}Post(()=>CompleteInstall(root,result,shortcutResult,wantsShortcut));}catch(Exception error){Post(()=>{busy=false;ShowFailure(error);});}});
   }
   void CompleteInstall(string root,InstallerInstallResult result,InstallerShortcutResult shortcutResult,bool wantsShortcut){
    try{

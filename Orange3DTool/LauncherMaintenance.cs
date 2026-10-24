@@ -52,13 +52,53 @@ namespace PZ3D {
    if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");
    Normalize(config,value);NoReparse(e.Data);string backupDir=Path.Combine(e.Data,"backups","heap-"+DateTime.UtcNow.ToString("yyyyMMddHHmmss")+"-"+Guid.NewGuid().ToString("N"));NoReparse(backupDir);Directory.CreateDirectory(backupDir);
    string backup=Path.Combine(backupDir,"ProjectZomboid64.json"),temp=e.Config+".heap-"+Guid.NewGuid().ToString("N")+".tmp";
-   try{File.WriteAllText(temp,new JavaScriptSerializer().Serialize(config),new UTF8Encoding(false));if(e.Progress!=null)e.Progress(-1,"准备原子写入堆内存配置");e.GuardHeap();NoReparse(e.Config);if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");ValidateHeapBudget(value,memoryProvider);File.Replace(temp,e.Config,backup);e.LastBackup=backupDir;}
+   try{
+    File.WriteAllText(temp,new JavaScriptSerializer().Serialize(config),new UTF8Encoding(false));
+    // The game and launcher data may be on different volumes. ReplaceFile cannot
+    // move its displaced file to a backup on another volume, so persist the exact
+    // snapshot first and keep the atomic replacement entirely beside the game.
+    using(var output=new FileStream(backup,FileMode.CreateNew,FileAccess.Write,FileShare.None)){output.Write(before,0,before.Length);output.Flush(true);}
+    if(e.Progress!=null)e.Progress(-1,"准备原子写入堆内存配置");e.GuardHeap();NoReparse(e.Config);if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");ValidateHeapBudget(value,memoryProvider);File.Replace(temp,e.Config,null);e.LastBackup=backupDir;
+   }
    finally{if(File.Exists(temp))File.Delete(temp);}
    return "最大堆内存已设为 "+value+" GiB；已备份启动配置："+backup;
   }
-  static bool Number(string value){return Regex.IsMatch(value,@"^-?(0|[1-9][0-9]*)$");}
-  internal static string[] ChunkTargets(Engine e){string mp=Path.Combine(e.User,"Saves","Multiplayer");NoReparse(mp);var files=new List<string>();if(!Directory.Exists(mp))return files.ToArray();foreach(string server in Directory.GetDirectories(mp)){NoReparse(server);string map=Path.Combine(server,"map");NoReparse(map);if(!Directory.Exists(map))continue;foreach(string x in Directory.GetDirectories(map)){NoReparse(x);if(!Number(Path.GetFileName(x)))continue;foreach(string f in Directory.GetFiles(x)){NoReparse(f);if(Path.GetExtension(f)==".bin"&&Number(Path.GetFileNameWithoutExtension(f)))files.Add(f);}}}return files.ToArray();}
-  public static string ClearMultiplayerCache(Engine e){e.GuardMaintenance();string[] files=ChunkTargets(e);int count=0;foreach(string f in files){e.GuardMaintenance();NoReparse(f);File.Delete(f);count++;if(e.Progress!=null)e.Progress(count*100/files.Length,"清理联机区块缓存 "+count+" / "+files.Length);}return "已清理 "+count+" 个已核实的联机地图区块缓存。保留角色、车辆数据库、地图标记、其他存档和本地模组；重连时由服务器重新发送区块。";}
+  static bool Number(string value){int number;return int.TryParse(value,System.Globalization.NumberStyles.AllowLeadingSign,System.Globalization.CultureInfo.InvariantCulture,out number)&&number.ToString(System.Globalization.CultureInfo.InvariantCulture)==value;}
+  internal static string[] ChunkTargets(Engine e){
+   string mp=Path.Combine(e.User,"Saves","Multiplayer");NoReparse(mp);var files=new List<string>();if(!Directory.Exists(mp))return files.ToArray();
+   foreach(string server in Directory.GetDirectories(mp)){
+    NoReparse(server);
+    // Legacy clients used save-root map_x_y.bin; never scan arbitrary subfolders.
+    foreach(string f in Directory.GetFiles(server)){NoReparse(f);var m=Regex.Match(Path.GetFileName(f),@"\Amap_([^_]+)_([^_]+)\.bin\z",RegexOptions.CultureInvariant);if(m.Success&&Number(m.Groups[1].Value)&&Number(m.Groups[2].Value))files.Add(f);}
+    // Verified in B42.21 zombie.ChunkMapFilenames.getFilename(int,int): map/x/y.bin.
+    string map=Path.Combine(server,"map");NoReparse(map);if(!Directory.Exists(map))continue;
+    foreach(string x in Directory.GetDirectories(map)){NoReparse(x);if(!Number(Path.GetFileName(x)))continue;foreach(string f in Directory.GetFiles(x)){NoReparse(f);if(Path.GetExtension(f)==".bin"&&Number(Path.GetFileNameWithoutExtension(f)))files.Add(f);}}
+   }
+   return files.ToArray();
+  }
+  public static string ClearMultiplayerCache(Engine e){
+   e.GuardMaintenance();string[] files=ChunkTargets(e);
+   if(files.Length==0)return "未发现可清理的联机地图区块缓存；未删除任何文件。仅识别旧版 map_x_y.bin 和新版 map/x/y.bin 区块文件；存档目录、角色和车辆数据库、地图标记及世界元数据会保留。";
+   int count=0;foreach(string f in files){e.GuardMaintenance();NoReparse(f);File.Delete(f);count++;if(e.Progress!=null)e.Progress(count*100/files.Length,"清理联机区块缓存 "+count+" / "+files.Length);}
+   return "已清理 "+count+" 个已核实的联机地图区块缓存。保留角色、车辆数据库、地图标记、其他存档和本地模组；重连时由服务器重新发送区块。";
+  }
+  static void MultiplayerChild(string root,string path){if(!Path.GetFullPath(path).StartsWith(root+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new Exception("多人本地数据路径超出允许清理的目录。");NoReparse(path);}
+  public static string ClearAllMultiplayerData(Engine e){
+   int removedFiles=0,removedDirectories=0;
+   try{
+    e.GuardMaintenance();string mp=Path.GetFullPath(Path.Combine(e.User,"Saves","Multiplayer"));NoReparse(mp);
+    if(!Directory.Exists(mp))return "未发现多人本地数据；未删除任何文件或目录（0 个文件、0 个目录）。";
+    var files=new List<string>();var directories=new List<string>();var pending=new Stack<string>();pending.Push(mp);
+    // Inspect the complete tree before deleting anything, including unknown subfolders.
+    while(pending.Count>0){string dir=pending.Pop();NoReparse(dir);foreach(string f in Directory.GetFiles(dir)){MultiplayerChild(mp,f);files.Add(f);}foreach(string child in Directory.GetDirectories(dir)){MultiplayerChild(mp,child);directories.Add(child);pending.Push(child);}}
+    int total=files.Count+directories.Count;if(total==0)return "未发现需要彻底清除的多人本地数据；未删除任何文件或目录（0 个文件、0 个目录）。";
+    foreach(string f in files){e.GuardMaintenance();MultiplayerChild(mp,f);if(!File.Exists(f))continue;File.Delete(f);removedFiles++;if(e.Progress!=null)e.Progress((removedFiles+removedDirectories)*100/total,"彻底清除多人本地数据：已删除 "+removedFiles+" 个文件、"+removedDirectories+" 个目录");}
+    // Every child is listed after its parent; reverse order permits nonrecursive deletes.
+    for(int i=directories.Count-1;i>=0;i--){string dir=directories[i];e.GuardMaintenance();MultiplayerChild(mp,dir);if(!Directory.Exists(dir))continue;Directory.Delete(dir,false);removedDirectories++;if(e.Progress!=null)e.Progress((removedFiles+removedDirectories)*100/total,"彻底清除多人本地数据：已删除 "+removedFiles+" 个文件、"+removedDirectories+" 个目录");}
+    e.GuardMaintenance();NoReparse(mp);if(Directory.GetFileSystemEntries(mp).Length!=0)throw new Exception("多人目录在清理期间发生变化，请退出占用后重试。");
+    return "已彻底清除多人本地数据：删除 "+removedFiles+" 个文件、"+removedDirectories+" 个目录。下次进服将重新同步服务器数据；服务器未保存的本地角色数据和地图标记无法恢复。";
+   }catch(Exception ex){throw new Exception("彻底清除多人本地数据未完成；已删除 "+removedFiles+" 个文件、"+removedDirectories+" 个目录。请退出占用后重试；已删除的本地数据无法自动恢复。原因："+ex.Message,ex);}
+  }
   public static string RebuildWorkshop(Engine e,Action<int,string> progress,CancellationToken cancel){e.GuardMaintenance();cancel.ThrowIfCancellationRequested();return LauncherWorkshopRebuild.Start(e,progress,cancel);}
  }
 }

@@ -65,7 +65,7 @@ async function sent(page,action){await page.waitForFunction(a=>window.sent.some(
 const tests=[];function test(name,fn){tests.push({name,fn});}
 test('eleven navigable routes remain visible in both themes and narrow windows',async browser=>{
   const shots=path.resolve(__dirname,'../../artifacts/full-ui-shots');fs.mkdirSync(shots,{recursive:true});
-  for(const theme of ['dark','light']){const {page,errors}=await setup(browser,theme);assert.equal(await page.locator('nav [data-page]').count(),6);
+  for(const theme of ['dark','light']){const {page,errors}=await setup(browser,theme);assert.equal(await page.locator('nav [data-page]').count(),7);
     for(const viewport of [{width:1100,height:760},{width:733,height:507},{width:500,height:760}]){await page.setViewportSize(viewport);
       for(const name of routes){await route(page,name);await page.waitForTimeout(30);assert.equal(await page.locator('#page').getAttribute('data-route'),name);assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,name+' overflow');assert.equal(await page.locator('nav [data-page="help"]').evaluate(e=>e.getBoundingClientRect().bottom<=innerHeight),true,'navigation visible');if(viewport.width===1100)await page.screenshot({path:path.join(shots,`${theme}-${name}.png`)});}
     }assert.deepEqual(errors,[]);await page.close();}
@@ -154,4 +154,6 @@ if(require.main===module)tests.push(...require('./fluent-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./copy-contact-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./server-workshop-ui-tests.cjs').tests);
 if(require.main===module)tests.push(...require('./final-fix-ui-tests.cjs').tests);
+if(require.main===module)tests.push(...require('./memory-recovery-ui-tests.cjs').tests);
+if(require.main===module)tests.push(...require('./cache-cleanup-ui-tests.cjs').tests);
 if(require.main===module)(async()=>{const browser=await playwright.chromium.launch({channel:process.env.ORANGE_BROWSER_CHANNEL||'msedge',headless:true});let failed=0;try{for(const {name,fn} of tests){try{await fn(browser);console.log('PASS '+name);}catch(e){failed++;console.error('FAIL '+name+'\n'+e.stack);}}}finally{await browser.close();}console.log(`${tests.length-failed}/${tests.length} full UI test groups passed`);if(failed)process.exitCode=1;})().catch(e=>{console.error(e);process.exitCode=1});

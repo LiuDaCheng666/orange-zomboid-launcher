@@ -1,6 +1,7 @@
-function Test-OzlVelopackArchives {
+﻿function Test-OzlVelopackArchives {
  param([string]$ReleaseDirectory,[string]$PublicKey,[string]$Version)
  Add-Type -AssemblyName System.IO.Compression.FileSystem
+ $stubTitle=if([Version]$Version -ge [Version]'1.2.16'){'橙子启动器'}else{'OrangeZomboidLauncher'}
  $rsa=[Security.Cryptography.RSACryptoServiceProvider]::new()
  try {
   $rsa.PersistKeyInCsp=$false; $rsa.FromXmlString([IO.File]::ReadAllText($PublicKey))
@@ -16,9 +17,9 @@ function Test-OzlVelopackArchives {
     $allowed=@{}; foreach($file in $manifest.files){$allowed[$item[1]+$file.path]=$true}
     foreach($name in @('velopack-bootstrap.json','velopack-bootstrap.sig','sq.version')){$allowed[$item[1]+$name]=$true}
     if($item[1] -eq 'current/'){
-     foreach($name in @('.portable','Update.exe','OrangeZomboidLauncher.exe')){$allowed[$name]=$true}
+     foreach($name in @('.portable','Update.exe',($stubTitle+'.exe'))){$allowed[$name]=$true}
     } else {
-     foreach($name in @('[Content_Types].xml','OrangeZomboidLauncher.nuspec','_rels/.rels','lib/app/Squirrel.exe','lib/app/OrangeZomboidLauncher_ExecutionStub.exe')){$allowed[$name]=$true}
+     foreach($name in @('[Content_Types].xml','OrangeZomboidLauncher.nuspec','_rels/.rels','lib/app/Squirrel.exe',('lib/app/'+$stubTitle+'_ExecutionStub.exe'))){$allowed[$name]=$true}
     }
     foreach($name in $entries.Keys){if(-not $allowed.ContainsKey($name)){throw "Unexpected packaged file: $name"}}
     foreach($file in $manifest.files){
@@ -28,7 +29,7 @@ function Test-OzlVelopackArchives {
     }
     foreach($name in $entries.Keys){if($name -match '(\u6a59\u5b50\u66f4\u65b0\u52a9\u624b|\u5378\u8f7d\u6a59\u5b50\u542f\u52a8\u5668)\.exe$'){throw 'Legacy auxiliary found in Velopack artifact'}}
     if($item[1] -eq 'current/'){
-     foreach($name in @('.portable','Update.exe','OrangeZomboidLauncher.exe')){if(-not $entries.ContainsKey($name)){throw "Missing framework portable file: $name"}}
+     foreach($name in @('.portable','Update.exe',($stubTitle+'.exe'))){if(-not $entries.ContainsKey($name)){throw "Missing framework portable file: $name"}}
     }
    } finally {$archive.Dispose()}
   }

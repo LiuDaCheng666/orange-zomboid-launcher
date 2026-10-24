@@ -1,25 +1,24 @@
 {
   "distribution": "velopack",
-  "version": "1.2.15",
+  "version": "1.2.16",
   "date": "2026-10-24",
   "notes": [
-    "启动器安装与更新改用本地 Velopack 框架，继续提供安装版和完整免安装 ZIP；新发行包不再包含自制更新助手和卸载器，保留框架所需的官方 Update.exe。",
-    "程序内继续检查、下载、明确确认后一步更新并重启。更新完整应用包，验证签名、长度、SHA-256 和版本；优先 orangezl.com，仅传输失败时回退同一项目的 GitHub，校验失败直接报错。",
-    "可变运行数据放在 current 之外，执行中的监控副本放入用户本地缓存，保留个人配置、游戏、存档与工坊文件。1.2.14 及更早版首次迁移需将完整新版安装或解压到新的独立目录；此后使用新版程序内更新。",
-    "修复 Steam 配置中的普通文本含制表符或换行时，被误报为启动配置无法解析的问题；保留原始编码及其他字段。",
-    "修改游戏内存不再依赖 Steam 登录、Steam 配置解析或启动参数检查。保存后重新读取实际游戏配置，Steam 启动选项变化也不会让内存编辑失效。",
-    "保留当前 UI、总内存推荐算法、游戏配置备份和文件实际写入错误反馈。"
+    "修复游戏与启动器备份位于不同磁盘时，保存内存报“无法删除要被替换的文件”的问题；先保留完整原始备份，再在游戏所在磁盘原子写入配置。",
+    "修复保存失败后长时间停留“保存中”的问题；失败后保留编辑内容，可继续修改、重试或重新读取。",
+    "恢复安装前选择目录，优先推荐非系统固定盘；安装版快捷方式显示“橙子启动器”。安装、更新与卸载继续由官方 Velopack 执行。",
+    "左侧一级菜单增加“内存”，“维护与恢复”改为“修复”。",
+    "多人地图缓存同时识别旧版 map_x_y.bin 与新版 map/x/y.bin；没有区块文件时明确提示未删除。增加“彻底清除”选项，确认后删除本机多人目录的全部内容，包括角色缓存、车辆和地图标记；服务器端存档、单人存档和模组保留，本地标记等内容可能无法恢复。"
   ],
   "setup": {
-    "url": "/releases/v1.2.15/OrangeZomboidLauncher-win-Setup.exe",
-    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.15/OrangeZomboidLauncher-win-Setup.exe",
-    "length": 22352314,
-    "sha256": "C246F2B97BD01FCC753DB6E9A1DE99648EB7E59773445B08A1BC8E744A2884DB"
+    "url": "/releases/v1.2.16/OrangeZomboidLauncher-win-Setup.exe",
+    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.16/OrangeZomboidLauncher-win-Setup.exe",
+    "length": 23314432,
+    "sha256": "ABBC684DE4712ECB758D7B5EFC205843FEBCACF8959DFA79B58F8A614B12B3CD"
   },
   "portable": {
-    "url": "/releases/v1.2.15/OrangeZomboidLauncher-win-Portable.zip",
-    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.15/OrangeZomboidLauncher-win-Portable.zip",
-    "length": 14837104,
-    "sha256": "38F18A6E434607AA46C7547DA194BB484BD3627E03C3B66DDA486B5D83C7E06D"
+    "url": "/releases/v1.2.16/OrangeZomboidLauncher-win-Portable.zip",
+    "github": "https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v1.2.16/OrangeZomboidLauncher-win-Portable.zip",
+    "length": 14839613,
+    "sha256": "0C33A190F22F786F08E2FE646CC8A6CC348B3479356C6DD3F3A4E27DDED61650"
   }
 }

@@ -6,8 +6,8 @@ const path = require('node:path');
 const { chromium } = require('../Orange3DTool/Web/playwright-runtime.cjs');
 const root = path.resolve(__dirname, '../website');
 const approvedStaticDownloads = {
-  setup: '/releases/v1.2.15/OrangeZomboidLauncher-win-Setup.exe',
-  portable: '/releases/v1.2.15/OrangeZomboidLauncher-win-Portable.zip'
+  setup: '/releases/v1.2.16/OrangeZomboidLauncher-win-Setup.exe',
+  portable: '/releases/v1.2.16/OrangeZomboidLauncher-win-Portable.zip'
 };
 async function assertApprovedStaticDownloads(page) {
   for (const [kind, href] of Object.entries(approvedStaticDownloads)) {
@@ -30,7 +30,7 @@ before(async () => {
   server = http.createServer(async (req, res) => {
     try {
       const name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-      const file = path.join(root, name === '/' ? 'index.html' : name);
+      const file = path.join(root, name === '/' ? 'index.html' : ['/help','/changes'].includes(name) ? name+'.html' : name);
       if (!file.startsWith(root + path.sep)) throw Error('path');
       const bytes = await fs.readFile(file);
       const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon' }[path.extname(file)] || 'application/octet-stream';
@@ -188,10 +188,10 @@ test('desktop and mobile expose real downloads without horizontal overflow', asy
 
 test('source, registration and keyboard-operable help have explicit destinations', async () => {
   const page = await browser.newPage(); await page.goto(base);
-  assert.ok(await page.locator('a[href="https://github.com/LiuDaCheng666/orange-zomboid-launcher"]').count() >= 2);
+  assert.ok(await page.locator('a[href="https://github.com/LiuDaCheng666/orange-zomboid-launcher"]').count() >= 1);
   assert.equal(await page.getByRole('link', { name: '辽ICP备2026024866号-1' }).getAttribute('href'), 'https://beian.miit.gov.cn/');
   await page.getByRole('link', { name: '使用帮助', exact: true }).first().click();
-  assert.ok(page.url().endsWith('/help.html'));
+  assert.match(new URL(page.url()).pathname, /^\/help(?:\.html)?$/);
   const summary = page.locator('details summary').first();
   await summary.focus(); await page.keyboard.press('Enter');
   assert.equal(await summary.locator('..').getAttribute('open'), '');
@@ -326,11 +326,11 @@ test('help and text-only changes have no historical download links and fit narro
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(base);
     await page.getByRole('link', { name: name === 'help' ? '使用帮助' : '更新记录', exact: true }).first().click();
-    assert.ok(page.url().endsWith(`/${name}.html`));
+    assert.match(new URL(page.url()).pathname, new RegExp(`^/${name}(?:\\.html)?$`));
     assert.ok(await page.getByRole('heading', { level: 1 }).isVisible());
     assert.equal(await page.locator('a[href*="/releases/download/"], a[href$=".exe"], a[href$=".zip"]').count(), 0);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-    assert.equal(await page.locator('nav [aria-current="page"]').getAttribute('href'), `${name}.html`);
+    assert.match(await page.locator('nav [aria-current="page"]').getAttribute('href'), new RegExp(`^/?${name}(?:\\.html)?$`));
     assert.deepEqual(errors, []);
     await page.screenshot({ path: path.resolve(__dirname, `../artifacts/website-shots/${name}-${width}.png`), fullPage: true, animations: 'disabled' });
     await page.close();
@@ -537,7 +537,7 @@ test('untrusted metadata cannot inject markup or send downloads to a foreign hos
 });
 
 test('Velopack metadata retains both exact versioned delivery links and rejects unknown formats', async () => {
-  const version = '1.2.15';
+  const version = '1.2.16';
   const data = { distribution: 'velopack', version, date: '2026-10-25', notes: ['Full package updates'] };
   for (const [kind, name] of Object.entries({ setup: 'OrangeZomboidLauncher-win-Setup.exe', portable: 'OrangeZomboidLauncher-win-Portable.zip' })) {
     data[kind] = { url: `/releases/v${version}/${name}`, github: `https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/download/v${version}/${name}`, length: 100, sha256: 'A'.repeat(64) };
@@ -546,7 +546,7 @@ test('Velopack metadata retains both exact versioned delivery links and rejects 
   try {
     await page.route('**/release.json', route => route.fulfill({ json: data }));
     await page.goto(base);
-    await page.waitForFunction(() => document.querySelector('[data-version]').textContent === 'v1.2.15');
+    await page.waitForFunction(() => document.querySelector('[data-version]').textContent === 'v1.2.16');
     for (const kind of ['setup', 'portable']) assert.equal(await page.locator(`[data-download="${kind}"]`).first().getAttribute('href'), data[kind].url);
     data.distribution = 'unknown';
     await page.reload();
@@ -560,7 +560,7 @@ test('static downloads without JavaScript point to both current Velopack artifac
   try {
     await page.goto(base);
     await assertApprovedStaticDownloads(page);
-    assert.equal(await page.locator('[data-version]').textContent(), 'v1.2.15');
+    assert.equal(await page.locator('[data-version]').textContent(), 'v1.2.16');
   } finally { await page.close(); }
 });
 

@@ -25,15 +25,8 @@ namespace PZ3D {
    string external="{\"vmArgs\":[\"-Xmx2g\",\"-Dexternal=keep\"]}";e.Progress=(v,t)=>File.WriteAllText(e.Config,external);Check(Denied(()=>Call("SetHeapGiB",e,1))&&File.ReadAllText(e.Config)==external,"concurrent config update refuses and preserves external bytes");e.Progress=null;
    File.WriteAllText(e.Config,"{\"vmArgs\":[\"-Xmxgarbage\"]}");string malformed=File.ReadAllText(e.Config);Check(Denied(()=>Call("SetHeapGiB",e,1))&&File.ReadAllText(e.Config)==malformed,"malformed heap config refuses mutation");
    File.WriteAllText(e.Config,original);
-   string mp=Path.Combine(e.User,"Saves","Multiplayer","server_hash");Directory.CreateDirectory(Path.Combine(mp,"map","12"));Directory.CreateDirectory(Path.Combine(mp,"custom"));
-   foreach(string f in new[]{"players.db","vehicles.db","map_symbols.bin","map_t.bin","unknown.bin","map_1_2.bin","custom/map_1_2.bin","map/12/34.bin","map/12/note.bin"})File.WriteAllText(Path.Combine(mp,f),"fixture");
-   string mods=Path.Combine(e.User,"mods","author");Directory.CreateDirectory(mods);File.WriteAllText(Path.Combine(mods,"mod.info"),"id=keep");
-   Call("ClearMultiplayerCache",e);
-   Check(!File.Exists(Path.Combine(mp,"map","12","34.bin")),"verified B42 numeric map chunk removed");
-   Check(new[]{"players.db","vehicles.db","map_symbols.bin","map_t.bin","unknown.bin","map_1_2.bin","custom/map_1_2.bin","map/12/note.bin"}.All(f=>File.ReadAllText(Path.Combine(mp,f))=="fixture")&&File.Exists(Path.Combine(mods,"mod.info")),"all unknown saves and local mods preserved");
-   string outside=Path.Combine(root,"outside");Directory.CreateDirectory(outside);File.WriteAllText(Path.Combine(outside,"9.bin"),"outside");
-   string link=Path.Combine(mp,"map","99");var p=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe","/c mklink /J \""+link+"\" \""+outside+"\""){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true});p.WaitForExit();Check(p.ExitCode==0,"fixture junction created");
-   Check(Denied(()=>Call("ClearMultiplayerCache",e))&&File.ReadAllText(Path.Combine(outside,"9.bin"))=="outside","junction rejects cleanup without traversal");
+   LauncherMultiplayerCacheTests.Run();
+   LauncherMultiplayerDataTests.Run();
    Check(Denied(()=>Call("RebuildWorkshop",e,null,new CancellationToken(true))),"cancelled workshop rebuild does not spawn child");
    Console.WriteLine("MAINTENANCE TESTS PASSED; fixture retained: "+root);
   }

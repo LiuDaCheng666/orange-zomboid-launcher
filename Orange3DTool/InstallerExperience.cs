@@ -64,6 +64,7 @@ namespace PZ3D {
  internal sealed class InstallerInstallResult {
   internal readonly string Root,Version,InstallationId,LauncherPath,UninstallerPath,EvidenceDirectory;
   internal InstallerInstallResult(string root,string version,string id){Root=root;Version=version;InstallationId=id;LauncherPath=Path.Combine(root,"橙子启动器.exe");UninstallerPath=Path.Combine(root,"卸载橙子启动器.exe");EvidenceDirectory=Path.Combine(root,CoreDeployment.Runtime);}
+  internal InstallerInstallResult(string root,string version,string id,string launcher,string uninstaller):this(root,version,id){LauncherPath=launcher;UninstallerPath=uninstaller;}
  }
  internal sealed class InstallerInstallException:IOException {
   internal readonly InstallerPhase Phase;internal readonly string Root,EvidenceDirectory;
