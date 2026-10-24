@@ -96,10 +96,12 @@
   function selectFeature(id) {
     selected = id;
     tabs.forEach(tab => {
+      stop(tab);
       const active = tab.dataset.feature === id;
       tab.setAttribute('aria-selected', String(active));
       tab.tabIndex = active ? 0 : -1;
     });
+    enter(tabs.find(tab => tab.dataset.feature === id), 260);
     panel.setAttribute('aria-labelledby', 'tab-' + id);
     document.querySelector('[data-feature-title]').textContent = features[id][0];
     document.querySelector('[data-feature-description]').textContent = features[id][1];
@@ -115,7 +117,7 @@
     previewError.hidden = true;
     enlarge.disabled = false;
     watchScreenshot(nextImage);
-    nextImage.src = 'assets/launcher-' + id + '-' + theme.value + '.png?v=20261024-fluent';
+    nextImage.src = 'assets/launcher-' + id + '-' + theme.value + '.png?v=20261024-c-glass';
     enter(panel);
   }
   retryImage.addEventListener('click', () => {

@@ -155,6 +155,29 @@ dialog p{font-size:13px;margin:12px 0 0}
 .steps{grid-template-columns:1fr;gap:12px;margin-block:26px 32px}.steps li{position:relative;padding:20px 20px 20px 58px}.steps li::before{position:absolute;left:20px;top:23px;margin:0}.steps h2{font-size:19px}.steps p{font-size:14px}
 .change-entry{grid-template-columns:1fr;gap:14px;padding:22px}.change-version{display:flex;align-items:center;justify-content:space-between;gap:16px}.change-version h2{margin:0}.footer-links{gap:8px 22px}.preview{padding-top:24px}
 }
+/* Milk glass: ambient depth, refracting planes, and lit lens edges. */
+.hero{padding-block:12px 8px}
+:root{--bg:#cdd8e5;--ink:#24364b;--muted:#4c627a;--line:#8da4bd59;--orange:#a4470b;--tint:#fff2e0b8}
+body{background:radial-gradient(ellipse at 7% 22%,#a9c9dfa3 0,transparent 43%),radial-gradient(ellipse at 87% 41%,#9aacc999 0,transparent 44%),radial-gradient(ellipse at 48% 72%,#d5c9b9a6 0,transparent 40%),linear-gradient(125deg,#dae8f0,#c6d2e2 56%,#e2e3e1);background-attachment:fixed}
+.site-header,.tabs button,[role=tabpanel],.panel-copy,.download-card,.steps li,.change-entry,dialog{background-color:rgba(240,247,252,.46);backdrop-filter:blur(24px) saturate(118%);border-color:#ffffffa8;box-shadow:inset 0 1px 0 #ffffffd9,inset 1px 0 0 #ffffff69,0 2px 3px #33465a12,0 15px 38px #34496224}
+.site-header{background-image:linear-gradient(110deg,#ffffff45,#d9e7f43b 60%,#ffffff18);border-bottom-color:#8fa8c66b}
+.site-header nav a[aria-current=page]{box-shadow:inset 0 1px #ffffffd1,0 2px 5px #364c6012}
+.tabs{padding:6px;border:1px solid #ffffff60;border-radius:17px;background:linear-gradient(120deg,#7892af20,#ffffff30);box-shadow:inset 0 1px 3px #52698419,0 1px #ffffff9c}
+.tabs button{position:relative;background-color:rgba(235,244,251,.36);border-radius:11px;padding:12px 11px;box-shadow:inset 0 1px #ffffffbf,0 2px 3px #263d5815,0 7px 18px #34496212}
+.tabs button:hover{background-color:#f5faff9c;box-shadow:inset 0 1px #fff,0 8px 19px #34496225}
+.tabs button[aria-selected=true]{background:#f4f9fcb8;border-color:#fff;box-shadow:inset 0 1px #fff,inset 3px 0 var(--orange),0 3px 6px #263d5819,0 10px 20px #3449621c}
+[role=tabpanel]{border:1px solid #ffffffb0;box-shadow:inset 0 1px #ffffffd9,0 0 0 6px #f1f8ff38,0 3px 6px #24394c26,0 28px 65px #283e5a36;background-color:rgba(214,227,241,.46)}
+.preview-toolbar{background:linear-gradient(115deg,#edf7ffb8,#c0d1e37d);box-shadow:inset 0 1px #ffffffc4;color:#344c65}
+.preview-image{padding:7px;background:linear-gradient(125deg,#263a4ce6,#62768c96 50%,#1e2d3de6);box-shadow:inset 0 1px 4px #0c172a52}
+.app-shot{border:1px solid #ffffff60;border-radius:7px}
+.panel-copy{background-color:rgba(240,247,252,.4);border:0;border-top:1px solid #ffffffab;box-shadow:inset 0 1px #ffffff80,0 -8px 24px #2b405a0a}
+.download-card,.steps li,.change-entry{background-image:linear-gradient(120deg,#ffffff39,#c5d9eb29)}
+.download-card:hover{border-color:#ffffff;box-shadow:inset 0 1px #fff,0 18px 38px #34496230}
+select,.dialog-bar button{background:#f1f7fba3;border-color:#ffffffa6;box-shadow:inset 0 1px #fff,0 2px 4px #34496219}
+dialog{background-color:rgba(220,232,243,.88);border-color:#ffffffc4;box-shadow:inset 0 1px #fff,0 30px 100px #0b172c66}
+dialog::backdrop{background:#15263999;backdrop-filter:blur(12px)}
+.image-scroll{border:1px solid #ffffff70;border-radius:7px;background:#182735;box-shadow:0 8px 24px #142b4530}
+@media(max-width:800px){.tabs button{padding:12px}.preview-image{padding:4px}.tabs{padding:5px}.panel-copy{padding:16px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}
 *,*::before,*::after{animation:none!important;transition:none!important}
 }

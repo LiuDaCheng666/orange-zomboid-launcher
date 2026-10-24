@@ -32,6 +32,40 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); });
 
+test('glass framing exposes translucent layered navigation, choices and preview', async () => {
+  const page = await browser.newPage({ reducedMotion: 'reduce' });
+  try {
+    await page.goto(base);
+    for (const selector of ['.site-header', '.tabs button', '[role=tabpanel]', '.panel-copy']) {
+      const style = await page.locator(selector).first().evaluate(el => {
+        const s = getComputedStyle(el);
+        return { backdrop: s.backdropFilter, shadow: s.boxShadow, background: s.backgroundColor };
+      });
+      assert.match(style.backdrop, /blur\(/, `${selector} refracts the ambient layers`);
+      assert.notEqual(style.shadow, 'none', `${selector} has a lit edge and depth`);
+      assert.match(style.background, /rgba\(/, `${selector} remains translucent`);
+    }
+  } finally { await page.close(); }
+});
+
+test('rapid feature selection retires the prior glass control motion', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.goto(base);
+    const result = await page.evaluate(() => {
+      const first = document.querySelector('#tab-components');
+      const next = document.querySelector('#tab-mods');
+      first.click();
+      const started = first.getAnimations().some(a => a.constructor.name === 'Animation');
+      next.click();
+      return { started, previous: first.getAnimations().filter(a => a.constructor.name === 'Animation').length, next: next.getAnimations().filter(a => a.constructor.name === 'Animation').length };
+    });
+    assert.equal(result.started, true, 'selected glass control visibly settles into place');
+    assert.equal(result.previous, 0, 'obsolete control effect is cancelled');
+    assert.equal(result.next, 1);
+  } finally { await page.close(); }
+});
+
 test('showcase keeps a readable full screenshot and five horizontal choices on desktop', async () => {
   for (const width of [1440, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce' });
@@ -317,7 +351,7 @@ test('preview requests bypass prior screenshot caches in every feature and theme
     await page.locator('[data-feature-image]').evaluate(image => image.decode());
     assert.equal(requested.length, 1, 'initial preview has a single image request');
     assert.equal(requested[0].pathname, '/assets/launcher-home-dark.png');
-    assert.equal(requested[0].searchParams.get('v'), '20261024-fluent', 'initial request must bypass the old unversioned cache');
+    assert.equal(requested[0].searchParams.get('v'), '20261024-c-glass', 'initial request must bypass the old unversioned cache');
     for (const theme of ['dark', 'light']) {
       await page.getByLabel('预览主题').selectOption(theme);
       for (const feature of ['home', 'components', 'mods', 'servers', 'maintenance']) {
@@ -326,14 +360,14 @@ test('preview requests bypass prior screenshot caches in every feature and theme
         const selected = await page.locator('[data-feature-image]').getAttribute('src');
         const url = new URL(selected, base);
         assert.equal(url.pathname, `/assets/launcher-${feature}-${theme}.png`);
-        assert.equal(url.searchParams.get('v'), '20261024-fluent');
+        assert.equal(url.searchParams.get('v'), '20261024-c-glass');
         await page.locator('[data-enlarge]').click();
         assert.equal(new URL(await page.locator('[data-dialog-image]').getAttribute('src'), base).href, url.href, 'enlargement uses the exact selected versioned image');
         await page.locator('[data-close]').click();
       }
     }
     assert.equal(new Set(requested.map(url => url.pathname)).size, 10, 'all ten screenshot URLs are actually requested');
-    assert.ok(requested.every(url => url.searchParams.get('v') === '20261024-fluent'), 'dynamic requests use the same cache version as the initial image');
+    assert.ok(requested.every(url => url.searchParams.get('v') === '20261024-c-glass'), 'dynamic requests use the same cache version as the initial image');
   } finally { await page.close(); }
 });
 
