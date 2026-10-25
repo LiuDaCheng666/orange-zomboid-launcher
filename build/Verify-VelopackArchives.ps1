@@ -13,7 +13,7 @@
     $raw=& $read ($item[1]+'velopack-bootstrap.json'); $sig=& $read ($item[1]+'velopack-bootstrap.sig')
     if(-not $rsa.VerifyData($raw,[Security.Cryptography.CryptoConfig]::MapNameToOID('SHA256'),$sig)){throw 'Packaged bootstrap signature failed'}
     $manifest=[Text.Encoding]::UTF8.GetString($raw)|ConvertFrom-Json
-    if($manifest.schema -ne 1 -or $manifest.version -ne $Version -or @($manifest.files).Count -ne 20){throw 'Packaged bootstrap identity failed'}
+    Assert-OzlVelopackBootstrapInventory -Manifest $manifest -Version $Version
     if([Version]$Version -ge [Version]'1.2.18'){
      $settings=[Xml.XmlReaderSettings]::new();$settings.DtdProcessing=[Xml.DtdProcessing]::Prohibit;$settings.XmlResolver=$null
      $metadataStream=[IO.MemoryStream]::new([byte[]](& $read ($item[1]+'sq.version')))
@@ -46,4 +46,18 @@
    } finally {$archive.Dispose()}
   }
  } finally {$rsa.Dispose()}
+}
+function Assert-OzlVelopackBootstrapInventory {
+ param($Manifest,[string]$Version)
+ # Historical releases have 20 paths. The in-game loading component is required
+ # from 1.2.21 onward; validate identities as well as count, matching runtime.
+ $expected=@('橙子启动器.exe','VERSION','CHANGELOG.md','使用说明.txt','release-public-key.xml',
+  'Web/index.html','Web/app.js','Web/app.css','Web/home.png','Web/orange-app.ico','Web/WebView2-LICENSE.txt',
+  'Web/Microsoft.Web.WebView2.Core.dll','Web/Microsoft.Web.WebView2.WinForms.dll','Web/WebView2Loader.dll',
+  'Assets/OrangeShootPresentation.jar','Assets/OrangeLaunchBridge.lua',
+  'Velopack.dll','Newtonsoft.Json.dll','ThirdPartyNotices/Velopack.txt','ThirdPartyNotices/Newtonsoft.Json.txt')
+ if([Version]$Version -ge [Version]'1.2.21'){$expected+='Assets/OrangeStartup.jar'}
+ if($Manifest.schema -ne 1 -or $Manifest.version -cne $Version -or @($Manifest.files).Count -ne $expected.Count){throw 'Packaged bootstrap identity failed'}
+ $names=@($Manifest.files|ForEach-Object {$_.path})
+ foreach($name in $expected){if(@($names|Where-Object {$_ -ceq $name}).Count -ne 1){throw 'Packaged bootstrap identity failed'}}
 }
