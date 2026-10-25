@@ -12,10 +12,11 @@ async function fixture(browser,options={}){
     const response=(m,data,error)=>({data:{id:m.id,ok:!error,...(error?{error}:{data})}});
     chrome.webview.postMessage=m=>{
       let data,error='';
-      if(m.action==='launchPreflight'){
+      if(m.action==='launch'||m.action==='profileLaunch'){
         const blocked=!configUI.sorted||configUI.afterSortBlocked;
         data={canLaunch:!blocked,checkedUtc:'2026-10-16T04:19:00Z',message:blocked?'模组依赖需要处理':'已核对本次启动',items:[{id:'mods',title:'模组依赖',status:blocked?'error':'ok',message:blocked?'当前清单不符合依赖约束':'顺序已核对',route:'mods',details:blocked?(configUI.sorted?['缺少依赖：Extra 需要 MissingMod']:['LaoYuTranslationJava 必须排在 ViewpointTrueWeathers 之后','literal <img src=x onerror=alert(1)> & <script>bad()</script>']):[],canAutoSort:blocked&&!configUI.sorted}]};
         if(configUI.extraAutoSort)data.items.push({id:'memory',title:'内存预算',status:'warning',message:'其他项目不会获得模组排序按钮',route:'memory',details:[],canAutoSort:true});
+        if(blocked){sent.push(m);queueMicrotask(()=>reply({data:{id:m.id,ok:false,error:data.message,preflight:data}}));return;}data={message:'启动请求已发送',preflight:data};
       }else if(m.action==='modAutoSort'){
         data={message:'默认清单已自动排序',changed:true,mods:['base','extra']};error=configUI.sortError;
         configUI.sorted=!error;
@@ -49,7 +50,7 @@ test('explicit repair rechecks readiness and continues the selected save without
   const {page}=await fixture(browser);try{
     await page.locator('#launch-target-kind').selectOption('save');await page.locator('#launch-target-id').selectOption('Sandbox/one');await blocked(page);
     await page.getByRole('button',{name:'自动排序并继续启动',exact:true}).click();await doneSort(page);
-    assert.deepEqual(await launchActions(page),[{action:'launchPreflight',payload:{startupId:'0123456789abcdef0123456789abcdef',targetKind:'save'}},{action:'modAutoSort',payload:{confirmed:true}},{action:'launchPreflight',payload:{startupId:'0123456789abcdef0123456789abcdef',targetKind:'save'}},{action:'profileLaunch',payload:{startupId:'0123456789abcdef0123456789abcdef',kind:'save',id:'Sandbox/one'}}]);
+    assert.deepEqual(await launchActions(page),[{action:'profileLaunch',payload:{startupId:'0123456789abcdef0123456789abcdef',kind:'save',id:'Sandbox/one'}},{action:'modAutoSort',payload:{confirmed:true}},{action:'profileLaunch',payload:{startupId:'0123456789abcdef0123456789abcdef',kind:'save',id:'Sandbox/one'}}]);
     assert.doesNotMatch(await page.locator('[data-launch-feedback]').innerText(),/100%|已进入|加载成功|本次已提交目标/);assert.doesNotMatch(await page.locator('[data-launch-feedback]').innerText(),/已进入游戏|启动成功/);
     await page.screenshot({path:path.join(shots,'sort-continued.png')});
   }finally{await page.close();}
@@ -58,14 +59,14 @@ test('failed automatic sort stays visible and never sends a launch request',asyn
   const {page}=await fixture(browser,{sortError:'依赖环：base → extra <svg onload=alert(1)>'});try{
     await blocked(page);await page.getByRole('button',{name:'自动排序并继续启动',exact:true}).click();await doneSort(page);
     assert.match(await page.locator('[data-launch-feedback]').innerText(),/依赖环：base → extra <svg/);
-    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launchPreflight','modAutoSort']);
+    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launch','modAutoSort']);
     assert.equal(await page.locator('[data-launch-feedback] svg').count(),0);await page.screenshot({path:path.join(shots,'sort-error.png')});
   }finally{await page.close();}
 });
 test('a remaining genuine dependency error after sorting still prevents launch',async browser=>{
   const {page}=await fixture(browser,{afterSortBlocked:true});try{
     await blocked(page);await page.getByRole('button',{name:'自动排序并继续启动',exact:true}).click();await doneSort(page);
-    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launchPreflight','modAutoSort','launchPreflight']);
+    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launch','modAutoSort','launch']);
     assert.match(await page.locator('.preflight-details').innerText(),/MissingMod/);assert.equal(await page.getByRole('button',{name:'自动排序并继续启动',exact:true}).count(),0);
   }finally{await page.close();}
 });
@@ -74,7 +75,7 @@ test('a target changed during sorting is preserved and cannot be launched by the
     await blocked(page);await page.getByRole('button',{name:'自动排序并继续启动',exact:true}).click();await page.waitForFunction(()=>configUI.heldSort);
     assert.equal(await page.locator('[data-preflight-auto-sort]').isDisabled(),true,'the sort request retains its in-flight lock');
     await page.locator('#launch-target-kind').selectOption('server');await page.locator('#launch-target-id').selectOption('own');await page.evaluate(()=>reply(configUI.heldSort));await doneSort(page);
-    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launchPreflight','modAutoSort']);
+    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launch','modAutoSort']);
     assert.equal(await page.locator('#launch-target-id').inputValue(),'own');assert.match(await page.locator('[data-launch-feedback]').innerText(),/启动选择已变化/);
   }finally{await page.close();}
 });
@@ -84,7 +85,7 @@ test('an unapplied named mod draft opened while sorting survives automatic conti
     await route(page,'mods');await page.locator('#mod-workspace-select').selectOption('p1');await page.locator('#mod-profile-name').fill('New draft during repair');
     await page.evaluate(()=>reply(configUI.heldSort));await doneSort(page);
     assert.equal(await page.locator('#mod-profile-name').inputValue(),'New draft during repair');assert.equal(await page.evaluate(()=>orange.state.modProfileDirty),true);
-    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launchPreflight','modAutoSort','launchPreflight','launch']);
+    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launch','modAutoSort','launch']);
   }finally{await page.close();}
 });
 test('failed named-profile save remains by the buttons and successful retry clears it with a receipt',async browser=>{

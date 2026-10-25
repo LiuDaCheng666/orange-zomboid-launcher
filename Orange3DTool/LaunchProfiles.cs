@@ -10,11 +10,12 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 namespace PZ3D {
- sealed class GameLaunchOutcome { public string message; public string stage; public string warning; }
+ sealed class GameLaunchOutcome { public string message; public string stage; public string warning; public LaunchPreflightReport preflight; }
  sealed class ProfileLaunchRequest {
   public string Kind,Id,Mode,Save,Host,Username,UserPassword,ServerPassword;
   public int Port; public bool UseSteamRelay;
   internal string StartupSessionId;
+  internal Action ValidateBeforeStage;
  }
  sealed class ProfileSessionRecord {
   public string Game,User,Original,AppliedHash,CreatedUtc,State,Token,Nonce;
@@ -66,7 +67,7 @@ namespace PZ3D {
    if(record.CaptureEndpoint!=null){try{record.CaptureRevision=ServerWorkshopCatalog.Revision(e.Data,record.CaptureEndpoint);}catch{record.CaptureRevision=null;}}
    var files=new Dictionary<string,byte[]>{{Path.Combine(folder,"common","mod.info"),Encoding.UTF8.GetBytes("name=Orange Launcher Session\nid="+ModId+"\ndescription=一次性客户端启动桥接，不修改服务器。\n")},{Path.Combine(folder,"42","mod.info"),Encoding.UTF8.GetBytes("name=Orange Launcher Session\nid="+ModId+"\n")},{Path.Combine(folder,"42","media","lua","client","OrangeLaunchBridge.lua"),Script()}};
    foreach(var file in translations)files.Add(file.Key,file.Value);foreach(var file in files)record.Files[file.Key]=DlssInstaller.Hash(file.Value);
-   ValidateRecord(e,record);byte[] journalBytes=Encoding.UTF8.GetBytes(Json.Serialize(record));if(journalBytes.Length>MaxJournalBytes)throw new Exception("联机汉化文件记录过大，未改动配置。");Atomic(Journal(e),journalBytes);
+   ValidateRecord(e,record);byte[] journalBytes=Encoding.UTF8.GetBytes(Json.Serialize(record));if(journalBytes.Length>MaxJournalBytes)throw new Exception("联机汉化文件记录过大，未改动配置。");if(r.ValidateBeforeStage!=null)r.ValidateBeforeStage();Atomic(Journal(e),journalBytes);
    try{foreach(var file in files)Atomic(file.Key,file.Value);Directory.CreateDirectory(Path.GetDirectoryName(request));PrivateRequest(request,payload);Atomic(status,Encoding.UTF8.GetBytes("prepared\n"));if(!SameOriginal(e.Mods,original))throw new Exception("准备期间本地模组清单改变，拒绝覆盖。");if(!e.TestMode&&e.RuntimeRunning(true))throw new Exception("客户端或无法核实用途的游戏 Java 已运行，取消重复启动。");Atomic(e.Mods,applied);}catch{Recover(e,true);throw;}
   }
   static bool SameOriginal(string file,byte[] original){return original==null?!File.Exists(file):File.Exists(file)&&File.ReadAllBytes(file).SequenceEqual(original);}
@@ -84,7 +85,7 @@ namespace PZ3D {
   public static object State(Engine e){string warning="";try{if(Pending(e))warning="存在一次性启动会话；可继续编辑配置，退出后清理会话并保留期间的编辑。";string stage="";foreach(string status in new[]{LuaFile(e,StatusName),LuaFile(e,"OrangeLauncherSession.status"),Path.Combine(e.User,"OrangeLauncherSession.status")}){LauncherMaintenance.NoReparse(status);if(File.Exists(status)){if(new FileInfo(status).Length<=1024)stage=File.ReadAllText(status).Trim();break;}}return new{pending=Pending(e),stage=StageText(stage),warning=warning};}catch(Exception ex){return new{pending=Pending(e),stage="恢复需检查",warning=ex.Message};}}
   internal static string RecoverWatched(Engine e,string nonce){using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;try{while(!acquired){try{acquired=mutex.WaitOne(5000);}catch(AbandonedMutexException){acquired=true;}if(!acquired){if(!Pending(e))return "";if(Load(e).Nonce!=nonce)return "旧会话已结束；未改动新会话。";}}return Recover(e,true,nonce);}finally{if(acquired)mutex.ReleaseMutex();}}}
   // Steam keeps its original URI and arguments; the owned one-shot mod only observes menu readiness.
-  internal static GameLaunchOutcome LaunchNormal(Engine e,string sessionId,Action openSteam){
+  internal static GameLaunchOutcome LaunchNormal(Engine e,string sessionId,Action openSteam,Action validateBeforeStage=null){
    if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");
    if(openSteam==null)throw new ArgumentNullException("openSteam");
    string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));if(reason!="")throw new Exception(reason);
@@ -92,7 +93,7 @@ namespace PZ3D {
     try{
      try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}
      if(!acquired)throw new Exception("另一个启动器正在准备游戏。");
-     Recover(e);Stage(e,new ProfileLaunchRequest{Kind="normal",StartupSessionId=sessionId});
+     Recover(e);Stage(e,new ProfileLaunchRequest{Kind="normal",StartupSessionId=sessionId,ValidateBeforeStage=validateBeforeStage});
      try{openSteam();}catch{Recover(e,true);throw;}
      var record=Load(e);record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));
      try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }

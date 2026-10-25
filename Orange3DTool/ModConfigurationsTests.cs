@@ -10,7 +10,7 @@ using System.Web.Script.Serialization;
 namespace PZ3D {
  static class ModConfigurationsTests {
   static Type Api;static int assertions,failures;
-  static readonly string TestRoot="E:/Projects/OrangeLauncher/artifacts/config-order-127/mod-workspace-fixtures";
+  static readonly string TestRoot=Path.Combine(LauncherTestPaths.Root,"mod-workspace-fixtures");
   sealed class Fixture {
    public string Root;public Engine E;
    public Fixture(){Root=Path.Combine(TestRoot,Guid.NewGuid().ToString("N"));E=new Engine(Path.Combine(Root,"steamapps/common/ProjectZomboid"),Path.Combine(Root,"User"),Path.Combine(Root,"Data"),true);Put(E.Config,"{\"vmArgs\":[]}");Put(Path.Combine(E.Game,"game-version.txt"),"42.12.3");Mod("A","");Mod("B","require=A\n");Put(E.Mods,Text(new[]{"A","B"}));}
