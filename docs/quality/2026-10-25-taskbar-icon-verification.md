@@ -26,4 +26,8 @@
 
 ## 发布结果
 
-发版只允许不可变发行文件、签名更新清单、版本元数据和本次更新说明。最终上线结果及公开下载校验以本地 `artifacts/publication-1.2.18` 回执为准；本节在发布后补记。
+1.2.18 已先发布到 orangezl.com，再于 2026-10-25 16:32:29（Asia/Shanghai）公开 GitHub 正式发行。源代码标签 `v1.2.18` 固定于 `fd9195e`。十个发行文件在两个公开源均完成匿名完整下载，共二十次，长度及 SHA-256 全部与最终冻结文件一致；三个最新更新元数据逐字节一致，公开 `release.json` 为 1.2.18。
+
+正式 1.2.16 生产客户端使用实际网络传输，在隔离定位器中检查并下载到 1.2.18，状态为 Ready（“下载已验证，等待确认重启”）；未对用户 D 盘安装执行更新。原生应用/重启由前述独立生命周期测试覆盖。
+
+服务器发布前后保护快照相同：网页、网站 current、Web 防护和 SSH 配置未改变。最终固定指纹、指定密钥的 SSH / SFTP 只读检查成功。发布及下载证据均在 `artifacts/publication-1.2.18`，包括 `primary-receipt.json`、`github-public.json`、`public-download-proof.json`、`production-client-proof.json` 和 `ssh-final.json`。原始玩家日志没有上传。
