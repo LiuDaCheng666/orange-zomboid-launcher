@@ -16,6 +16,8 @@ public final class Hooks {
             })
             .type(named("zombie.GameWindow"))
             .transform((builder,type,loader,module,domain)->builder.visit(Advice.to(Phase.class).on(named("DoLoadingText").and(takesArguments(String.class)))))
+            .type(named("zombie.core.Translator"))
+            .transform((builder,type,loader,module,domain)->builder.visit(Advice.to(Translation.class).on(named("getText").and(takesArgument(0,String.class)).and(returns(String.class)))))
             .type(named("zombie.ZomboidFileSystem"))
             .transform((builder,type,loader,module,domain)->builder.visit(Advice.to(Mod.class).on(named("loadMod").and(takesArguments(String.class)))))
             .type(named("zombie.Lua.LuaManager"))
@@ -34,6 +36,7 @@ public final class Hooks {
             .installOn(instrumentation);
     }
     public static final class Phase {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.Argument(0)String value){StartupRuntime.phase(value);}}
+    public static final class Translation {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Argument(0)String key,@Advice.Return String label){StartupRuntime.translation(key,label);}}
     public static final class Mod {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Argument(0)String value){StartupRuntime.mod(value);}}
     public static final class Script {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.Argument(0)String value){StartupRuntime.script(value);}}
     public static final class Menu {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.menuReady();}}

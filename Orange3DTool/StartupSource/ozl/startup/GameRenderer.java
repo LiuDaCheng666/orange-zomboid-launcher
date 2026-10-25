@@ -75,6 +75,8 @@ public final class GameRenderer implements LoadingScene.Canvas {
     private static Texture upload(BufferedImage image){
         int w=image.getWidth(),h=image.getHeight();ByteBuffer bytes=ByteBuffer.allocateDirect(w*h*4);
         for(int y=0;y<h;y++)for(int x=0;x<w;x++){int p=image.getRGB(x,y);bytes.put((byte)(p>>16));bytes.put((byte)(p>>8));bytes.put((byte)p);bytes.put((byte)(p>>>24));}bytes.flip();
+        // draw() owns a saved client pixel-store scope; uploaded images are tightly packed.
+        GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH,0);GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS,0);GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS,0);
         int id=GL11.glGenTextures();GL11.glBindTexture(GL11.GL_TEXTURE_2D,id);GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT,1);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_LINEAR);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,GL11.GL_LINEAR);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_S,GL12.GL_CLAMP_TO_EDGE);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_T,GL12.GL_CLAMP_TO_EDGE);GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA,w,h,0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,bytes);return new Texture(id,w,h);
     }
 }

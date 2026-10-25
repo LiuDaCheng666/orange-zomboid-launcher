@@ -14,6 +14,7 @@ public final class StartupRuntime {
     public static void begin(Session accepted){session=accepted;model=new LoadingModel();}
     public static LoadingModel.Snapshot snapshot(){LoadingModel value=model;return value==null?null:value.snapshot();}
     public static void phase(String value){LoadingModel m=model;if(m!=null)m.phase(value);}
+    public static void translation(String key,String label){LoadingModel m=model;if(m!=null)m.translation(key,label);}
     public static void mod(String value){LoadingModel m=model;if(m!=null)m.mod(value);}
     public static void script(String value){LoadingModel m=model;if(m!=null)m.script(value);}
     public static void menuReady(){LoadingModel m=model;if(m!=null){m.menuReady();System.out.println("[OZL-STARTUP-JAVA] game-menu");}}

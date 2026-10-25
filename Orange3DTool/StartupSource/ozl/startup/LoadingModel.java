@@ -9,6 +9,7 @@ public final class LoadingModel {
     private String title="正在启动游戏", detail="", stage="准备";
     private final ArrayDeque<String> activity=new ArrayDeque<>();
     private final Set<String> mods=new HashSet<>(),scripts=new HashSet<>();
+    private final LinkedHashMap<String,Integer> translatedPhases=new LinkedHashMap<>();
     private String[] issue=new String[0];
     private int stageIndex;
     private long began=System.nanoTime();
@@ -22,12 +23,28 @@ public final class LoadingModel {
         if(value.isEmpty()||value.equals(activity.peekLast()))return;
         activity.addLast(value);while(activity.size()>5)activity.removeFirst();
     }
+    /** Only actual game loading keys may associate a resolved label with a phase.
+     * Dynamic texture-pack names stay exact, with bounded label count and length. */
+    public synchronized void translation(String key,String label){
+        int index=switch(key==null?"":key){
+            case "UI_Loading_Scripts" -> 3;
+            case "UI_Loading_Clothing","UI_Loading_ModelsAnimations","UI_Loading_Texturepack" -> 2;
+            case "UI_Loading_OnGameBoot" -> 5;
+            case "UI_Loading_Lua" -> 4;
+            default -> -1;
+        };
+        if(index<0||label==null||label.isBlank()||label.length()>2048)return;
+        translatedPhases.remove(label);translatedPhases.put(label,index);
+        while(translatedPhases.size()>64)translatedPhases.remove(translatedPhases.keySet().iterator().next());
+    }
     public synchronized void phase(String text) {
         if(disabled||(!boot&&!world))return;
         String value=safe(text,160),lower=value.toLowerCase(Locale.ROOT);
         if(lower.contains("waiting for java mods approval")){waiting=true;return;}
         String next=null;int index=stageIndex;
-        if(lower.equals("loading mods")){next="模组";index=1;}
+        Integer translated=translatedPhases.get(text);
+        if(translated!=null){index=translated;next=switch(index){case 2 -> "资源";case 3 -> "脚本";case 4 -> "界面";case 5 -> "就绪";default -> null;};}
+        else if(lower.equals("loading mods")){next="模组";index=1;}
         else if(lower.contains("texture pack")||lower.contains("models and animations")||lower.contains("clothing")){next="资源";index=2;}
         else if(lower.contains("loading scripts")){next="脚本";index=3;}
         else if(lower.contains("loading lua")||lower.contains("reloading lua")||lower.contains("载入lua")||lower.contains("加载lua")){next="界面";index=4;}
@@ -57,7 +74,10 @@ public final class LoadingModel {
     public synchronized void worldEnd(){world=false;waiting=false;issue=new String[0];}
     public synchronized void waitingForInput(){waiting=true;}
     public synchronized void worldStatus(String value){if(world&&!waiting&&!disabled&&!value.isBlank()){detail=safe(value,140);append(detail);}}
-    public synchronized void issue(String[] value){if(value!=null&&value.length==5&&!value[0].isBlank())issue=value.clone();}
+    public synchronized void issue(String[] value){
+        if(value==null||value.length==0||(value.length==5&&value[0].isBlank()))issue=new String[0];
+        else if(value.length==5)issue=value.clone();
+    }
     public synchronized void disable(){disabled=true;}
     public synchronized Snapshot snapshot(){return new Snapshot((boot||world)&&!waiting&&!disabled,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9);}
     public static final class Snapshot {

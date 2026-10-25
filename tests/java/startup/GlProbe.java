@@ -26,12 +26,18 @@ public final class GlProbe {
             GL13.glActiveTexture(GL13.GL_TEXTURE0);GL11.glMatrixMode(GL11.GL_TEXTURE);GL11.glLoadIdentity();GL11.glTranslated(.35,0,0);
             GL13.glActiveTexture(GL13.GL_TEXTURE1);
             int unpack=GL15.glGenBuffers();GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER,unpack);GL15.glBufferData(GL21.GL_PIXEL_UNPACK_BUFFER,32,GL15.GL_STATIC_DRAW);
+            // A short row stride keeps the regression safe even before isolation:
+            // the inherited offsets corrupt the image without exceeding its full buffer.
+            GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH,1);GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS,1);GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS,1);
             LoadingModel model=new LoadingModel();model.phase("Loading Mods");model.mod("Actual API fixture");
             new GameRenderer().draw(model.snapshot(),session,2L<<30,12L<<30);
             check(GL11.glIsEnabled(GL11.GL_SCISSOR_TEST),"scissor enable state changed");
             check(GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE)==GL13.GL_TEXTURE1,"active texture changed");
             check(GL11.glIsEnabled(GL11.GL_TEXTURE_2D),"secondary texture enable state changed");
             check(GL11.glGetInteger(GL21.GL_PIXEL_UNPACK_BUFFER_BINDING)==unpack,"game pixel upload buffer changed");
+            check(GL11.glGetInteger(GL11.GL_UNPACK_ROW_LENGTH)==1,"game unpack row length changed");
+            check(GL11.glGetInteger(GL11.GL_UNPACK_SKIP_ROWS)==1,"game unpack row skip changed");
+            check(GL11.glGetInteger(GL11.GL_UNPACK_SKIP_PIXELS)==1,"game unpack pixel skip changed");
             IntBuffer viewport=ByteBuffer.allocateDirect(16).order(ByteOrder.nativeOrder()).asIntBuffer();GL11.glGetIntegerv(GL11.GL_VIEWPORT,viewport);
             check(viewport.get(0)==7&&viewport.get(2)==700,"game viewport changed");
             GL11.glReadBuffer(GL11.GL_BACK);ByteBuffer pixels=ByteBuffer.allocateDirect(1440*900*4);GL11.glReadPixels(0,0,1440,900,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
