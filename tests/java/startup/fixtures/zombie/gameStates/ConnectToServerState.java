@@ -4,9 +4,9 @@ public final class ConnectToServerState extends GameState {
     private enum State {Start,TestTCP,WorkshopInit,WorkshopQuery,WorkshopConfirm,ServerWorkshopItemScreen,WorkshopUpdate,CheckMods,Finish,Exit}
     private State state=State.Start;
     private final ArrayList<String> workshopItems=new ArrayList<>(),confirmItems=new ArrayList<>();
-    public int calls;public boolean throwUpdate;
+    public int calls;public boolean throwUpdate;public Runnable duringUpdate;
     public void enter(){calls++;state=State.Start;}
-    public GameStateMachine.StateAction update(){calls++;if(throwUpdate)throw new IllegalStateException("original update");state=State.WorkshopUpdate;return GameStateMachine.StateAction.Remain;}
+    public GameStateMachine.StateAction update(){calls++;if(throwUpdate)throw new IllegalStateException("original update");state=State.WorkshopUpdate;if(duringUpdate!=null)duringUpdate.run();return GameStateMachine.StateAction.Remain;}
     public void FromLua(String command){calls++;if(command.equals("bad"))throw new IllegalArgumentException("original command");if(command.equals("disconnect"))state=State.Exit;}
     public void exit(){calls++;}
     public void loadTime(boolean fail)throws java.io.IOException{receiveGameTime(new zombie.core.network.ByteBufferReader(fail));}

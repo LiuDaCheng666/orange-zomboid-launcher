@@ -24,6 +24,10 @@ public final class LoadingScene {
     static void text(Canvas c,String value,double x,double y,double size,int color,boolean right,double width){if(!value.isEmpty())c.text(fit(c,value,size,width),x,y,font(size),color,right);}
     static double entrance(double time){double t=Math.max(0,Math.min(1,time/1.1)),u=t-1;return 1+2.4*u*u*u+1.4*u*u;}
     public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum) {
+        draw(c,w,h,state,seconds,light,reduced,used,maximum,0,0);
+    }
+    /** Native widget bounds are normalized immutable observations from the accepted CPU frame. */
+    public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum,double statusBottom,double cancelTop) {
         double s=Math.max(.6,Math.min(2.5,Math.min(w/1440d,h/900d))),margin=Math.max(22,48*s);
         int accent=0xffffbf78,ink=light?0xff29343e:0xffe9edf2,muted=light?0xff66737c:0xff8f9da9;
         c.gradient(0,0,w,h,light?0xffeff1ec:0xff151e27,light?0xffdfe5df:0xff0a1017);
@@ -44,20 +48,22 @@ public final class LoadingScene {
             c.gradient(margin,heapY,track*ratio,Math.max(1,2*s),alpha(accent,155),alpha(accent,155));
             String heap=String.format(Locale.ROOT,"Java 内存  %,d / %,d MiB",Math.max(0,used)>>20,maximum>>20);text(c,heap,w-margin,top+55*s,small,muted,true,track);
         }
-        double cx=w*.5,cy=h*(state.context==LoadingModel.Context.SERVER?.4:.42),t=reduced?2:Math.max(0,seconds),growth=reduced?1:.3+.7*entrance(t),turn=reduced?-.12:((Math.max(0,t-1.05)*.065)%(Math.PI*2))-.12;
+        boolean nativeControls=state.context==LoadingModel.Context.SERVER&&statusBottom>0&&cancelTop>statusBottom;
+        double visualScale=s,cx=w*.5,cy=h*(state.context==LoadingModel.Context.SERVER?.4:.42),t=reduced?2:Math.max(0,seconds),growth=reduced?1:.3+.7*entrance(t),turn=reduced?-.12:((Math.max(0,t-1.05)*.065)%(Math.PI*2))-.12;
+        if(nativeControls){double upper=statusBottom*h+24*s,lower=cancelTop*h-24*s;cy=(upper+lower)/2;visualScale=Math.min(s,Math.max(.1,(lower-upper)/260));}
         c.glow(cx,cy,Math.min(310*s,w*.46),light?0x23e4ac62:0x18efa95b,0x00efa95b);
         if(state.context==LoadingModel.Context.SAVE)map(c,cx,cy,s,t,reduced,accent,light);
-        else if(state.context==LoadingModel.Context.SERVER)network(c,cx,cy,s,t,reduced,accent,light);
+        else if(state.context==LoadingModel.Context.SERVER)network(c,cx,cy,visualScale,t,reduced,accent,light);
         else {
             c.arc(cx,cy,107*s,1.1*s,0,Math.PI*2,light?0x38757e71:0x343e5261);
             double orbit=reduced?-.5:(t*.22)%(Math.PI*2);
             for(int i=0;i<3;i++)c.arc(cx,cy,107*s,2.4*s,orbit+i*Math.PI*2/3,.72,alpha(accent,190-i*45));
             c.arc(cx,cy,124*s,1*s,-orbit*.6+.3,1.1,alpha(accent,65));
         }
-        double logoSize=(state.context==LoadingModel.Context.BOOT?112:72)*s*growth;
+        double logoSize=(state.context==LoadingModel.Context.BOOT?112:72)*visualScale*growth;
         c.logo(cx,cy,logoSize,1,turn);
         String identity=state.context==LoadingModel.Context.BOOT?"O Z L":state.name;
-        double labelY=cy+157*s;
+        double labelY=nativeControls?top+88*s:cy+157*s;
         if(!identity.isEmpty()){double size=font(21*s);String value=fit(c,identity,size,w*.72);c.text(value,cx-c.measure(value,size)/2,labelY,size,ink,false);}
         String mode=switch(state.mode){case "Sandbox" -> "沙盒";case "Survival" -> "生存";default -> state.mode;};
         String metadata=String.join("  ·  ",java.util.stream.Stream.of(mode,state.map,state.context==LoadingModel.Context.SERVER&&state.requestedMods>=0?state.requestedMods+" 个模组":"").filter(v->!v.isEmpty()).toList());

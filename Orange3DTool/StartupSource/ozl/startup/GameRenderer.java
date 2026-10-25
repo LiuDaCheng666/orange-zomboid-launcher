@@ -18,7 +18,8 @@ public final class GameRenderer implements LoadingScene.Canvas {
     private final Graphics2D measure=measureImage.createGraphics();
     private final AnimationClock animation=new AnimationClock();
     public GameRenderer(){measure.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);}
-    public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum) throws Exception {
+    public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum) throws Exception {draw(state,session,used,maximum,0,0);}
+    public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum,double statusBottom,double cancelTop) throws Exception {
         if(!GameDisplay.created()||GL.getCapabilities()==null)return;
         int width=GameDisplay.width(),height=GameDisplay.height();if(width<320||height<240)return;
         int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),active=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE),framebuffer=GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING),matrixMode=GL11.glGetInteger(GL11.GL_MATRIX_MODE),unpack=GL11.glGetInteger(GL21.GL_PIXEL_UNPACK_BUFFER_BINDING);
@@ -36,7 +37,7 @@ public final class GameRenderer implements LoadingScene.Canvas {
             GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPushMatrix();modelview=true;GL11.glLoadIdentity();
             if(logo==null){try(InputStream input=GameRenderer.class.getResourceAsStream("/ozl/startup/orange.png")){if(input==null)throw new IOException("Missing OZL mark");logo=upload(ImageIO.read(input));}}
             double visible=animation.seconds(state.epoch,state.context+":"+state.route,System.nanoTime());
-            LoadingScene.draw(this,width,height,state,visible,"light".equals(session.theme),session.reducedMotion,used,maximum);
+            LoadingScene.draw(this,width,height,state,visible,"light".equals(session.theme),session.reducedMotion,used,maximum,statusBottom,cancelTop);
         } finally {
             if(modelview){GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPopMatrix();}
             if(projection){GL11.glMatrixMode(GL11.GL_PROJECTION);GL11.glPopMatrix();}

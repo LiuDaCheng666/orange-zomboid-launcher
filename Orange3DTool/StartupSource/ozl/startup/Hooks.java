@@ -61,6 +61,16 @@ public final class Hooks {
                 .visit(Advice.to(QueuePosition.class).on(named("onPlaceInQueue").and(takesArguments(int.class,java.util.HashMap.class)))))
             .type(named("zombie.Lua.LuaEventManager"))
             .transform((b,t,l,m,d)->b.visit(Advice.to(Event.class).on(named("triggerEvent").and(takesArgument(0,String.class)).and(returns(void.class)))))
+            .type(named("zombie.ui.UIElement"))
+            .transform((b,t,l,m,d)->b
+                .visit(Advice.to(ElementDraw.class).on(named("render").and(takesArguments(0)).and(returns(void.class))))
+                .visit(Advice.to(ScaledDraw.class).on(named("DrawTextureScaledColor").and(takesArguments(9)).and(takesArgument(0,named("zombie.core.textures.Texture"))).and(takesArgument(1,Double.class)).and(returns(void.class))))
+                .visit(Advice.to(ColorDraw.class).on(named("DrawTextureColor").and(takesArguments(7)).and(takesArgument(0,named("zombie.core.textures.Texture"))).and(returns(void.class))))
+                .visit(Advice.to(AspectDraw.class).on(named("DrawTextureScaledAspect3").and(takesArguments(9)).and(takesArgument(0,named("zombie.core.textures.Texture"))).and(returns(void.class)))))
+            .type(named("zombie.ui.LoadingQueueUI"))
+            .transform((b,t,l,m,d)->b.visit(Advice.to(QueueDraw.class).on(named("render").and(takesArguments(0)).and(returns(void.class)))))
+            .type(named("zombie.core.Core"))
+            .transform((b,t,l,m,d)->b.visit(Advice.to(EndUI.class).on(named("EndFrameUI").and(takesArguments(0)).and(returns(void.class)))))
             .type(named("org.lwjglx.opengl.Display"))
             .transform((b,t,l,m,d)->b.visit(Advice.to(Swap.class).on(named("swapBuffers").and(takesArguments(0)))))
             .type(named("zombie.core.opengl.RenderThread"))
@@ -90,7 +100,10 @@ public final class Hooks {
     public static final class Disconnect {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(){StartupRuntime.handoff(false);}}
     public static final class Sync {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(){StartupRuntime.sync();}}
     public static final class Request {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.Argument(0)Object value){if(value instanceof Enum<?> actual&&actual.name().equals("Loading"))StartupRuntime.sync();}}
-    public static final class ConnectionState {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.This Object state){StartupRuntime.connectionState(state);}}
+    public static final class ConnectionState {
+        @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.This Object state,@Advice.Origin("#m")String method){return StartupRuntime.enterConnection(state,method);}
+        @Advice.OnMethodExit(onThrowable=Throwable.class,suppress=Throwable.class)public static void exit(@Advice.This Object state,@Advice.Enter Object prior,@Advice.Thrown Throwable error){StartupRuntime.exitConnection(state,prior,error);}
+    }
     public static final class ConnectionCommand {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Argument(0)String command){if("disconnect".equals(command))StartupRuntime.handoff(false);}}
     public static final class ConnectionExit {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.handoff(true);}}
     public static final class QueueBegin {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.queueBegin();}}
@@ -113,6 +126,12 @@ public final class Hooks {
         @Advice.OnMethodExit(onThrowable=Throwable.class,suppress=Throwable.class)public static void exit(@Advice.Enter String prior){StartupRuntime.exitFrame(prior);}
     }
     public static final class Background {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.This Object state){StartupRuntime.background(state);}}
+    public static final class ElementDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element){return StartupRuntime.skipElement(element);}}
+    public static final class QueueDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element){return StartupRuntime.skipQueue(element);}}
+    public static final class ScaledDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"SCALED");}}
+    public static final class ColorDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"COLOR");}}
+    public static final class AspectDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"ASPECT");}}
+    public static final class EndUI {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.This Object core){StartupRuntime.endFrameUI(core);}}
     public static final class Event {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.Argument(0)String event,@Advice.Argument(value=1,optional=true)Object a,@Advice.Argument(value=2,optional=true)Object b,@Advice.Argument(value=3,optional=true)Object c,@Advice.Argument(value=4,optional=true)Object d){
             // The name branches precede every payload access. Auth/QR payloads are never read.

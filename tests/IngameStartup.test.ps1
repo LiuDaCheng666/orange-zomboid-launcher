@@ -5,9 +5,16 @@ $repo=Split-Path -Parent $PSScriptRoot
 $output=Join-Path $repo 'artifacts\ingame-startup\tests'
 $classes=Join-Path $output 'classes'
 New-Item -ItemType Directory -Path $classes -Force | Out-Null
+$api=Join-Path $output 'compile-api'
+New-Item -ItemType Directory -Path $api -Force | Out-Null
+$apiFiles=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'java\kahlua-api') -Recurse -Filter '*.java' -File | ForEach-Object FullName)
+# Signatures only: javac21 can target Java17 while the installed Kahlua VM uses Java25.
+# This directory is deliberately absent from every runtime classpath and the shipped JAR.
+& javac -encoding UTF-8 --release 17 -d $api $apiFiles
+if($LASTEXITCODE -ne 0){throw 'Compile-only Kahlua API declarations failed'}
 $asset=Join-Path $repo 'Orange3DTool\Assets\OrangeStartup.jar'
 $files=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'java\startup') -Recurse -Filter '*.java' -File | ForEach-Object FullName)
-& javac -encoding UTF-8 --release 17 -classpath ($asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) -d $classes $files
+& javac -encoding UTF-8 --release 17 -classpath ($api+';'+$asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) -d $classes $files
 if($LASTEXITCODE -ne 0){throw 'Startup Java test compilation failed'}
 & java -cp ($classes+';'+$asset) ozl.startup.tests.StartupModelTest
 if($LASTEXITCODE -ne 0){throw 'Startup state/session behavior failed'}
@@ -36,6 +43,10 @@ Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.RefinementTransformerTest;if($LASTEXITCODE -ne 0){throw 'Refinement agent behavior failed'}}finally{Pop-Location}
 Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.ServerInformationTransformerTest;if($LASTEXITCODE -ne 0){throw 'Server information agent behavior failed'}}finally{Pop-Location}
+foreach($probe in @('NativeCompositionTest','NativeLifecycleTest','QueueCompositionTest','NativeLuaGlProbe')){
+ Push-Location $fixture
+ try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.IsolatedLuaProbe $probe $GameDirectory (Join-Path $output 'native-composition');if($LASTEXITCODE -ne 0){throw "Native Lua composition fixture failed: $probe"}}finally{Pop-Location}
+}
 Push-Location $fixture
 try{& $runtime '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+$asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.GlProbe (Join-Path $output 'scenes');if($LASTEXITCODE -ne 0){throw 'Real GL render/state regression failed'}}finally{Pop-Location}
 Push-Location $fixture

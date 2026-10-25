@@ -30,6 +30,7 @@ public final class RefinementTransformerTest {
         ArrayList<String> ids=new ArrayList<>(List.of("1","2","3"));LuaEventManager.triggerEvent("OnServerWorkshopItems","Required",ids);
         check(StartupRuntime.snapshot().workshopProjects==3&&StartupRuntime.snapshot().requestedMods==-1,"workshop count is projects; mod-ID list remains unknown until initialized for this operation");
         LuaEventManager.triggerEvent("OnServerWorkshopItems","Progress","1",12L,24L);check(StartupRuntime.snapshot().downloaded==12,"known real per-project byte progress");
+        check(!StartupRuntime.snapshot().active,"Required retains native ownership throughout workshop interaction");connect("Post workshop passive");state.enter();
         Poison poison=new Poison();LuaEventManager.triggerEvent("Unrelated",poison,poison,poison,poison);check(LuaEventManager.last==poison,"unrelated payload untouched and original call preserved");
         MainScreenState.instance.render();List<Object> queue=SpriteRenderer.instance.queue;
         check(queue.size()==3&&queue.get(0).equals("background")&&queue.get(1).getClass().getName().startsWith("ozl.startup.")&&queue.get(2).equals("controls"),"actual generated drawer is queued between background and original controls");
@@ -42,7 +43,7 @@ public final class RefinementTransformerTest {
         connect("Second server");LuaEventManager.triggerEvent("OnServerWorkshopItems","Error","ItemQueryNotCompleted");check(!StartupRuntime.snapshot().active,"short workshop query error yields");
         connect("Third server");LuaEventManager.triggerEvent("OnServerWorkshopItems","Error",12L,"ItemInstallFailed");check(!StartupRuntime.snapshot().active,"item workshop error yields");
         connect("Queue server");LuaEventManager.triggerEvent("OnConnected");state.exit();LoadingQueueState q=new LoadingQueueState();q.enter();LoadingQueueState.onPlaceInQueue(4,new HashMap<>());q.render();
-        check(StartupRuntime.snapshot().name.equals("Queue server")&&StartupRuntime.snapshot().queuePosition==4&&queue.size()==4,"queue restores current-operation identity and native queue controls stay above background");SpriteRenderer.instance.recycle();
+        check(StartupRuntime.snapshot().name.equals("Queue server")&&StartupRuntime.snapshot().queuePosition==4&&queue.size()==5,"queue restores current-operation identity; missing Lua scope keeps native queue controls and original black clear");SpriteRenderer.instance.recycle();
         LoadingQueueState.cancel();check(q.update()==GameStateMachine.StateAction.Continue&&!StartupRuntime.snapshot().active&&q.redirectState() instanceof MainScreenState,"original queue cancellation yields and invalidates tickets");
         GameClient.instance.doConnectCoop("private-coop-id");check(StartupRuntime.snapshot().name.isEmpty(),"coop never reads stale static normal-server name");
         GameClient.instance.serverMods.clear();GameClient.instance.serverMods.addAll(List.of("Mod1","Mod2"));GameLoadingState world=new GameLoadingState();Core.gameSaveWorld="ADDRESS_encrypted-user";world.enter();world.render();

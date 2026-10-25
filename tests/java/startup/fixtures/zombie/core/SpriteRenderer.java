@@ -9,6 +9,7 @@ public final class SpriteRenderer {
     public TextureDraw drawGeneric(TextureDraw.GenericDrawer drawer){queue.add(drawer);return new TextureDraw();}
     public void drain(){for(Object command:new ArrayList<>(queue)){
         if(command instanceof TextureDraw.GenericDrawer drawer){rendered.add("owned");drawer.render(new TextureDraw());}
+        else if(command instanceof Runnable action){rendered.add("native");action.run();}
         else {String name=(String)command;rendered.add(name);Runnable action=name.equals("background")?background:controls;if(action!=null)action.run();}
     }}
     public void recycle(){for(Object command:queue)if(command instanceof TextureDraw.GenericDrawer drawer)drawer.postRender();queue.clear();rendered.clear();}

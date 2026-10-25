@@ -8,7 +8,7 @@ import java.io.File;
 public final class LoadingModel {
     public enum Context { BOOT, SAVE, SERVER, NONE }
     public enum Route { FULL, BEHIND_UI, NONE }
-    private boolean boot=true, world, waiting, disabled;
+    private boolean boot=true, world, waiting, disabled,nativeInteraction;
     private Context context=Context.BOOT;
     private Route route=Route.FULL;
     private long epoch=1,scannedResources,lastResourceLabel;
@@ -114,7 +114,8 @@ public final class LoadingModel {
         detail=safe((owner.isEmpty()?"":owner+" / ")+name,120);
         append("脚本  ·  "+detail);
     }
-    private void reset(Context next,Route target){epoch++;boot=next==Context.BOOT;world=false;waiting=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
+    private void reset(Context next,Route target){epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
+    public synchronized void nativeInteraction(boolean value){if(serverOperation&&context==Context.SERVER&&route==Route.BEHIND_UI&&nativeInteraction!=value){nativeInteraction=value;epoch++;}}
     public synchronized void menuReady(){reset(Context.NONE,Route.NONE);clearServer();}
     public synchronized void serverBegin(String friendly){serverBegin(friendly,"",0);}
     public synchronized void serverBegin(String friendly,String host,int port){if(disabled)return;clearServer();serverOperation=true;reset(Context.SERVER,Route.BEHIND_UI);name=safe(friendly,96);server.name=name;endpoint(generation,host,port);title="正在连接服务器";stage="连接";append(title);}
@@ -127,7 +128,8 @@ public final class LoadingModel {
     }
     public synchronized void serverStats(String actualMap,int modsCount){if(context!=Context.SERVER||disabled)return;if(actualMap!=null&&!actualMap.isBlank()){map=safe(actualMap,120);server.map=map;server.mapRank=2;}if(modsCount>=0){requestedMods=modsCount;server.mods=modsCount;}}
     public synchronized void workshop(int projects,long bytes,long total){if(context!=Context.SERVER||route!=Route.BEHIND_UI||disabled)return;if(projects>=0){workshopProjects=projects;server.projects=projects;}if(bytes>=0&&total>0&&bytes<=total){downloaded=bytes;downloadTotal=total;}}
-    public synchronized void queue(int position){if(context!=Context.SERVER||disabled||position<0)return;route=Route.BEHIND_UI;queuePosition=position;title="正在排队连接";stage="排队";detail="排队位置  "+position;append(detail);}
+    public synchronized void queueWaiting(){if(context!=Context.SERVER||disabled)return;title="正在排队连接";stage="排队";detail="Esc / 手柄 A 取消排队";}
+    public synchronized void queue(int position){if(context!=Context.SERVER||disabled||position<0)return;route=Route.BEHIND_UI;queuePosition=position;title="正在排队连接";stage="排队";detail="排队位置  "+position+"  ·  Esc / 手柄 A 取消排队";append(detail);}
     /** Retain only an explicitly owned friendly identity for the next real world entry. */
     public synchronized void handoff(boolean keepServer){reset(Context.NONE,Route.NONE);if(!keepServer)clearServer();}
     public synchronized void worldBegin(){worldBegin(false,"","","");}
@@ -148,7 +150,7 @@ public final class LoadingModel {
         else if(value.length==5)issue=value.clone();
     }
     public synchronized void disable(){disabled=true;}
-    public synchronized Snapshot snapshot(){return new Snapshot(route!=Route.NONE&&!waiting&&!disabled,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9,context,route,epoch,scannedResources,name,mode,map,workshopProjects,requestedMods,queuePosition,downloaded,downloadTotal,generation,server);}
+    public synchronized Snapshot snapshot(){return new Snapshot(route!=Route.NONE&&!waiting&&!disabled&&!nativeInteraction,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9,context,route,epoch,scannedResources,name,mode,map,workshopProjects,requestedMods,queuePosition,downloaded,downloadTotal,generation,server);}
     public static final class Snapshot {
         public final boolean active,world;
         public final String title,detail,stage;

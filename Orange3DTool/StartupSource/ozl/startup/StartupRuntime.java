@@ -13,8 +13,15 @@ public final class StartupRuntime {
     private static volatile long issueFloor;
     private static boolean drawing,reportedFailure;
     private static final ThreadLocal<String> frame=new ThreadLocal<>();
+    private static final NativeConnectionPresentation presentation=new NativeConnectionPresentation();
+    private static final ThreadLocal<long[]> cpuFrame=new ThreadLocal<>();
+    private static final java.util.concurrent.atomic.AtomicLong frameSequence=new java.util.concurrent.atomic.AtomicLong();
+    private static volatile Object connectionOwner;
+    private static final ThreadLocal<Object> connectionDispatch=new ThreadLocal<>();
+    private static volatile WorkshopInteraction workshopInteraction;
+    private static final class WorkshopInteraction {final Object owner;final long generation;volatile boolean success;WorkshopInteraction(Object owner,long generation){this.owner=owner;this.generation=generation;}}
     private static final ServerQuery publicQuery=new ServerQuery((operation,result)->{LoadingModel m=model;if(m!=null)m.publicInfo(operation,result.name,result.map,result.players,result.maximum);});
-    public static void begin(Session accepted){publicQuery.cancel();session=accepted;model=new LoadingModel();issueFloor=0;}
+    public static void begin(Session accepted){publicQuery.cancel();presentation.clear();workshopInteraction=null;connectionOwner=null;session=accepted;model=new LoadingModel();issueFloor=0;}
     public static LoadingModel.Snapshot snapshot(){LoadingModel value=model;return value==null?null:value.snapshot();}
     public static void phase(String value){LoadingModel m=model;if(m!=null)m.phase(value);}
     public static void early(String value){LoadingModel m=model;if(m!=null)m.early(value.equals("initFonts")?"fonts":value);}
@@ -25,11 +32,11 @@ public final class StartupRuntime {
     public static long generation(){LoadingModel.Snapshot s=snapshot();return s==null?0:s.generation;}
     public static void menuReady(){publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.menuReady();System.out.println("[OZL-STARTUP-JAVA] game-menu");}}
     public static void serverBegin(String friendly){serverBegin(friendly,"","");}
-    public static void serverBegin(String friendly,String host,String port){publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();int parsed=0;try{if(port!=null&&port.length()<8)parsed=Integer.parseInt(port.trim());}catch(NumberFormatException invalid){}m.serverBegin(friendly,host==null?"":host.trim(),parsed);startQuery(m,host,parsed);}}
+    public static void serverBegin(String friendly,String host,String port){publicQuery.cancel();presentation.clear();workshopInteraction=null;connectionOwner=null;LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();int parsed=0;try{if(port!=null&&port.length()<8)parsed=Integer.parseInt(port.trim());}catch(NumberFormatException invalid){}m.serverBegin(friendly,host==null?"":host.trim(),parsed);startQuery(m,host,parsed);}}
     private static void startQuery(LoadingModel m,String host,int port){if(host==null||m.snapshot().endpoint.isEmpty())return;String target=host.trim();if(target.startsWith("[")&&target.endsWith("]"))target=target.substring(1,target.length()-1);publicQuery.request(m.snapshot().generation,target,port);}
     public static void coopConnected(Object client){LoadingModel m=model;if(m==null||client==null)return;Class<?> type=client.getClass();String host=string(type,"ip");int port=number(type,null,"port");m.endpoint(m.snapshot().generation,host,port);startQuery(m,host,port);}
-    public static void handoff(boolean keep){if(!keep)publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.handoff(keep);}}
-    public static void queueBegin(){LoadingModel m=model;if(m!=null)m.serverResume();}
+    public static void handoff(boolean keep){if(!keep)publicQuery.cancel();presentation.clear();workshopInteraction=null;connectionOwner=null;LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.handoff(keep);}}
+    public static void queueBegin(){LoadingModel m=model;if(m!=null){m.serverResume();m.queueWaiting();}}
     public static void queue(int position){LoadingModel m=model;if(m!=null)m.queue(position);}
     private static int integer(Object value){if(value instanceof Byte||value instanceof Short||value instanceof Integer||value instanceof Long){long n=((Number)value).longValue();if(n>=Integer.MIN_VALUE&&n<=Integer.MAX_VALUE)return (int)n;}return -1;}
     public static void queueInformation(long operation,int position,java.util.HashMap<?,?> info){LoadingModel m=model;if(m==null||m.snapshot().generation!=operation)return;m.queue(position);if(info!=null)m.queueInformation(operation,integer(info.get("countPlayers")),integer(info.get("maxPlayers")),integer(info.get("Year")),integer(info.get("Month")),integer(info.get("Day")),integer(info.get("Hour")),integer(info.get("Minutes")));}
@@ -71,7 +78,7 @@ public final class StartupRuntime {
         String map=string(client,"gameMap");if(map.isBlank())map=string(core,"gameMap");m.serverStats(map,instance==null?-1:listSize(read(client,instance,"serverMods")));
     }
     public static void connectionState(Object state){
-        LoadingModel m=model;if(m==null||state==null)return;Class<?> type=state.getClass();Object current=read(type,state,"state");
+        LoadingModel m=model;if(m==null||state==null||state!=connectionOwner)return;Class<?> type=state.getClass();Object current=read(type,state,"state");
         if(current instanceof Enum<?> actual){String actualStage=actual.name();if(actualStage.equals("Exit")){handoff(true);return;}
             int projects=switch(actualStage){case "WorkshopQuery","WorkshopConfirm","ServerWorkshopItemScreen","WorkshopUpdate" -> listSize(read(type,state,"workshopItems"));default -> -1;};
             m.serverStage(actualStage,projects,-1);
@@ -83,35 +90,50 @@ public final class StartupRuntime {
             }catch(ReflectiveOperationException ignored){}
         }
     }
+    public static Object enterConnection(Object state,String method){Object prior=connectionDispatch.get();if(method.equals("enter"))connectionOwner=state;connectionDispatch.set(state);return prior;}
+    public static void exitConnection(Object state,Object prior,Throwable error){try{if(error==null)connectionState(state);}finally{if(prior==null)connectionDispatch.remove();else connectionDispatch.set(prior);}}
     public static void sync(){LoadingModel m=model;if(m!=null)m.serverStage("Loading",-1,-1);}
     public static void queueUpdate(Object state){if(state!=null&&flag(state.getClass(),"cancel"))handoff(false);}
     public static void queueRedirect(Object next){handoff(next!=null&&next.getClass().getName().equals("zombie.gameStates.GameLoadingState"));}
     public static void connectionEvent(String state){switch(state){case "Failed","Disconnected","Disconnecting","ClientVersionMismatch" -> handoff(false);default -> {}}}
     public static void workshopEvent(Object flag,Object item,Object bytes,Object total){
         LoadingModel m=model;if(m==null||!(flag instanceof String kind))return;
-        switch(kind){case "Error" -> handoff(false);case "Required" -> m.workshop(listSize(item),-1,-1);
+        switch(kind){case "Error" -> handoff(false);case "Required" -> {m.workshop(listSize(item),-1,-1);workshopInteraction=new WorkshopInteraction(connectionOwner,m.snapshot().generation);presentation.clear();m.nativeInteraction(true);}
             case "Progress" -> {if(item instanceof String&&bytes instanceof Long received&&total instanceof Long size)m.workshop(-1,received,size);}
-            case "Success" -> m.serverStage("CheckMods",-1,-1);default -> {}}
+            case "Success" -> {WorkshopInteraction interaction=workshopInteraction;if(interaction!=null&&interaction.owner!=null&&interaction.owner==connectionOwner&&interaction.owner==connectionDispatch.get()&&interaction.generation==m.snapshot().generation){Object state=read(connectionOwner.getClass(),connectionOwner,"state");if(state instanceof Enum<?> actual&&actual.name().equals("WorkshopUpdate"))interaction.success=true;m.serverStage("CheckMods",-1,-1);}}default -> {}}
     }
     public static void worldEvent(String event){LoadingModel m=model;if(m==null)return;m.worldStatus(switch(event){case "OnLoadedTileDefinitions" -> "已读取地形定义";case "OnLoadedMapZones" -> "已读取地图区域";case "OnGameTimeLoaded" -> "已读取世界时间";default -> "";});}
-    public static String enterFrame(String type){String prior=frame.get();frame.set(type.equals("zombie.gameStates.MainScreenState")?"MENU":type.equals("zombie.gameStates.LoadingQueueState")?"QUEUE":"");return prior;}
-    public static void exitFrame(String prior){if(prior==null)frame.remove();else frame.set(prior);}
+    public static String enterFrame(String type){String prior=frame.get();presentation.clear();cpuFrame.set(new long[]{frameSequence.incrementAndGet(),0});frame.set(type.equals("zombie.gameStates.MainScreenState")?"MENU":type.equals("zombie.gameStates.LoadingQueueState")?"QUEUE":"");return prior;}
+    public static void exitFrame(String prior){presentation.clear();cpuFrame.remove();if(prior==null)frame.remove();else frame.set(prior);}
+    static boolean acceptedFrame(long sequence){long[] cpu=cpuFrame.get();return cpu!=null&&cpu[0]==sequence&&cpu[1]!=0;}
+    public static boolean skipElement(Object element){return presentation.skipElement(element);}
+    public static boolean skipQueue(Object element){return presentation.skipQueue(element);}
+    public static boolean skipTexture(Object element,Object texture,String kind){return presentation.skipTexture(element,texture,NativeConnectionPresentation.Kind.valueOf(kind));}
+    /** Queue place=-1/immediate never call renderBackground; this runs after their black clear. */
+    public static void endFrameUI(Object core){if("QUEUE".equals(frame.get()))background(core);}
     public static void background(Object state){
-        LoadingModel.Snapshot s=snapshot();String scope=frame.get();if(s==null||!s.active||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||scope==null||scope.isEmpty()||state==null)return;
-        try{ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use))return;QueuedBackdrop.enqueue(loader,new QueuedBackdrop.Ticket(s,scope));}
+        LoadingModel.Snapshot s=snapshot();String scope=frame.get();if(s==null||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||scope==null||scope.isEmpty()||state==null)return;
+        WorkshopInteraction interaction=workshopInteraction;
+        if(interaction!=null&&interaction.success&&interaction.owner==connectionOwner&&interaction.generation==s.generation&&scope.equals("MENU")&&presentation.resolve(state.getClass().getClassLoader(),s,0,false)!=null){model.nativeInteraction(false);workshopInteraction=null;s=snapshot();}
+        if(!s.active)return;
+        try{long[] cpu=cpuFrame.get();if(cpu==null||cpu[1]!=0)return;ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use))return;
+            NativeConnectionPresentation.Lease lease=presentation.resolve(loader,s,cpu[0],scope.equals("QUEUE"));
+            if(QueuedBackdrop.enqueue(loader,new QueuedBackdrop.Ticket(s,scope,lease))){cpu[1]=1;presentation.accept(lease);}
+        }
         catch(Throwable error){failed(error);}
     }
     private static boolean currentContext(){try{return GameDisplay.created()&&GL.getCapabilities()!=null;}catch(Throwable notCurrent){return false;}}
     /** Called by the fixed generated drawer; exceptions cannot escape into native UI commands. */
     public static void queuedDraw(QueuedBackdrop.Ticket ticket){
-        try{LoadingModel.Snapshot current=snapshot();if(ticket==null||current==null||!current.active||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE"))||drawing||!currentContext())return;
+        try{LoadingModel.Snapshot current=snapshot();if(ticket==null||current==null||!current.active||current.generation!=ticket.state.generation||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE"))||drawing||!currentContext())return;
             if(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING)!=0)return;
-            draw(ticket.state);
+            draw(ticket.state,ticket.statusBottom,ticket.cancelTop);
         }catch(Throwable error){failed(error);}
     }
-    private static void draw(LoadingModel.Snapshot state)throws Exception{
+    private static void draw(LoadingModel.Snapshot state)throws Exception{draw(state,0,0);}
+    private static void draw(LoadingModel.Snapshot state,double statusBottom,double cancelTop)throws Exception{
         drawing=true;try{LoadingModel m=model;long now=System.currentTimeMillis();if(now-lastIssueRead>=250){lastIssueRead=now;m.issue(session.readIssue(now,issueFloor));}
-            if(renderer==null)renderer=new GameRenderer();java.lang.Runtime memory=java.lang.Runtime.getRuntime();renderer.draw(state,session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory());
+            if(renderer==null)renderer=new GameRenderer();java.lang.Runtime memory=java.lang.Runtime.getRuntime();renderer.draw(state,session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory(),statusBottom,cancelTop);
         }finally{drawing=false;}
     }
     public static void beforeSwap(){lastSwap=System.nanoTime();LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||!currentContext())return;try{draw(s);}catch(Throwable failure){failed(failure);}}
