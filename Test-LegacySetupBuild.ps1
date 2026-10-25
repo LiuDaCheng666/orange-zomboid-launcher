@@ -14,10 +14,13 @@ function Copy-Input([string]$Relative){
  New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
  Copy-Item -LiteralPath $source -Destination $destination
 }
-foreach($name in @('Build-Setup.ps1','Build-Version.ps1','Build-CoverGallery.ps1','Prepare-Assets.ps1','Prepare-Dependencies.ps1','build\ProductionSources.ps1','build\DependencyIntegrity.ps1','build\dependencies.lock.json','VERSION','使用说明.md','docs\THIRD-PARTY.md','Orange3DTool\Build-Modern.ps1','Orange3DTool\app.manifest')){Copy-Input $name}
+foreach($name in @('Build-StartupComponent.ps1','Build-Setup.ps1','Build-Version.ps1','Build-CoverGallery.ps1','Prepare-Assets.ps1','Prepare-Dependencies.ps1','build\ProductionSources.ps1','build\DependencyIntegrity.ps1','build\dependencies.lock.json','VERSION','使用说明.md','docs\THIRD-PARTY.md','Orange3DTool\Build-Modern.ps1','Orange3DTool\app.manifest')){Copy-Input $name}
 foreach($name in @('crossroads','riverside','safehouse')){Copy-Input ('docs\assets\cover-candidates\'+$name+'.png')}
 foreach($file in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool') -Filter '*.cs'){Copy-Input ('Orange3DTool\'+$file.Name)}
-foreach($name in @('OrangeLaunchBridge.lua','OrangeShootPresentation.jar','orange-app.ico')){Copy-Input ('Orange3DTool\Assets\'+$name)}
+foreach($name in @('OrangeLaunchBridge.lua','OrangeShootPresentation.jar','OrangeStartup.jar','orange-app.png','orange-app.ico')){Copy-Input ('Orange3DTool\Assets\'+$name)}
+foreach($file in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool\StartupSource') -File -Recurse){Copy-Input $file.FullName.Substring($PSScriptRoot.Length+1)}
+Copy-Input 'Dependencies\ZombieBuddy-v2.3.4.jar'
+if(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool\Assets\OrangeStartup.build.json')){Copy-Input 'Orange3DTool\Assets\OrangeStartup.build.json'}
 foreach($name in @('index.html','app.js','app.css','home.png','orange-app.ico','WebView2-LICENSE.txt')){Copy-Input ('Orange3DTool\Web\'+$name)}
 foreach($name in @('lib\net462\Microsoft.Web.WebView2.Core.dll','lib\net462\Microsoft.Web.WebView2.WinForms.dll','runtimes\win-x64\native\WebView2Loader.dll')){Copy-Input ('Dependencies\WebView2\'+$name)}
 $previousTemp=$env:TEMP;$previousTmp=$env:TMP

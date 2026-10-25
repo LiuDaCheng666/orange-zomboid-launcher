@@ -47,7 +47,7 @@ namespace PZ3D {
    "橙子启动器.exe","橙子更新助手.exe","卸载橙子启动器.exe","VERSION","CHANGELOG.md","使用说明.txt","release-public-key.xml",
    "Web/index.html","Web/app.js","Web/app.css","Web/home.png","Web/orange-app.ico","Web/WebView2-LICENSE.txt",
    "Web/Microsoft.Web.WebView2.Core.dll","Web/Microsoft.Web.WebView2.WinForms.dll","Web/WebView2Loader.dll",
-   "Assets/OrangeShootPresentation.jar","Assets/OrangeLaunchBridge.lua"
+   "Assets/OrangeShootPresentation.jar","Assets/OrangeLaunchBridge.lua","Assets/OrangeStartup.jar"
   });
   internal static Version ParseVersion(string value) {
    if(value==null || !Regex.IsMatch(value,@"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z"))throw new InvalidDataException("Invalid release version.");

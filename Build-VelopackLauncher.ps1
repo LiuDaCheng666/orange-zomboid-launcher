@@ -32,7 +32,7 @@ try {
  & (Join-Path $buildRoot 'Build-CoverGallery.ps1') -OutputHtml (Join-Path $destination 'Web/index.html') | Out-Null
  Copy-Item -LiteralPath $core,$forms -Destination (Join-Path $destination 'Web')
  Copy-Item -LiteralPath (Join-Path $sdk 'runtimes/win-x64/native/WebView2Loader.dll') -Destination (Join-Path $destination 'Web')
- foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua')){Copy-Item -LiteralPath (Join-Path $project "Assets/$name") -Destination (Join-Path $destination "Assets/$name")}
+ foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua','OrangeStartup.jar')){Copy-Item -LiteralPath (Join-Path $project "Assets/$name") -Destination (Join-Path $destination "Assets/$name")}
  foreach($name in @('VERSION','CHANGELOG.md','release-public-key.xml')){Copy-Item -LiteralPath (Join-Path $buildRoot $name) -Destination (Join-Path $destination $name)}
  Copy-Item -LiteralPath (Join-Path $buildRoot 'docs/licenses/Velopack.txt') -Destination (Join-Path $destination 'ThirdPartyNotices/Velopack.txt')
  Copy-Item -LiteralPath (Join-Path $deps.DependencyRoot 'newtonsoft/LICENSE.md') -Destination (Join-Path $destination 'ThirdPartyNotices/Newtonsoft.Json.txt')

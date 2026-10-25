@@ -1,12 +1,11 @@
 using System;
 namespace PZ3D {
  sealed partial class ModernForm {
-  GameStartupPresenter gameStartupPresenter;
+  GameStartupObserver gameStartupObserver;
   void InitializeStartupPresentation(){
-   gameStartupPresenter=new GameStartupPresenter(this);
-   gameStartupPresenter.PrelaunchClosed=id=>controller.CancelStartup(id);
-   controller.StartupPresentation=launch=>{if(!capture)gameStartupPresenter.Handle(launch);};
-   FormClosed+=(sender,args)=>{controller.StartupPresentation=null;gameStartupPresenter.Dispose();};
+   gameStartupObserver=new GameStartupObserver();
+   controller.StartupPresentation=launch=>{if(!capture)gameStartupObserver.Handle(launch);};
+   FormClosed+=(sender,args)=>{controller.StartupPresentation=null;gameStartupObserver.Dispose();};
   }
  }
 }

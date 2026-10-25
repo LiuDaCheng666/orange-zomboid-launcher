@@ -35,7 +35,7 @@ if(-not $CoreDirectory){
  & (Join-Path $PSScriptRoot 'Build-CoverGallery.ps1') -OutputHtml (Join-Path $CoreDirectory 'Web\index.html')
  foreach($name in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll')){Copy-Item -LiteralPath (Join-Path $sdk "lib\net462\$name") -Destination (Join-Path $CoreDirectory "Web\$name")}
  Copy-Item -LiteralPath (Join-Path $sdk 'runtimes\win-x64\native\WebView2Loader.dll') -Destination (Join-Path $CoreDirectory 'Web\WebView2Loader.dll')
- foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua')){Copy-Item -LiteralPath (Join-Path $project "Assets\$name") -Destination (Join-Path $CoreDirectory "Assets\$name")}
+ foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua','OrangeStartup.jar')){Copy-Item -LiteralPath (Join-Path $project "Assets\$name") -Destination (Join-Path $CoreDirectory "Assets\$name")}
  foreach($name in @('VERSION','CHANGELOG.md','release-public-key.xml')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $CoreDirectory $name)}
  & (Join-Path $PSScriptRoot 'Build-Guide.ps1') -OutputPath (Join-Path $CoreDirectory '使用说明.txt')
 }

@@ -16,7 +16,10 @@ if(-not (Test-Path -LiteralPath $core)) {
 }
 Assert-OzlWebView2Dependencies -SdkDirectory $sdk
 $bridge=Join-Path $PSScriptRoot 'Orange3DTool\Assets\OrangeShootPresentation.jar'
-if((Test-Path -LiteralPath $bridge) -and -not $ForceBridge){return}
+if((Test-Path -LiteralPath $bridge) -and -not $ForceBridge){
+  & (Join-Path $PSScriptRoot 'Build-StartupComponent.ps1') -JdkPath $JdkPath
+  return
+}
 $buddy=Join-Path $deps 'ZombieBuddy-v2.3.4.jar'
 if(-not (Test-Path -LiteralPath $buddy)){
   Invoke-WebRequest -Uri 'https://github.com/zed-0xff/ZombieBuddy/releases/download/v2.3.4/ZombieBuddy.jar' -OutFile $buddy
@@ -33,3 +36,5 @@ if($LASTEXITCODE -ne 0){throw 'Own Java bridge compilation failed'}
 & $jar --create --file $bridge --manifest (Join-Path $source 'agent.mf') -C $buildDir orange
 if($LASTEXITCODE -ne 0){throw 'Own Java bridge packaging failed'}
 Write-Host 'Compiled original bridge only; author framework is not packed into our JAR.'
+
+& (Join-Path $PSScriptRoot 'Build-StartupComponent.ps1') -JdkPath $JdkPath

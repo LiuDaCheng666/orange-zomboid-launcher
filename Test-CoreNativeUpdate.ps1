@@ -78,7 +78,7 @@ foreach($entry in @(@('PZ3D.CoreUpdateNativeFixtureTests','橙子启动器.exe')
 foreach($name in @('index.html','app.js','app.css','home.png','orange-app.ico','WebView2-LICENSE.txt')){Copy-Item -LiteralPath (Join-Path $project "Web\$name") -Destination (Join-Path $source "Web\$name")}
 foreach($name in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll')){Copy-Item -LiteralPath (Join-Path $sdk "lib\net462\$name") -Destination (Join-Path $source "Web\$name")}
 Copy-Item -LiteralPath (Join-Path $sdk 'runtimes\win-x64\native\WebView2Loader.dll') -Destination (Join-Path $source 'Web\WebView2Loader.dll')
-foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua')){Copy-Item -LiteralPath (Join-Path $project "Assets\$name") -Destination (Join-Path $source "Assets\$name")}
+foreach($name in @('OrangeShootPresentation.jar','OrangeLaunchBridge.lua','OrangeStartup.jar')){Copy-Item -LiteralPath (Join-Path $project "Assets\$name") -Destination (Join-Path $source "Assets\$name")}
 foreach($name in @('VERSION','CHANGELOG.md')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $source $name)}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '使用说明.md') -Destination (Join-Path $source '使用说明.txt');Copy-Item -LiteralPath $public -Destination (Join-Path $source 'release-public-key.xml')
 $release=Join-Path $FixtureRoot 'release'

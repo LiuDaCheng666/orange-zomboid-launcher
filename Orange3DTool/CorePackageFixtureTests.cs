@@ -10,7 +10,7 @@ namespace PZ3D {
    if(args.Length>0&&args[0]=="--complete-core-uninstall")return UninstallerProgram.Main(args);
    if(args.Length==1&&args[0]=="--fixture-uninstall"){UninstallerProgram.UninstallCore(root,self);return 0;}
    string web=ModernAssets.Prepare();if(!File.Exists(Path.Combine(web,"app.js")))throw new IOException("Sidecar Web missing.");
-   if(BundledAssets.ReadOwnAsset("OrangeLaunchBridge.lua").Length==0||BundledAssets.ReadOwnAsset("OrangeShootPresentation.jar").Length==0)throw new IOException("Sidecar bridge missing.");
+   if(BundledAssets.ReadOwnAsset("OrangeStartup.jar").Length==0||BundledAssets.ReadOwnAsset("OrangeLaunchBridge.lua").Length==0||BundledAssets.ReadOwnAsset("OrangeShootPresentation.jar").Length==0)throw new IOException("Sidecar bridge missing.");
    Console.WriteLine("PASS: extracted fixture adopts signed root and loads owned sidecars");return 0;
   }catch(Exception ex){Console.Error.WriteLine(ex);return 1;}}
  }

@@ -7,7 +7,7 @@ namespace PZ3D {
  static class BundledAssets {
   const string Resource="Orange3D.Bundle.zip";
   static readonly object sync=new object();
-  public static byte[] ReadOwnAsset(string name){if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua")throw new InvalidDataException("Unknown bridge asset.");
+  public static byte[] ReadOwnAsset(string name){if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua"&&name!="OrangeStartup.jar")throw new InvalidDataException("Unknown bridge asset.");
 #if OZL_VELOPACK
  if(DistributionPaths.Enabled)return DistributionBootstrap.Asset("Assets/"+name);
 #endif
