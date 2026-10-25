@@ -98,14 +98,17 @@ public final class StartupRuntime {
     public static void connectionEvent(String state){switch(state){case "Failed","Disconnected","Disconnecting","ClientVersionMismatch" -> handoff(false);default -> {}}}
     private record StatusObservation(Object owner,NativeConnectionPresentation.Lease page,Object label) {}
     private static boolean passiveState(String state){return switch(state){case "Connecting","GettingServerInfo","UDPConnecting","SteamConnecting","AuthPending","ConnectionPending","TestTCP","Connected","ConnectionImmediately","ApplyRequest" -> true;default -> false;};}
-    public static Object statusBefore(Object state,Object message,Object argument){
-        if(!(state instanceof String key))return null;
+    public static Object statusBefore(Class<?> eventType,Object state,Object message,Object argument){
+        if(eventType==null||!eventType.getName().equals("zombie.Lua.LuaEventManager")||!(state instanceof String key))return null;
         boolean allowed=passiveState(key);
         if(key.equals("Message"))allowed=message instanceof String suffix&&passiveState(suffix);
         if(key.equals("FormatMessage"))allowed="PlaceInQueue".equals(message)&&integer(argument)>=0&&integer(argument)<=255;
         LoadingModel.Snapshot s=snapshot();Object owner=connectionOwner;
-        if(!allowed||s==null||!s.active||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||owner==null)return null;
-        NativeConnectionPresentation.Lease page=presentation.statusPage(owner.getClass().getClassLoader(),s);Object label=presentation.statusIdentity(page);
+        ClassLoader loader=eventType.getClassLoader();
+        // Native handshakes occur before ConnectionDetails creates the Java state.
+        // Exact page/generation identities own that interval; an established owner must still match.
+        if(!allowed||s==null||!s.active||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||loader==null||owner!=null&&owner.getClass().getClassLoader()!=loader)return null;
+        NativeConnectionPresentation.Lease page=presentation.statusPage(loader,s);Object label=presentation.statusIdentity(page);
         return page==null||label==null?null:new StatusObservation(owner,page,label);
     }
     public static void statusAfter(Object value){

@@ -2,6 +2,8 @@
 
 Status: DONE
 
+Current payload: see **Review fix round 1** below. The original full-suite evidence and hash are retained as historical evidence; the review fix has fresh focused verification and a new Jar hash.
+
 ## Result
 
 BOOT uses a warm amber background with the growing central brand and meaningful stage subtitle. SERVER uses navy/cyan network activity, a separate information area, full wrapped endpoint, observed population/date/clock/world day, map and mod/project counts. SAVE uses forest/emerald map chunks and save/mode/world status. Known server information remains in the existing model through queue/world handoffs. Diagnostics retain right alignment and the relevant mod name.
@@ -70,3 +72,34 @@ The final full Java accepted-premain fixture copy at `artifacts/ingame-startup/t
 Original `Orange3DTool/Assets/orange-app.png` SHA-256 remains `602D843B5D7FBDAB9B37695B2D2FDABD5B0ADC1E4B26ECB1FD6DB69E75CCBF3D`; its working-tree and HEAD Git blob IDs both equal `ba8f7f50a7595924279a4eee1f308e9ea7310214`. No image/icon source or version metadata changed.
 
 This is offline fixture/hidden-GL acceptance, not an actual interactive game run. No game/Steam UI, process attach, real-path Controller/Prepare/Stage/Recover, game configuration mutation/bootstrap, website/server/deploy action or publishing occurred. Temporary session receipt changes in hidden GL tests are confined to generated fixture directories. Foreign website/deploy/http-guard changes remain untouched. Workshop download implementation is Task3 and is not included here. The 20–40-second observed game/mod initialization interval has not been optimized or remeasured; no startup speedup is claimed.
+
+## Review fix round 1 — native handshakes before Java connection state
+
+Review `task-2-review.md` found a real event-order gap in commit `fbb603f`: statusBefore required a non-null connectionOwner, although serverBegin clears it and ConnectionDetails creates/enters ConnectToServerState only after the initial native handshake. The original native center label remained visible, but early SteamConnecting/AuthPending/UDPConnecting/GettingServerInfo events were absent from the new activity/detail observations. The previous fixture entered the Java owner before those events and missed this ordering.
+
+Added a RED actual-Lua sequence: serverBegin → exact current native panel → SteamConnecting/AuthPending/UDPConnecting/GettingServerInfo with no Java owner → owner establishment → continued statuses. Against the original component it fails `pre-details native status captured before any Java connection owner: SteamConnecting`; log `artifacts/context-growth/early-status-red.txt`.
+
+Minimal production repair: Event advice passes its actual declaring LuaEventManager class via `@Advice.Origin`. statusBefore verifies that event type, obtains its game classloader, and resolves the existing exact passive UI identities without depending on a not-yet-created Java owner. An owner that already exists must belong to the same loader. The observation still captures the optional owner and requires strict identity equality on exit, so a null→owner transition during the original handler is rejected. Existing generation/epoch/environment/page/label/visibility/auth/failure checks remain in force. No render lease, FBO, queue, callback, control or geometry policy changed.
+
+The expanded fixture also rejects pre-owner unknown messages, hidden/auth pages, environment replacement, and new generation while the owner remains null; verifies the next operation's own event works; rejects owner establishment during a handler while accepting subsequent events under that owner; rejects an unverified event type; and confirms early observation never arms a render lease. Existing stale/post-owner/private-field/failure tests remain intact.
+
+Fresh scoped verification:
+
+```powershell
+./Build-StartupComponent.ps1 -GameDirectory E:/Steam/steamapps/common/ProjectZomboid
+./tests/Run-NativeCompositionFixture.ps1 -Probe NativeStatusTest -Output artifacts/context-growth/early-status-green
+./tests/Run-NativeCompositionFixture.ps1 -Probe NativeLifecycleTest -Output artifacts/context-growth/early-lifecycle
+./tests/Run-NativeCompositionFixture.ps1 -Probe RefinementTransformerTest -Output artifacts/context-growth/early-hook-regression
+```
+
+- NativeStatusTest: **45 PASS**, `artifacts/context-growth/early-status-green.txt`.
+- NativeLifecycleTest: **17 PASS**, `artifacts/context-growth/early-lifecycle.txt`.
+- RefinementTransformerTest: **32 PASS**, `artifacts/context-growth/early-hook-regression.txt`; exercises the other Lua event branches, poison payloads, lifecycle and queue hooks affected by the advice signature.
+- Actual GameClassProbe, compiled alone under `artifacts/context-growth/early-actual-classes` and launched with the installed JRE25/projectzomboid.jar/ZombieBuddy.jar against the accepted fresh fixture: **18 actual class/API checks PASS**, no game class initialization/window; `artifacts/context-growth/early-actual-api.txt`. This verifies the new Origin advice on the actual LuaEventManager overloads.
+- Owned diff whitespace check passes. Existing JVM Unsafe warnings remain.
+
+Current rebuilt ignored `Orange3DTool/Assets/OrangeStartup.jar` SHA-256:
+
+`FC38249421E2AAC69F7251230636FF009184FACEF443B25EC49D5D13D03DBE6E`
+
+The accepted-premain copy at `artifacts/context-growth/early-status-green/fixture-5c53f443bf254981b2e9fcd1842399ef/OrangeLauncherRuntime/startup/OrangeStartup.jar` has the same hash. Comparing every decompressed entry with the original RED fixture shows only `ozl/startup/Hooks$Event.class` and `ozl/startup/StartupRuntime.class` changed. Renderer/scene/assets and previously reviewed visuals are byte-identical. The earlier 889/native and full Java results apply to the original pre-review payload; this repair deliberately runs the scoped checks above, with the next combined full validation reserved for Task3 as requested. No actual game/UI/server activity or performance claim was added.

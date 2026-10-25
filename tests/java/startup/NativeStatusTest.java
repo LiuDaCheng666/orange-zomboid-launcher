@@ -9,6 +9,7 @@ import zombie.gameStates.ConnectToServerState;
 public final class NativeStatusTest {
  static int checks;static void check(boolean v,String why){if(!v)throw new AssertionError(why);checks++;}
  public static void main(String[] args)throws Exception{
+  StartupRuntime.serverBegin("Pre-details status fixture");
   NativeLuaFixture f=new NativeLuaFixture(Path.of(args[0]),1280,720);
   f.function("getText",(frame,n)->frame.push("本地化 / "+frame.get(0)));
   f.run("string={format=function(text,arg) return text..' / '..tostring(arg) end}; function ConnectToServer:OnConnectFailed(message,detail) self.failMessage=message;self.connectLabel.name=message end");
@@ -16,8 +17,24 @@ public final class NativeStatusTest {
   var oldUser=f.child("userName");var userTable=oldUser.getTable();int[] privateReads={0};
   var guarded=(se.krka.kahlua.vm.KahluaTable)java.lang.reflect.Proxy.newProxyInstance(userTable.getClass().getClassLoader(),new Class<?>[]{se.krka.kahlua.vm.KahluaTable.class},(proxy,method,a)->{if(method.getName().equals("rawget")&&("name".equals(a[0])||"text".equals(a[0]))){privateReads[0]++;throw new AssertionError("private username read");}return method.invoke(userTable,a);});
   var guardedUser=new zombie.ui.UIElement(guarded);guarded.rawset("javaObject",guardedUser);f.connect.controls.set(f.connect.controls.indexOf(oldUser),guardedUser);f.connect.getTable().rawset("userName",guarded);
-  StartupRuntime.serverBegin("Status fixture");new ConnectToServerState().enter();
   LuaEventManager.original=(event,a)->{if(event.equals("OnConnectionStateChanged")){Object[] values=new Object[a.length+1];values[0]=f.connect.getTable();System.arraycopy(a,0,values,1,a.length);for(int i=1;i<values.length;i++)if(values[i] instanceof Number n)values[i]=n.doubleValue();f.thread.call(f.thread.tableget(f.connect.getTable(),"OnConnectionStateChanged"),values);}};
+  // RakNet handshakes precede the ConnectionDetails packet that creates the Java state.
+  for(String state:new String[]{"SteamConnecting","AuthPending","UDPConnecting","GettingServerInfo"}){
+   LuaEventManager.triggerEvent("OnConnectionStateChanged",state);
+   check(StartupRuntime.snapshot().detail.equals("本地化 / UI_servers_"+state),"pre-details native status captured before any Java connection owner: "+state);
+   String[] activity=StartupRuntime.snapshot().activity;LuaEventManager.triggerEvent("OnConnectionStateChanged",state);check(Arrays.equals(activity,StartupRuntime.snapshot().activity),"pre-owner duplicate status is not appended");
+  }
+  check(!StartupRuntime.skipElement(f.child("title")),"pre-owner status observation never arms a rendering lease");
+  String earlyKnown=StartupRuntime.snapshot().detail;var earlyOriginal=LuaEventManager.original;
+  LuaEventManager.triggerEvent("OnConnectionStateChanged","Message","PrivateEarlyPayload");check(StartupRuntime.snapshot().detail.equals(earlyKnown),"pre-owner unknown payload rejected");
+  f.connect.visible=false;LuaEventManager.triggerEvent("OnConnectionStateChanged","SteamConnecting");check(StartupRuntime.snapshot().detail.equals(earlyKnown),"pre-owner hidden page rejected");f.connect.visible=true;
+  f.child("googleAuthPopup").visible=true;LuaEventManager.triggerEvent("OnConnectionStateChanged","AuthPending");check(StartupRuntime.snapshot().detail.equals(earlyKnown),"pre-owner auth page rejected");f.child("googleAuthPopup").visible=false;
+  LuaEventManager.original=(event,a)->{earlyOriginal.accept(event,a);zombie.Lua.LuaManager.env=f.platform.newTable();};LuaEventManager.triggerEvent("OnConnectionStateChanged","AuthPending");check(StartupRuntime.snapshot().detail.equals(earlyKnown),"pre-owner changed environment rejected");zombie.Lua.LuaManager.env=f.env;
+  LuaEventManager.original=(event,a)->{earlyOriginal.accept(event,a);StartupRuntime.serverBegin("New pre-details generation");};LuaEventManager.triggerEvent("OnConnectionStateChanged","AuthPending");check(StartupRuntime.snapshot().detail.isEmpty(),"pre-owner generation change rejected even while owner stays null");LuaEventManager.original=earlyOriginal;
+  LuaEventManager.triggerEvent("OnConnectionStateChanged","SteamConnecting");check(StartupRuntime.snapshot().detail.endsWith("SteamConnecting"),"new pre-owner operation can observe its own status");
+  LuaEventManager.original=(event,a)->{earlyOriginal.accept(event,a);new ConnectToServerState().enter();};LuaEventManager.triggerEvent("OnConnectionStateChanged","AuthPending");check(StartupRuntime.snapshot().detail.endsWith("SteamConnecting"),"owner established during handler invalidates pre-owner observation");LuaEventManager.original=earlyOriginal;
+  LuaEventManager.triggerEvent("OnConnectionStateChanged","AuthPending");check(StartupRuntime.snapshot().detail.endsWith("AuthPending"),"next event is captured under established Java owner");
+  check(StartupRuntime.statusBefore(NativeStatusTest.class,"SteamConnecting",null,null)==null,"unverified event type cannot supply an observation classloader");
   for(String state:new String[]{"SteamConnecting","AuthPending","UDPConnecting","GettingServerInfo","Connected"}){
    LuaEventManager.triggerEvent("OnConnectionStateChanged",state);
    String label="本地化 / UI_servers_"+state;
