@@ -47,3 +47,13 @@
 - `artifacts/log-priority/final-review.md`、`archive-final.log`、`ssh-final.log`。
 
 原始玩家日志未复制进Git或上传。软件发布结果另记发布回执。
+
+## 发布验证
+
+- 源码提交：`08c8157`；标签：`v1.2.19`。
+- 自有服务器发布回执状态published，十个发行文件及四个更新元数据已验证；保护快照完全相同，网站current仍为`/var/www/ozl/sites/20261024T195630Z-d3f3c044`。
+- GitHub已公开：https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.19；时间`2026-10-25T09:27:39Z`（北京时间17:27:39）。十个资产的名称、长度与SHA-256均和冻结候选相同。
+- 匿名完整下载自有服务器和GitHub各十个文件，20/20哈希及长度通过；latest三份清单和release.json版本通过。
+- 实际1.2.16生产程序集通过真实传输发现1.2.19并下载至Ready；测试使用隔离更新目录，未应用到用户安装。启动自动检查另由8组前端边界测试覆盖。
+- 发布后只读SSH/SFTP检查通过，固定主机指纹和指定Ed25519密钥有效。
+- 回执与公开下载证明位于`artifacts/publication-1.2.19/`。
