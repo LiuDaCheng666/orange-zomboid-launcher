@@ -21,22 +21,23 @@
 
 Files: `ModernController.cs`, `ModernHostPolicy.cs`/`ModernHost.cs` only if necessary, `Web/app.js`, `LaunchPreflight.cs`, `SaveProfiles.cs`, `ModConfigurations.cs`, relevant existing C# and UI tests.
 
-- [ ] Add failing behavioral tests for exactly one full check per automatic launch, direct backend refusal before staging/transport, structured dependency refusal and auto-sort continuation.
-- [ ] Implement one authoritative native preflight; remove the frontend duplicate without accepting JavaScript authorization tokens or bypassing backend validation.
-- [ ] Separate identity discovery from selected metadata, preserving every matching source and current version overlays. Read selected bytes fresh and preserve requirements/conflicts/maps/unknown-source semantics. Do not add a persistent security cache.
-- [ ] Retain final fresh guard/config/process/agent checks and cancellation. Necessary user-facing failures remain actionable; ordinary launch wording stays brief.
-- [ ] Run focused/native/headless workflow regressions, compare the existing controlled read-only local benchmark, self-review and commit exact task paths.
+- [x] Add failing behavioral tests for exactly one full check per automatic launch, direct backend refusal before staging/transport, structured dependency refusal and auto-sort continuation.
+- [x] Implement one authoritative native preflight; remove the frontend duplicate without accepting JavaScript authorization tokens or bypassing backend validation.
+- [x] Separate identity discovery from selected metadata, preserving every matching source and current version overlays. Read selected bytes fresh and preserve requirements/conflicts/maps/unknown-source semantics. Do not add a persistent security cache.
+- [x] Retain final fresh guard/config/process/agent checks and cancellation. Necessary user-facing failures remain actionable; ordinary launch wording stays brief.
+- [x] Run focused/native/headless workflow regressions, compare the existing controlled read-only local benchmark, self-review and commit exact task paths.
 
 ## Task 2 — early activity, animation and three contexts
 
 Files: `StartupSource/ozl/startup/{LoadingModel,LoadingScene,StartupRuntime,Hooks,GameRenderer}.java`, new small queued-render adapter if needed, `tests/java/startup/`, `tests/IngameStartup.test.ps1` only as necessary.
 
-- [ ] Add failing model/transformer/render tests for early real activity, bounded/throttled file observations, grow/rotate animation and reduced motion, and boot/save/server context changes.
-- [ ] Hook actual main-thread/resource-index/fonts/init boundaries; count resource scan callbacks with cheap per-entry work and throttled sanitized labels. Improve measured memory precision.
-- [ ] Capture local name/mode/map and server friendly name/map/mod counts from proven fields; capture only white-listed workshop progress/connection/queue data and original event names. Add context epochs and genuine completion/failure/cancel/interaction handoffs.
-- [ ] Render distinct boot growth/rotation, local map chunks and server network/synchronization scenes with bounded left/right rows and no arbitrary percentage.
-- [ ] Add the properly queued server backdrop through an owned runtime GenericDrawer adapter, only on verified non-FBO routes, below native controls. Reject stale queued frames; no server swap cover. Keep fallback to original UI on unverified route/error.
-- [ ] Run actual premain fixtures, actual class transformation verification without initialization, hidden queued GL/state/pixel tests, package audit and scene capture review. Commit exact task paths and evidence.
+- [x] Add failing model/transformer/render tests for early real activity, bounded/throttled file observations, grow/rotate animation and reduced motion, and boot/save/server context changes.
+- [x] Hook actual main-thread/resource-index/fonts/init boundaries; count resource scan callbacks with cheap per-entry work and throttled sanitized labels. Improve measured memory precision.
+- [x] Capture local name/mode/map and server friendly name/map/mod counts from proven fields; capture only white-listed workshop progress/connection/queue data and original event names. Add context epochs and genuine completion/failure/cancel/interaction handoffs.
+- [x] Include the user's 2026-10-26 server-information expansion: current endpoint, actual population, synchronized game time/date/world day and real entering stages. Use current queue/sync proof plus an isolated bounded asynchronous public query for ordinary connections; cancel stale operations and preserve same-connection information through interaction/world handoffs. Never use replicated-player counts, old defaults, PC time or unrelated payloads.
+- [x] Render distinct boot growth/rotation, local map chunks and server network/synchronization scenes with bounded left/right rows and no arbitrary percentage.
+- [x] Add the properly queued server backdrop through an owned runtime GenericDrawer adapter, only on verified non-FBO routes, below native controls. Reject stale queued frames; no server swap cover. Keep fallback to original UI on unverified route/error.
+- [x] Run actual premain fixtures, actual class transformation verification without initialization, hidden queued GL/state/pixel tests, package audit and scene capture review. Commit exact task paths and evidence.
 
 ## Task 3 — review and user candidate
 
