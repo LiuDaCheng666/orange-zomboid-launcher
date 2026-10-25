@@ -1,0 +1,2 @@
+package zombie.ui;
+public final class TextManager {public static final TextManager instance=new TextManager();private final java.awt.Graphics2D measure=new java.awt.image.BufferedImage(1,1,2).createGraphics();public int MeasureStringX(UIFont font,String text){return measure.getFontMetrics(new java.awt.Font("Microsoft YaHei",0,font.size)).stringWidth(text);}public int getFontHeight(UIFont font){return font.size;}}

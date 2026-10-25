@@ -16,6 +16,8 @@ public final class LoadingModel {
     private String lastWorldStatus="",lastConversion="";
     private int workshopProjects=-1,requestedMods=-1,queuePosition=-1;
     private long downloaded=-1,downloadTotal=-1;
+    private String downloadPhase="download";
+    private boolean downloadPage;private String downloadID="",downloadTitle="";private int workshopReady=-1;private double downloadRate=-1;
     private long generation=1;
     private boolean serverOperation;
     private ServerInfo server=new ServerInfo();
@@ -114,7 +116,7 @@ public final class LoadingModel {
         detail=safe((owner.isEmpty()?"":owner+" / ")+name,120);
         append("脚本  ·  "+detail);
     }
-    private void reset(Context next,Route target){lastNativeStatus="";epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
+    private void reset(Context next,Route target){lastNativeStatus="";downloadPage=false;downloadID=downloadTitle="";workshopReady=-1;downloadRate=-1;epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
     public synchronized void nativeInteraction(boolean value){if(serverOperation&&context==Context.SERVER&&route==Route.BEHIND_UI&&nativeInteraction!=value){nativeInteraction=value;epoch++;}}
     public synchronized void menuReady(){reset(Context.NONE,Route.NONE);clearServer();}
     public synchronized void serverBegin(String friendly){serverBegin(friendly,"",0);}
@@ -130,6 +132,8 @@ public final class LoadingModel {
     }
     public synchronized void serverStats(String actualMap,int modsCount){if(context!=Context.SERVER||disabled)return;if(actualMap!=null&&!actualMap.isBlank()){map=safe(actualMap,120);server.map=map;server.mapRank=2;}if(modsCount>=0){requestedMods=modsCount;server.mods=modsCount;}}
     public synchronized void workshop(int projects,long bytes,long total){if(context!=Context.SERVER||route!=Route.BEHIND_UI||disabled)return;if(projects>=0){workshopProjects=projects;server.projects=projects;}if(bytes>=0&&total>0&&bytes<=total){downloaded=bytes;downloadTotal=total;}}
+    public synchronized void downloadPhase(String phase){downloadPhase=phase;}
+    public synchronized void download(boolean active,String id,String title,int ready,long bytes,long total,double rate){if(disabled)return;if(downloadPage!=active){downloadPage=active;epoch++;}downloadID=id;downloadTitle=title;workshopReady=ready;downloaded=bytes;downloadTotal=total;downloadRate=rate;if(active)nativeInteraction=false;}
     public synchronized void queueWaiting(){if(context!=Context.SERVER||disabled)return;title="正在排队连接";stage="排队";detail="Esc / 手柄 A 取消排队";}
     public synchronized void queue(int position){if(context!=Context.SERVER||disabled||position<0)return;route=Route.BEHIND_UI;queuePosition=position;title="正在排队连接";stage="排队";detail="排队位置  "+position+"  ·  Esc / 手柄 A 取消排队";append(detail);}
     /** Retain only an explicitly owned friendly identity for the next real world entry. */
@@ -152,9 +156,10 @@ public final class LoadingModel {
         else if(value.length==5)issue=value.clone();
     }
     public synchronized void disable(){disabled=true;}
-    public synchronized Snapshot snapshot(){return new Snapshot(route!=Route.NONE&&!waiting&&!disabled&&!nativeInteraction,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9,context,route,epoch,scannedResources,name,mode,map,workshopProjects,requestedMods,queuePosition,downloaded,downloadTotal,generation,server);}
+    public synchronized Snapshot snapshot(){return new Snapshot(route!=Route.NONE&&!waiting&&!disabled&&!nativeInteraction,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9,context,route,epoch,scannedResources,name,mode,map,workshopProjects,requestedMods,queuePosition,downloaded,downloadTotal,generation,server,downloadPage,downloadID,downloadTitle,workshopReady,downloadRate,downloadPhase);}
     public static final class Snapshot {
         public final boolean active,world;
+        public final boolean downloadPage;public final String downloadID,downloadTitle,downloadPhase;public final int workshopReady;public final double downloadRate;
         public final String title,detail,stage;
         public final int stageIndex,processedMods,processedScripts;
         public final String[] activity,issue;
@@ -162,6 +167,6 @@ public final class LoadingModel {
         public final Context context;public final Route route;public final long epoch,scannedResources,downloaded,downloadTotal;
         public final String name,mode,map;public final int workshopProjects,requestedMods,queuePosition;
         public final long generation,worldDay;public final String endpoint,gameClock,gameDate;public final int online,maxPlayers;public final boolean clockObserved;
-        Snapshot(boolean active,boolean world,String title,String detail,String stage,int index,int mods,int scripts,String[] activity,String[] issue,double elapsed,Context context,Route route,long epoch,long scanned,String name,String mode,String map,int projects,int requested,int queue,long downloaded,long total,long generation,ServerInfo server){this.active=active;this.world=world;this.title=title;this.detail=detail;this.stage=stage;stageIndex=index;processedMods=mods;processedScripts=scripts;this.activity=activity;this.issue=issue;this.elapsed=elapsed;this.context=context;this.route=route;this.epoch=epoch;scannedResources=scanned;this.name=name;this.mode=mode;this.map=map;workshopProjects=projects;requestedMods=requested;queuePosition=queue;this.downloaded=downloaded;downloadTotal=total;this.generation=generation;endpoint=server.endpoint();online=server.online;maxPlayers=server.maximum;gameClock=server.clock;gameDate=server.date;worldDay=server.day;clockObserved=server.clockObserved;}
+        Snapshot(boolean active,boolean world,String title,String detail,String stage,int index,int mods,int scripts,String[] activity,String[] issue,double elapsed,Context context,Route route,long epoch,long scanned,String name,String mode,String map,int projects,int requested,int queue,long downloaded,long total,long generation,ServerInfo server,boolean downloadPage,String downloadID,String downloadTitle,int workshopReady,double downloadRate,String downloadPhase){this.downloadPhase=downloadPhase;this.downloadPage=downloadPage;this.downloadID=downloadID;this.downloadTitle=downloadTitle;this.workshopReady=workshopReady;this.downloadRate=downloadRate;this.active=active;this.world=world;this.title=title;this.detail=detail;this.stage=stage;stageIndex=index;processedMods=mods;processedScripts=scripts;this.activity=activity;this.issue=issue;this.elapsed=elapsed;this.context=context;this.route=route;this.epoch=epoch;scannedResources=scanned;this.name=name;this.mode=mode;this.map=map;workshopProjects=projects;requestedMods=requested;queuePosition=queue;this.downloaded=downloaded;downloadTotal=total;this.generation=generation;endpoint=server.endpoint();online=server.online;maxPlayers=server.maximum;gameClock=server.clock;gameDate=server.date;worldDay=server.day;clockObserved=server.clockObserved;}
     }
 }

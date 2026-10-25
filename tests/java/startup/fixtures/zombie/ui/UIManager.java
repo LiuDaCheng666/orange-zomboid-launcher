@@ -1,6 +1,8 @@
 package zombie.ui;
 import zombie.core.SpriteRenderer;
 public final class UIManager {
+ public static se.krka.kahlua.vm.KahluaThread thread;
+ public static se.krka.kahlua.vm.KahluaThread getDefaultThread(){return thread;}
  public static boolean useUiFbo=true;
  public static Runnable luaRender;
  public static final java.util.ArrayList<UIElement> UI=new java.util.ArrayList<>();

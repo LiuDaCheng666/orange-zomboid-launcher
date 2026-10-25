@@ -11,6 +11,7 @@ public final class NativeConnectionPresentation {
     private static final String[] CHROME={"reportBug","termsOfService","versionBtn","resetLua"};
     private static final String[] PAGES={"bottomPanel","charCreationMain","charCreationProfession","sandOptions","onlineCoopScreen","soloScreen","creditsScreen","loadScreen","worldSelect","mapSpawnSelect","modSelect","bootstrapConnectPopup","serverConnectPopup","multiplayer","lastStandPlayerSelect","workshopSubmit","serverWorkshopItem","serverSettingsScreen","mainOptions","scoreboard","inviteFriends","modListDetail","seedLabel","threeD","demoMessagePanel"};
     private final ThreadLocal<Lease> current=new ThreadLocal<>();
+    private WorkshopGeometry workshopGeometry;
     public static final class Lease {
         public final double statusBottom,cancelTop;
         final ClassLoader loader;final Object environment,mainTable,connectTable,main,connect,logo,background,arrowBG,arrowFG,queue;
@@ -42,6 +43,7 @@ public final class NativeConnectionPresentation {
     private Lease resolve(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean queueScope,boolean drawing){
         try{
             if(drawing&&!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",loader),"useUiFbo")))return null;
+            if(state.downloadPage)return resolveWorkshop(loader,state,frame,true);
             Object env=field(type("zombie.Lua.LuaManager",loader),"env");if(env==null)return null;
             Object mainTable=raw(raw(env,"MainScreen"),"instance"),main=element(mainTable);if(main==null||!visible(main)||Boolean.TRUE.equals(raw(mainTable,"inGame")))return null;
             namedType(loader,mainTable,"MainScreen");
@@ -81,6 +83,7 @@ public final class NativeConnectionPresentation {
         try{
             LoadingModel.Snapshot state=StartupRuntime.snapshot();
             if(state==null||!state.active||state.generation!=lease.generation||state.epoch!=lease.epoch||!StartupRuntime.acceptedFrame(lease.frame)||!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",lease.loader),"useUiFbo"))||field(type("zombie.Lua.LuaManager",lease.loader),"env")!=lease.environment)return null;
+            if(state.downloadPage){Lease check=resolveWorkshop(lease.loader,state,lease.frame,false);if(check==null||check.environment!=lease.environment||check.main!=lease.main||check.connect!=lease.connect||check.logo!=lease.logo||check.allowedConnection.size()!=lease.allowedConnection.size()||!lease.allowedConnection.containsAll(check.allowedConnection)){restoreWorkshop();return null;}return lease;}
             if(raw(raw(lease.environment,"MainScreen"),"instance")!=lease.mainTable||element(raw(lease.mainTable,"connectToServer"))!=lease.connect||!visible(lease.main)||visible(lease.connect)==lease.queueScope)return null;
             if(raw(lease.mainTable,"logoTexture")!=lease.logo||raw(lease.connectTable,"failMessage")!=null)return null;
             if(visible(element(raw(lease.connectTable,"googleAuthPopup"))))return null;
@@ -90,12 +93,51 @@ public final class NativeConnectionPresentation {
             return lease;
         }catch(Throwable unavailable){return null;}
     }
+    public boolean skipWorkshopTitle(Object element,String text,double x,double y){Lease lease=valid();try{return lease!=null&&StartupRuntime.snapshot().downloadPage&&element==lease.connect&&text!=null&&y==10&&x==number(lease.connectTable,"width")/2;}catch(Exception unavailable){return false;}}
+    private Lease resolveWorkshop(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean reflow){try{
+        if(!StartupRuntime.ownsWorkshop(loader,state.generation))return null;Class<?> font=type("zombie.ui.UIFont",loader),text=type("zombie.ui.TextManager",loader);text.getMethod("MeasureStringX",font,String.class);if(text.getField("instance").get(null)==null)return null;
+        if(!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",loader),"useUiFbo")))return null;
+        Object env=field(type("zombie.Lua.LuaManager",loader),"env"),mt=raw(raw(env,"MainScreen"),"instance"),main=element(mt);namedType(loader,mt,"MainScreen");if(!visible(main)||Boolean.TRUE.equals(raw(mt,"inGame")))return null;
+        Object wt=raw(mt,"serverWorkshopItem"),page=element(wt);namedType(loader,wt,"ServerWorkshopItemScreen");if(!visible(page)||raw(raw(env,"ServerWorkshopItemScreen"),"instance")!=wt)return null;
+        Set<Object> allowed=identities(),ma=identities(),hidden=identities();ma.add(page);
+        for(String name:new String[]{"label","listbox","installButton","disconnectButton"}){Object t=raw(wt,name),e=element(t);namedType(loader,t,name.equals("label")?"ISLabel":name.equals("listbox")?"WorkshopItemList":"ISButton");if(!visible(e))return null;allowed.add(e);if(!name.equals("listbox")&&!children(e).isEmpty())return null;}
+        exactChildren(page,allowed,false);
+        Object listTable=raw(wt,"listbox"),listElement=element(listTable),scrollTable=raw(listTable,"vscroll"),scroll=element(scrollTable);if(scroll==null||raw(listTable,"hscroll")!=null)return null;namedType(loader,scrollTable,"ISScrollBar");if(!children(scroll).isEmpty())return null;Set<Object> scrollAllowed=identities();scrollAllowed.add(scroll);exactChildren(listElement,scrollAllowed,false);
+        for(String name:CHROME){Object e=element(raw(mt,name));if(e!=null)ma.add(e);}
+        Object connection=element(raw(mt,"connectToServer"));if(connection==null||visible(connection)||raw(raw(mt,"connectToServer"),"failMessage")!=null||visible(element(raw(raw(mt,"connectToServer"),"googleAuthPopup"))))return null;ma.add(connection);hidden.add(connection);
+        for(String name:PAGES){if(name.equals("serverWorkshopItem"))continue;Object e=element(raw(mt,name));if(e!=null){if(visible(e))return null;ma.add(e);hidden.add(e);}}
+        exactChildren(main,ma,false);Object roots=type("zombie.ui.UIManager",loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(main))return null;for(Object root:list)if(root!=main&&visible(root))return null;
+        if(!Boolean.FALSE.equals(raw(raw(wt,"installButton"),"enable")))return null;
+        if(workshopGeometry!=null&&(workshopGeometry.page!=wt||workshopGeometry.environment!=env||!workshopGeometry.sameWidgets())){restoreWorkshop();return null;}
+        if(workshopGeometry==null)workshopGeometry=new WorkshopGeometry(loader,env,wt);
+        if(reflow){if(!workshopGeometry.apply(number(mt,"height")))return null;}else if(!workshopGeometry.matches())return null;
+        Object logo=raw(mt,"logoTexture");if(logo==null)return null;
+        return new Lease(loader,env,mt,wt,main,page,logo,null,null,null,null,identities(),ma,allowed,hidden,state,frame,false,0,0);
+    }catch(Throwable unavailable){return null;}}
+    /** CPU-only: retained through input, including between rendered frames. */
+    public void restoreWorkshop(){WorkshopGeometry geometry=workshopGeometry;workshopGeometry=null;if(geometry!=null)geometry.restore();}
+    private static final class WorkshopGeometry {
+        final ClassLoader loader;final Object environment,page,list,label,install,disconnect,scroll;final double originalY,originalLabelY;double appliedY,appliedLabelY;
+        WorkshopGeometry(ClassLoader loader,Object env,Object page)throws Exception{this.loader=loader;environment=env;this.page=page;list=raw(page,"listbox");label=raw(page,"label");install=raw(page,"installButton");disconnect=raw(page,"disconnectButton");scroll=raw(list,"vscroll");originalY=number(list,"y");originalLabelY=number(label,"y");appliedY=originalY;appliedLabelY=originalLabelY;}
+        void set(Object table,String method,double value)throws Exception{
+            Class<?> kt=type("se.krka.kahlua.vm.KahluaTable",loader),ui=type("zombie.ui.UIManager",loader);Object function=ui.getMethod("tableget",kt,Object.class).invoke(null,table,method);if(function==null)throw new IllegalStateException("native setter");
+            Object caller=field(type("zombie.Lua.LuaManager",loader),"caller"),thread=ui.getMethod("getDefaultThread").invoke(null);
+            caller.getClass().getMethod("pcallvoid",type("se.krka.kahlua.vm.KahluaThread",loader),Object.class,Object[].class).invoke(caller,thread,function,new Object[]{table,Double.valueOf(value)});
+            String key=method.equals("setY")?"y":"height",getter=method.equals("setY")?"getY":"getHeight";Object javaValue=element(table).getClass().getMethod(getter).invoke(element(table));if(!(javaValue instanceof Double n)||Math.abs(number(table,key)-value)>.01||Math.abs(n-value)>.01)throw new IllegalStateException("native setter mismatch");
+        }
+        boolean sameWidgets()throws Exception{return raw(page,"listbox")==list&&raw(page,"label")==label&&raw(page,"installButton")==install&&raw(page,"disconnectButton")==disconnect&&raw(list,"vscroll")==scroll;}
+        boolean matches()throws Exception{return sameWidgets()&&number(list,"y")==appliedY&&number(label,"y")==appliedLabelY;}
+        boolean apply(double screen)throws Exception{if(number(list,"y")!=appliedY||number(label,"y")!=appliedLabelY)return false;double bottom=number(list,"y")+number(list,"height"),button=number(raw(page,"installButton"),"y");if(Math.abs(bottom+20-button)>.01)return false;double y=Math.max(originalY,screen*.56-number(page,"y"));if(bottom-y<90||screen<480)return false;double beforeY=appliedY,beforeLabel=appliedLabelY,beforeHeight=number(list,"height");appliedY=y;appliedLabelY=y-number(label,"height")-8;try{set(list,"setY",y);set(list,"setHeight",bottom-y);set(label,"setY",appliedLabelY);return true;}catch(Exception error){try{set(list,"setY",beforeY);set(list,"setHeight",beforeHeight);set(label,"setY",beforeLabel);}finally{appliedY=beforeY;appliedLabelY=beforeLabel;}throw error;}}
+        void restore(){try{if(number(list,"y")==appliedY&&Math.abs(number(list,"y")+number(list,"height")+20-number(raw(page,"installButton"),"y"))<.01){double bottom=number(list,"y")+number(list,"height");set(list,"setY",originalY);set(list,"setHeight",bottom-originalY);}if(number(label,"y")==appliedLabelY)set(label,"setY",originalLabelY);}catch(Throwable unavailable){/* Native page remains authoritative if a mod replaced the setter. */}}
+    }
+    public boolean workshopList(Object element){Lease lease=valid();try{return lease!=null&&StartupRuntime.snapshot().downloadPage&&element==element(raw(lease.connectTable,"listbox"));}catch(Throwable unavailable){return false;}}
     public boolean skipElement(Object element){Lease lease=valid();return lease!=null&&lease.decoration.contains(element);}
     public boolean skipQueue(Object element){Lease lease=valid();return lease!=null&&lease.queueScope&&element==lease.queue;}
     public boolean skipTexture(Object element,Object texture,Kind kind){
         Lease lease=valid();if(lease==null)return false;
         if(element==lease.main)return kind==Kind.SCALED&&texture==lease.logo;
         if(element!=lease.connect||lease.queueScope)return false;
+        if(StartupRuntime.snapshot().downloadPage)return kind==Kind.SCALED&&texture==null;
         return switch(kind){case SCALED -> texture==null;case COLOR -> texture!=null&&(texture==lease.arrowBG||texture==lease.arrowFG);case ASPECT -> texture!=null&&texture==lease.background;};
     }
 }

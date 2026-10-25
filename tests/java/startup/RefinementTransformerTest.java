@@ -29,7 +29,7 @@ public final class RefinementTransformerTest {
         boolean thrown=false;try{state.FromLua("bad");}catch(IllegalArgumentException original){thrown=true;}check(thrown,"original Lua command exception preserved");
         ArrayList<String> ids=new ArrayList<>(List.of("1","2","3"));LuaEventManager.triggerEvent("OnServerWorkshopItems","Required",ids);
         check(StartupRuntime.snapshot().workshopProjects==3&&StartupRuntime.snapshot().requestedMods==-1,"workshop count is projects; mod-ID list remains unknown until initialized for this operation");
-        LuaEventManager.triggerEvent("OnServerWorkshopItems","Progress","1",12L,24L);check(StartupRuntime.snapshot().downloaded==12,"known real per-project byte progress");
+        LuaEventManager.triggerEvent("OnServerWorkshopItems","Progress","1",12L,24L);check(StartupRuntime.snapshot().downloaded==-1,"unowned progress without accepted original Install is rejected");
         check(!StartupRuntime.snapshot().active,"Required retains native ownership throughout workshop interaction");connect("Post workshop passive");state.enter();
         Poison poison=new Poison();LuaEventManager.triggerEvent("Unrelated",poison,poison,poison,poison);check(LuaEventManager.last==poison,"unrelated payload untouched and original call preserved");
         MainScreenState.instance.render();List<Object> queue=SpriteRenderer.instance.queue;

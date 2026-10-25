@@ -63,6 +63,8 @@ public final class Hooks {
             .transform((b,t,l,m,d)->b.visit(Advice.to(Event.class).on(named("triggerEvent").and(takesArgument(0,String.class)).and(returns(void.class)))))
             .type(named("zombie.ui.UIElement"))
             .transform((b,t,l,m,d)->b
+                .visit(Advice.to(RowText.class).on(named("DrawText").and(takesArguments(8)).and(takesArgument(0,named("zombie.ui.UIFont"))).and(takesArgument(1,String.class)).and(returns(void.class))))
+                .visit(Advice.to(TitleDraw.class).on(named("DrawTextCentre").and(takesArguments(8)).and(takesArgument(1,String.class)).and(returns(void.class))))
                 .visit(Advice.to(ElementDraw.class).on(named("render").and(takesArguments(0)).and(returns(void.class))))
                 .visit(Advice.to(ScaledDraw.class).on(named("DrawTextureScaledColor").and(takesArguments(9)).and(takesArgument(0,named("zombie.core.textures.Texture"))).and(takesArgument(1,Double.class)).and(returns(void.class))))
                 .visit(Advice.to(ColorDraw.class).on(named("DrawTextureColor").and(takesArguments(7)).and(takesArgument(0,named("zombie.core.textures.Texture"))).and(returns(void.class))))
@@ -104,7 +106,10 @@ public final class Hooks {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.This Object state,@Advice.Origin("#m")String method){return StartupRuntime.enterConnection(state,method);}
         @Advice.OnMethodExit(onThrowable=Throwable.class,suppress=Throwable.class)public static void exit(@Advice.This Object state,@Advice.Enter Object prior,@Advice.Thrown Throwable error){StartupRuntime.exitConnection(state,prior,error);}
     }
-    public static final class ConnectionCommand {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Argument(0)String command){if("disconnect".equals(command))StartupRuntime.handoff(false);}}
+    public static final class ConnectionCommand {
+        @Advice.OnMethodEnter(suppress=Throwable.class)public static long enter(){return StartupRuntime.commandBefore();}
+        @Advice.OnMethodExit(onThrowable=Throwable.class,suppress=Throwable.class)public static void exit(@Advice.This Object owner,@Advice.Argument(0)String command,@Advice.Enter long operation,@Advice.Thrown Throwable error){StartupRuntime.commandAfter(owner,command,operation,error);}
+    }
     public static final class ConnectionExit {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.handoff(true);}}
     public static final class QueueBegin {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.queueBegin();}}
     public static final class QueuePosition {
@@ -128,9 +133,13 @@ public final class Hooks {
     public static final class Background {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.This Object state){StartupRuntime.background(state);}}
     public static final class ElementDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element){return StartupRuntime.skipElement(element);}}
     public static final class QueueDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element){return StartupRuntime.skipQueue(element);}}
-    public static final class ScaledDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"SCALED");}}
+    public static final class ScaledDraw {
+        @Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture,@Advice.Argument(value=1,readOnly=false)Double x,@Advice.Argument(value=2,readOnly=false)Double y,@Advice.Argument(value=3,readOnly=false)Double w,@Advice.Argument(value=4,readOnly=false)Double h,@Advice.Argument(value=5,readOnly=false)Double r,@Advice.Argument(value=6,readOnly=false)Double g,@Advice.Argument(value=7,readOnly=false)Double b,@Advice.Argument(value=8,readOnly=false)Double a){double[] row=NativeWorkshopRows.rect(element,texture,x,y,w,h,r,g,b,a);if(row!=null){if(row.length==0)return true;x=row[0];y=row[1];w=row[2];h=row[3];r=row[4];g=row[5];b=row[6];a=row[7];}return StartupRuntime.skipTexture(element,texture,"SCALED");}
+    }
+    public static final class RowText {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.This Object element,@Advice.Argument(value=0,readOnly=false,typing=net.bytebuddy.implementation.bytecode.assign.Assigner.Typing.DYNAMIC)Object font,@Advice.Argument(value=1,readOnly=false)String text,@Advice.Argument(value=2,readOnly=false)double x,@Advice.Argument(3)double y){Object[] row=NativeWorkshopRows.text(element,font,text,x,y);if(row!=null){text=(String)row[0];x=(Double)row[1];font=row[2];}}}
     public static final class ColorDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"COLOR");}}
     public static final class AspectDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"ASPECT");}}
+    public static final class TitleDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(1)String text,@Advice.Argument(2)double x,@Advice.Argument(3)double y){return StartupRuntime.skipWorkshopTitle(element,text,x,y);}}
     public static final class EndUI {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.This Object core){StartupRuntime.endFrameUI(core);}}
     public static final class Event {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.Origin Class<?> eventType,@Advice.Argument(0)String event,@Advice.Argument(value=1,optional=true)Object a,@Advice.Argument(value=2,optional=true)Object b,@Advice.Argument(value=3,optional=true)Object c,@Advice.Argument(value=4,optional=true)Object d){

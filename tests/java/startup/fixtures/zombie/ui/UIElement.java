@@ -11,6 +11,14 @@ public class UIElement {
   Draw(UIElement e,Texture t,double x,double y,double w,double h,double r,double g,double b,double a){element=e;texture=t;this.x=x;this.y=y;this.w=w;this.h=h;this.r=r;this.g=g;this.b=b;this.a=a;}
  }
  final KahluaTable table;public final ArrayList<UIElement> controls=new ArrayList<>();
+ public static java.util.function.Consumer<Text> textDrawing;
+ public record Text(UIElement element,String text,double x,double y,double size){}
+ public double javaY=Double.NaN,javaHeight=Double.NaN;
+ public void setY(double v){javaY=v;}public void setHeight(double v){javaHeight=v;}
+ public Double getY(){return Double.isNaN(javaY)?((Number)table.rawget("y")).doubleValue():javaY;}
+ public Double getHeight(){return Double.isNaN(javaHeight)?((Number)table.rawget("height")).doubleValue():javaHeight;}
+ public void DrawTextCentre(UIFont font,String text,double x,double y,double r,double g,double b,double a){if(textDrawing!=null)textDrawing.accept(new Text(this,text,x,y,font.size));}
+ public void DrawText(UIFont font,String text,double x,double y,double r,double g,double b,double a){if(textDrawing!=null)textDrawing.accept(new Text(this,text,x,y,font.size));}
  public boolean visible=true;public int renders;public Runnable nativeRender;
  public UIElement(KahluaTable table){this.table=table;table.rawset("javaObject",this);}
  public KahluaTable getTable(){return table;}public ArrayList<UIElement> getControls(){return controls;}

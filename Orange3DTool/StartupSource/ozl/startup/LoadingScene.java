@@ -29,6 +29,7 @@ public final class LoadingScene {
     }
     /** Native widget bounds are normalized immutable observations from the accepted CPU frame. */
     public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum,double statusBottom,double cancelTop) {
+        if(state.downloadPage){WorkshopScene.draw(c,w,h,state,seconds,reduced);return;}
         boolean nativeControls=state.context==LoadingModel.Context.SERVER&&statusBottom>0&&cancelTop>statusBottom;
         if(nativeControls)light=false; // Original native status is white and remains authoritative.
         double sceneScale=Math.max(.6,Math.min(2.5,Math.min(w/1440d,h/900d))),s=nativeControls?Math.min(1.3,sceneScale):sceneScale,margin=Math.max(22,48*s);
