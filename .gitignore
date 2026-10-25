@@ -17,6 +17,7 @@ TestFixtures/
 **/*.exe
 **/*.dll
 **/*.jar
+**/OrangeStartup.build.json
 **/*.zip
 **/*.pdb
 **/*.log
