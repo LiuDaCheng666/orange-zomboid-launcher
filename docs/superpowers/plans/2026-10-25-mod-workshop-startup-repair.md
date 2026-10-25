@@ -44,4 +44,4 @@ Files: SteamLauncherServices/Native/WorkshopWorker/ModernHostPolicy and existing
 - [x] Empty keywords browse popular mods through native Steam APIs. Preserve optional search/filter, pagination and legitimate errors. No new server/API key/login flow.
 - [x] If using deep pagination, verify official cursor ABI/DTO and tests; do not promise all pages from a1000-page-limited endpoint.
 - [x] Review full changes and test native/UI boundary against the final production artifact; keep real Steam/network evidence separate from synthetic fixtures.
-- [ ] Build signed1.2.20, preserve installer/path/branding/update identity. Publish only immutable artifacts/latest metadata/notes through existing safe publisher. Verify20anonymous downloads, actual old client Ready, protected website equality and postpublish SSH.
+- [x] Build signed1.2.20, preserve installer/path/branding/update identity. Publish only immutable artifacts/latest metadata/notes through existing safe publisher. Verify20anonymous downloads, actual old client Ready, protected website equality and postpublish SSH.

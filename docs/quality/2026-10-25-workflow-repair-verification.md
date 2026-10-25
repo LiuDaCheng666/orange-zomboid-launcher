@@ -41,3 +41,13 @@ A cross-process PowerShell reflection experiment cannot exercise this SDK transp
 ## Coverage boundaries
 
 Browser suites exercise real page code with synthetic native replies; the native persistence and packaged-assembly checks supply actual file-effect evidence. Deletion and failure branches operate on isolated fixtures. Live Steam browsing and the actual main-menu/force-close flow were tested separately. No claim is made that arbitrary third-party mods, every server, every Windows installation or every possible concurrent schedule has been exhaustively tested.
+
+## Published release
+
+1.2.20 was published from `dist/1.2.20-workflow-20261025-final6/release`. Git tag `v1.2.20` points to cae444c, including application commit 07fdd57 and diagnostic-only line-ending cleanup.
+
+- Primary software publisher completed successfully. All 693 protected website/configuration entries matched before/after; the physical current website stayed unchanged. Only the ten immutable version files, three latest-feed files and merged release metadata were published.
+- GitHub release: https://github.com/LiuDaCheng666/orange-zomboid-launcher/releases/tag/v1.2.20 . Draft asset inventory, lengths and all ten GitHub SHA-256 digests matched the signed local release before promotion.
+- Anonymous HTTP download verification passed for all ten files on each origin, plus all three current-feed files and release.json version. Evidence: `artifacts/publication-1.2.20/public-download-proof.json`.
+- The actual 1.2.16 production update backend used real published transport in an isolated locator and reached Ready for 1.2.20 after verified download. It did not apply an update to the human installation. Evidence: `production-client-proof.json`.
+- Post-publication SSH pinned fingerprint, explicit-key login, read-only command and SFTP checks passed. Website/Caddy/Nginx/SSH configuration and unrelated working-tree edits were preserved.
