@@ -73,7 +73,7 @@ public final class NativeConnectionPresentation {
             if(raw(lease.mainTable,"logoTexture")!=lease.logo||raw(lease.connectTable,"failMessage")!=null)return null;
             if(visible(element(raw(lease.connectTable,"googleAuthPopup"))))return null;
             exactChildren(lease.main,lease.allowedMain,false);exactChildren(lease.connect,lease.allowedConnection,false);for(Object page:lease.hiddenPages)if(visible(page))return null;
-            for(String name:DECORATION)if(!lease.decoration.contains(element(raw(lease.connectTable,name))))return null;
+            for(String name:DECORATION){Object child=element(raw(lease.connectTable,name));if(!lease.decoration.contains(child)||!children(child).isEmpty())return null;}
             Object roots=type("zombie.ui.UIManager",lease.loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(lease.main))return null;for(Object root:list)if(root!=lease.main&&visible(root))return null;
             return lease;
         }catch(Throwable unavailable){return null;}

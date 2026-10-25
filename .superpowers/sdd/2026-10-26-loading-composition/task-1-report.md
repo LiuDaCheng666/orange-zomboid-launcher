@@ -65,7 +65,7 @@ All paths are relative to this checkout; both worker and root inspected the befo
 
 The fresh full-suite copies are under artifacts/ingame-startup/tests/native-composition/. Status and Abort pixels are measured independently in both 720p and 1080p captures. The tiny orange in these frames is the first accepted animation frame; sustained animation remains Task 2. A future deferred GPU failure cannot retroactively restore already-filtered same-frame decoration; essential native status/Abort are never filtered, and failure disables subsequent filtering. No contrary same-frame decoration recovery claim is made.
 
-## Component and handoff
+## Original Task 1 component and handoff (before review fix)
 
 Built ignored local artifact Orange3DTool/Assets/OrangeStartup.jar SHA-256:
 
@@ -76,3 +76,29 @@ The repository already ignores generated startup JAR/build-stamp outputs; rebuil
 Task 3 read-only native workshop pointers: media/lua/client/OptionScreens/ServerWorkshopItemScreen.lua has installButton/disconnectButton/label/listbox; onButtonInstall around 143, onButtonDisconnect 148, setRequiredItems 154, updateItemDetails 174, progress 190, local OnServerWorkshopItems dispatch 216. Native list/Install/Disconnect remain untouched in Task 1. A distinct custom download scene remains separate authorized work.
 
 After removing trailing blank lines in three new files, the full Java suite was rerun and passed. The rebuilt final JAR has identical decompressed entry bytes to the JAR embedded in the headless-tested suite (verified across every ZIP entry); only ZIP metadata and the container hash changed. The 889 native headless checks therefore cover the same payload bytes. Staged owned whitespace check then passed.
+
+## Review fix round 1 — descendants inserted after enqueue
+
+Review task-1-review.md identified a same-frame validation gap: resolve() checked that decorative labels/reminder had no descendants, but valid() only rechecked their identities. A MainScreen prerender could therefore attach a new modded control under title/richText after accepting the backdrop, and the known-parent render filter would suppress that new subtree.
+
+Added a regression for both title and richText. The actual MainScreen prerender boundary first verifies an owned drawer is already queued, then attaches a new descendant. It asserts that the original decorative parent traverses, the descendant renders and invokes its original callback once, and native logo/panel draws remain present. Before the fix, the accepted-premain fixture failed with `same-frame unknown descendant under title preserves native decoration traversal and callback`. RED output: artifacts/native-composition/descendant-red.txt.
+
+Minimal production change: valid() now rechecks `children(child).isEmpty()` for every decorative identity immediately before permitting any suppression. No other policy or lifecycle was changed.
+
+Commands and fresh results:
+
+```powershell
+./tests/Run-NativeCompositionFixture.ps1 # RED before production fix
+./Build-StartupComponent.ps1 -GameDirectory E:/Steam/steamapps/common/ProjectZomboid
+./tests/Run-NativeCompositionFixture.ps1 # GREEN: PASS 23 actual native Lua composition contracts
+./tests/Run-NativeCompositionFixture.ps1 -Probe NativeLuaGlProbe # PASS 14 hidden actual-Lua GL contracts
+git diff --check -- Orange3DTool/StartupSource/ozl/startup/NativeConnectionPresentation.java tests/java/startup/NativeCompositionTest.java
+```
+
+GREEN logs: artifacts/native-composition/descendant-green.txt and descendant-gl.txt. The focused checks cover the amended behavior; the full Java and native headless suites were not repeated for this one-line policy fix. Existing JVM Unsafe warnings and the explicitly contained GL failure diagnostic remain as documented above. No actual game/UI/Steam or server action was performed.
+
+Current rebuilt Orange3DTool/Assets/OrangeStartup.jar SHA-256:
+
+`7F16D72D8754C3AE35A2AA71DD39D3ABA8C0251A6DD0DDD71807677B346E32FA`
+
+Compared every decompressed JAR entry against the pre-fix component copied into the RED fixture: **only ozl/startup/NativeConnectionPresentation.class changed**; every other entry's bytes are identical. The previous 889 headless checks apply to the pre-review payload, while the revised adapter has the fresh focused Lua/GL evidence above. The minor diagnostics review item remains deferred by the root review ledger, outside this fix scope.

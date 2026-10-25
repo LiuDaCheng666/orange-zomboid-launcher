@@ -23,6 +23,12 @@ public final class NativeCompositionTest {
   try(var rejected=new java.net.URLClassLoader(new java.net.URL[0],null)){check(!QueuedBackdrop.enqueue(rejected,new QueuedBackdrop.Ticket(StartupRuntime.snapshot(),"MENU")),"foreign loader cannot report accepted draw or arm a presentation lease");}
   UIElement unknown=new UIElement(fixture.platform.newTable());fixture.connect.controls.add(unknown);fixture.draws.clear();MainScreenState.instance.render();
   check(fixture.draws.stream().anyMatch(d->d.texture==fixture.main.getTable().rawget("logoTexture")),"unknown child fails open to native logo/panel");fixture.connect.controls.remove(unknown);
+  for(String name:new String[]{"title","richText"}){
+   SpriteRenderer.instance.recycle();fixture.draws.clear();UIElement decoration=fixture.child(name),descendant=new UIElement(fixture.platform.newTable());int before=decoration.renders;int[] callbacks={0};descendant.nativeRender=()->callbacks[0]++;
+   var nativeCall=UIElement.call;UIElement.call=(element,method)->{if(element==fixture.main&&method.equals("prerender")){check(SpriteRenderer.instance.queue.stream().anyMatch(command->command instanceof zombie.core.textures.TextureDraw.GenericDrawer),"descendant mutation happens after accepted backdrop enqueue");decoration.controls.add(descendant);}nativeCall.accept(element,method);};
+   try{MainScreenState.instance.render();check(decoration.renders==before+1&&descendant.renders==1&&callbacks[0]==1,"same-frame unknown descendant under "+name+" preserves native decoration traversal and callback");check(fixture.draws.stream().anyMatch(draw->draw.texture==fixture.main.getTable().rawget("logoTexture"))&&fixture.draws.stream().anyMatch(draw->draw.element==fixture.connect),"same-frame descendant mutation restores native logo and panel");}
+   finally{UIElement.call=nativeCall;decoration.controls.remove(descendant);}
+  }
   UIElement page=new UIElement(fixture.platform.newTable());fixture.main.controls.add(page);fixture.draws.clear();MainScreenState.instance.render();check(!fixture.draws.isEmpty(),"unknown visible page keeps native drawing");fixture.main.controls.remove(page);
   Object title=fixture.connect.getTable().rawget("title");fixture.connect.getTable().rawset("title",null);fixture.draws.clear();MainScreenState.instance.render();check(!fixture.draws.isEmpty(),"missing named API/table fails open");fixture.connect.getTable().rawset("title",title);
   fixture.draws.clear();UIElement.drawing=d->{fixture.draws.add(d);};
