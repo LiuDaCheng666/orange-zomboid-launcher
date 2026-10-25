@@ -55,6 +55,8 @@ public final class StartupRuntime {
         }catch(ReflectiveOperationException unavailable){handoff(false);}
     }
     public static void worldEnd(){publicQuery.cancel();LoadingModel m=model;if(m!=null)m.worldEnd();}
+    /** Multiplayer SendDone sends a request; only the original done flag proves completion. */
+    public static void worldSent(Class<?> type){Object done=read(type,null,"done");if(!(done instanceof Boolean completed)||completed)worldEnd();}
     public static void worldFrame(Object state){
         LoadingModel m=model;if(m==null||state==null||!m.snapshot().world)return;
         Class<?> type=state.getClass();

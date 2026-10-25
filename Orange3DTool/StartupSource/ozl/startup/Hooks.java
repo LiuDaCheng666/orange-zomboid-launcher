@@ -35,7 +35,8 @@ public final class Hooks {
             .type(named("zombie.gameStates.GameLoadingState"))
             .transform((b,t,l,m,d)->b
                 .visit(Advice.to(WorldBegin.class).on(named("enter").and(takesArguments(0))))
-                .visit(Advice.to(WorldEnd.class).on(namedOneOf("exit","Done","SendDone").and(takesArguments(0))))
+                .visit(Advice.to(WorldEnd.class).on(namedOneOf("exit","Done").and(takesArguments(0))))
+                .visit(Advice.to(WorldSent.class).on(named("SendDone").and(takesArguments(0))))
                 .visit(Advice.to(WorldFrame.class).on(namedOneOf("render","update").and(takesArguments(0)))))
             .type(named("zombie.network.GameClient"))
             .transform((b,t,l,m,d)->b
@@ -76,6 +77,7 @@ public final class Hooks {
     public static final class Menu {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.menuReady();}}
     public static final class WorldBegin {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.This Object value){StartupRuntime.worldBegin(value);}}
     public static final class WorldEnd {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.worldEnd();}}
+    public static final class WorldSent {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Origin Class<?> type){StartupRuntime.worldSent(type);}}
     public static final class WorldFrame {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.This Object value){StartupRuntime.worldFrame(value);}}
     public static final class Connect {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.Argument(2)String host,@Advice.Argument(4)String port,@Advice.Argument(6)String friendly){StartupRuntime.serverBegin(friendly,host,port);}

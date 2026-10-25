@@ -8,6 +8,7 @@ public final class GameClient {
     public final ArrayList<String> serverMods=new ArrayList<>();
     public int calls,sync;
     public boolean failConnect,failCoop;
+    public int loginQueueDoneRequests;public boolean failLoginQueueDone;
     public enum RequestState {Start,Loading,Complete}
     public void doConnect(String a,String b,String c,String d,String e,String f,String friendly,boolean h,int i){doConnect(a,b,c,d,e,f,friendly,h,i,"credential");}
     public void doConnect(String a,String b,String c,String d,String e,String f,String friendly,boolean h,int i,String j){calls++;if(failConnect)throw new IllegalStateException("original connect");ip=c;port=Integer.parseInt(e);serverName=friendly;client=true;}
@@ -16,4 +17,5 @@ public final class GameClient {
     public void doDisconnect(String privateReason){calls++;client=false;}
     public void setRequest(RequestState state){sync++;}
     public void GameLoadingRequestData(){sync++;}
+    public void sendLoginQueueDone(long elapsed){loginQueueDoneRequests++;if(failLoginQueueDone)throw new IllegalStateException("original acknowledgement");}
 }
