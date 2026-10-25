@@ -11,6 +11,14 @@ $files=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'java\startup') -Re
 if($LASTEXITCODE -ne 0){throw 'Startup Java test compilation failed'}
 & java -cp ($classes+';'+$asset) ozl.startup.tests.StartupModelTest
 if($LASTEXITCODE -ne 0){throw 'Startup state/session behavior failed'}
+& java -cp ($classes+';'+$asset) ozl.startup.tests.RefinementModelTest
+if($LASTEXITCODE -ne 0){throw 'Loading refinement model behavior failed'}
+& java -cp ($classes+';'+$asset) ozl.startup.tests.ServerInformationTest
+if($LASTEXITCODE -ne 0){throw 'Server information receipt behavior failed'}
+& java -cp ($classes+';'+$asset) ozl.startup.tests.ServerQueryTest
+if($LASTEXITCODE -ne 0){throw 'Owned server public query behavior failed'}
+& java -cp ($classes+';'+$asset) ozl.startup.tests.SceneContractTest
+if($LASTEXITCODE -ne 0){throw 'Loading scene animation/context behavior failed'}
 & java '-Djava.awt.headless=true' -cp ($classes+';'+$asset) ozl.startup.tests.SceneProbe (Join-Path $output 'scenes') (Join-Path $repo 'Orange3DTool\Assets\orange-app.png')
 if($LASTEXITCODE -ne 0){throw 'Loading scene viewport checks failed'}
 $fixture=Join-Path $output ('game-'+[guid]::NewGuid().ToString('N'))
@@ -25,7 +33,13 @@ $runtime=Join-Path $GameDirectory 'jre64\bin\java.exe'
 Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.TransformerTest;if($LASTEXITCODE -ne 0){throw 'Real agent transformer behavior failed'}}finally{Pop-Location}
 Push-Location $fixture
+try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.RefinementTransformerTest;if($LASTEXITCODE -ne 0){throw 'Refinement agent behavior failed'}}finally{Pop-Location}
+Push-Location $fixture
+try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.ServerInformationTransformerTest;if($LASTEXITCODE -ne 0){throw 'Server information agent behavior failed'}}finally{Pop-Location}
+Push-Location $fixture
 try{& $runtime '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+$asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.GlProbe (Join-Path $output 'scenes');if($LASTEXITCODE -ne 0){throw 'Real GL render/state regression failed'}}finally{Pop-Location}
+Push-Location $fixture
+try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.QueuedGlProbe (Join-Path $output 'scenes');if($LASTEXITCODE -ne 0){throw 'Queued GL compositing regression failed'}}finally{Pop-Location}
 $actualClasses=Join-Path $output 'actual-classes'
 New-Item -ItemType Directory -Path $actualClasses -Force | Out-Null
 & javac -encoding UTF-8 --release 17 -classpath $asset -d $actualClasses (Join-Path $PSScriptRoot 'java\startup\GameClassProbe.java')

@@ -13,10 +13,11 @@ public final class SceneProbe implements LoadingScene.Canvas {
     public void gradient(double x,double y,double w,double h,int top,int bottom){g.setPaint(new GradientPaint((float)x,(float)y,new Color(top,true),(float)x,(float)(y+h),new Color(bottom,true)));g.fill(new Rectangle2D.Double(x,y,w,h));}
     public void glow(double x,double y,double radius,int center,int edge){g.setPaint(new RadialGradientPaint(new Point2D.Double(x,y),(float)radius,new float[]{0,1},new Color[]{new Color(center,true),new Color(edge,true)}));g.fill(new Ellipse2D.Double(x-radius,y-radius,radius*2,radius*2));}
     public void arc(double x,double y,double r,double thickness,double start,double length,int color){g.setColor(new Color(color,true));g.setStroke(new BasicStroke((float)thickness));g.draw(new Arc2D.Double(x-r,y-r,r*2,r*2,-Math.toDegrees(start),-Math.toDegrees(length),Arc2D.OPEN));}
-    public void logo(double x,double y,double size,double alpha){g.drawImage(logo,(int)(x-size/2),(int)(y-size/2),(int)size,(int)size,null);}
-    public double measure(String text,double size){return g.getFontMetrics(font.deriveFont((float)size)).stringWidth(text);}
+    public void line(double x1,double y1,double x2,double y2,double thickness,int color){g.setColor(new Color(color,true));g.setStroke(new BasicStroke((float)thickness));g.draw(new Line2D.Double(x1,y1,x2,y2));}
+    public void logo(double x,double y,double size,double alpha,double angle){AffineTransform saved=g.getTransform();try{g.translate(x,y);g.rotate(angle);g.drawImage(logo,(int)(-size/2),(int)(-size/2),(int)size,(int)size,null);}finally{g.setTransform(saved);}}
+    public double measure(String text,double size){return g.getFontMetrics(font.deriveFont((float)LoadingScene.font(size))).stringWidth(text);}
     public void text(String value,double x,double y,double size,int color,boolean right){
-        g.setFont(font.deriveFont((float)size));g.setColor(new Color(color,true));FontMetrics metrics=g.getFontMetrics();double xx=right?x-metrics.stringWidth(value):x;
+        g.setFont(font.deriveFont((float)LoadingScene.font(size)));g.setColor(new Color(color,true));FontMetrics metrics=g.getFontMetrics();double xx=right?x-metrics.stringWidth(value):x;
         if(xx<0||xx+metrics.stringWidth(value)>width+1||y-metrics.getAscent()<0||y+metrics.getDescent()>height)throw new AssertionError("Text escapes game viewport: "+value);
         g.drawString(value,(float)xx,(float)y);labels++;
     }
@@ -24,7 +25,7 @@ public final class SceneProbe implements LoadingScene.Canvas {
         Path output=Path.of(args[0]);Files.createDirectories(output);BufferedImage logo=ImageIO.read(Path.of(args[1]).toFile());
         LoadingModel model=new LoadingModel();model.phase("Loading Mods");model.mod("Project Viewpoint");model.script("/mods/AnotherAuthor/42/media/lua/client/RegisterWorld.lua");
         int checks=0;
-        for(int[] size:new int[][]{{1024,768},{1280,720},{1920,1080},{3840,2160}}){
+        for(int[] size:new int[][]{{640,480},{1024,768},{1280,720},{1920,1080},{3840,2160}}){
             BufferedImage image=new BufferedImage(size[0],size[1],BufferedImage.TYPE_INT_RGB);SceneProbe c=new SceneProbe(image,logo);
             LoadingScene.draw(c,size[0],size[1],model.snapshot(),1.4,false,false,3L<<30,12L<<30);c.g.dispose();
             if(c.labels<5)throw new AssertionError("Missing layout text");checks++;
@@ -40,6 +41,22 @@ public final class SceneProbe implements LoadingScene.Canvas {
         BufferedImage[] still=new BufferedImage[2];
         for(int i=0;i<2;i++){still[i]=new BufferedImage(1440,900,BufferedImage.TYPE_INT_RGB);SceneProbe c=new SceneProbe(still[i],logo);LoadingScene.draw(c,1440,900,model.snapshot(),i*5,false,true,4L<<30,12L<<30);c.g.dispose();}
         if(!java.util.Arrays.equals(((java.awt.image.DataBufferInt)still[0].getRaster().getDataBuffer()).getData(),((java.awt.image.DataBufferInt)still[1].getRaster().getDataBuffer()).getData()))throw new AssertionError("Reduced-motion setting still animates");checks++;
+        LoadingModel[] contexts={new LoadingModel(),new LoadingModel(),new LoadingModel()};
+        contexts[0].early("index");contexts[0].resource(new java.io.File("media/textures/MapGround.png"),1_000_000_000L);
+        contexts[1].worldBegin(false,"C:/Users/Private/My Rosewood Save","Sandbox","Rosewood");contexts[1].worldStatus("正在读取地图区块");
+        contexts[2].serverBegin("橙子社区服务器","203.0.113.7",16261);contexts[2].queueInformation(contexts[2].snapshot().generation,17,32,1993,7,9,14,35);contexts[2].serverClock(contexts[2].snapshot().generation,1993,6,8,14,35,48);contexts[2].worldBegin(true,"FORBIDDEN-cache","","Riverside");contexts[2].serverStats("Riverside",8);contexts[2].worldStatus("正在同步世界数据");
+        String[] names={"boot","save","server"};
+        for(int index=0;index<contexts.length;index++)for(int[] size:new int[][]{{640,480},{1280,720},{1920,1080},{3840,2160}})for(double time:new double[]{0,.45,1.4,8}){
+            BufferedImage image=new BufferedImage(size[0],size[1],BufferedImage.TYPE_INT_RGB);SceneProbe canvas=new SceneProbe(image,logo);
+            LoadingScene.draw(canvas,size[0],size[1],contexts[index].snapshot(),time,false,false,4097L<<20,12288L<<20);canvas.g.dispose();
+            ImageIO.write(image,"png",output.resolve("production-"+names[index]+"-"+size[0]+"x"+size[1]+"-t"+time+".png").toFile());checks++;
+        }
+        for(int[] size:new int[][]{{640,480},{1280,720}}){
+            BufferedImage image=new BufferedImage(size[0],size[1],BufferedImage.TYPE_INT_RGB);SceneProbe canvas=new SceneProbe(image,logo);
+            LoadingScene.draw(canvas,size[0],size[1],model.snapshot(),2,false,false,4097L<<20,12288L<<20);canvas.g.dispose();ImageIO.write(image,"png",output.resolve("production-issues-"+size[0]+"x"+size[1]+".png").toFile());checks++;
+            contexts[2].issue(new String[]{"模组脚本执行中断","脚本调用了当前不存在的对象","NewAuthorMod","attempted index: nil / RegisterWorld.lua:58","检查该模组的依赖与游戏版本"});
+            image=new BufferedImage(size[0],size[1],BufferedImage.TYPE_INT_RGB);canvas=new SceneProbe(image,logo);LoadingScene.draw(canvas,size[0],size[1],contexts[2].snapshot(),2,false,false,4097L<<20,12288L<<20);canvas.g.dispose();ImageIO.write(image,"png",output.resolve("production-server-information-issues-"+size[0]+"x"+size[1]+".png").toFile());checks++;
+        }
         System.out.println("PASS "+checks+" scene viewport/frame checks");
     }
 }

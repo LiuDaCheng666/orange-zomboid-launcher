@@ -1,9 +1,10 @@
 package ozl.startup;
 
 import java.lang.reflect.Field;
-import org.lwjgl.opengl.GL;
+import java.util.ArrayList;
+import org.lwjgl.opengl.*;
 
-/** Entry points called by advice; none of these methods can own a game operation. */
+/** Observations and rendering only: original game operations retain control. */
 public final class StartupRuntime {
     private static volatile LoadingModel model;
     private static Session session;
@@ -11,47 +12,108 @@ public final class StartupRuntime {
     private static long lastSwap,lastIssueRead;
     private static volatile long issueFloor;
     private static boolean drawing,reportedFailure;
-    public static void begin(Session accepted){session=accepted;model=new LoadingModel();}
+    private static final ThreadLocal<String> frame=new ThreadLocal<>();
+    private static final ServerQuery publicQuery=new ServerQuery((operation,result)->{LoadingModel m=model;if(m!=null)m.publicInfo(operation,result.name,result.map,result.players,result.maximum);});
+    public static void begin(Session accepted){publicQuery.cancel();session=accepted;model=new LoadingModel();issueFloor=0;}
     public static LoadingModel.Snapshot snapshot(){LoadingModel value=model;return value==null?null:value.snapshot();}
     public static void phase(String value){LoadingModel m=model;if(m!=null)m.phase(value);}
+    public static void early(String value){LoadingModel m=model;if(m!=null)m.early(value.equals("initFonts")?"fonts":value);}
+    public static void resource(java.io.File value){LoadingModel m=model;if(m!=null)m.resource(value,System.nanoTime());}
     public static void translation(String key,String label){LoadingModel m=model;if(m!=null)m.translation(key,label);}
     public static void mod(String value){LoadingModel m=model;if(m!=null)m.mod(value);}
     public static void script(String value){LoadingModel m=model;if(m!=null)m.script(value);}
-    public static void menuReady(){LoadingModel m=model;if(m!=null){m.menuReady();System.out.println("[OZL-STARTUP-JAVA] game-menu");}}
-    public static void worldBegin(){LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.worldBegin();}}
-    public static void worldEnd(){LoadingModel m=model;if(m!=null)m.worldEnd();}
-    private static boolean flag(Class<?> type,String name){try{Field f=type.getDeclaredField(name);f.setAccessible(true);return f.getBoolean(null);}catch(ReflectiveOperationException unavailable){return false;}}
+    public static long generation(){LoadingModel.Snapshot s=snapshot();return s==null?0:s.generation;}
+    public static void menuReady(){publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.menuReady();System.out.println("[OZL-STARTUP-JAVA] game-menu");}}
+    public static void serverBegin(String friendly){serverBegin(friendly,"","");}
+    public static void serverBegin(String friendly,String host,String port){publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();int parsed=0;try{if(port!=null&&port.length()<8)parsed=Integer.parseInt(port.trim());}catch(NumberFormatException invalid){}m.serverBegin(friendly,host==null?"":host.trim(),parsed);startQuery(m,host,parsed);}}
+    private static void startQuery(LoadingModel m,String host,int port){if(host==null||m.snapshot().endpoint.isEmpty())return;String target=host.trim();if(target.startsWith("[")&&target.endsWith("]"))target=target.substring(1,target.length()-1);publicQuery.request(m.snapshot().generation,target,port);}
+    public static void coopConnected(Object client){LoadingModel m=model;if(m==null||client==null)return;Class<?> type=client.getClass();String host=string(type,"ip");int port=number(type,null,"port");m.endpoint(m.snapshot().generation,host,port);startQuery(m,host,port);}
+    public static void handoff(boolean keep){if(!keep)publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.handoff(keep);}}
+    public static void queueBegin(){LoadingModel m=model;if(m!=null)m.serverResume();}
+    public static void queue(int position){LoadingModel m=model;if(m!=null)m.queue(position);}
+    private static int integer(Object value){if(value instanceof Byte||value instanceof Short||value instanceof Integer||value instanceof Long){long n=((Number)value).longValue();if(n>=Integer.MIN_VALUE&&n<=Integer.MAX_VALUE)return (int)n;}return -1;}
+    public static void queueInformation(long operation,int position,java.util.HashMap<?,?> info){LoadingModel m=model;if(m==null||m.snapshot().generation!=operation)return;m.queue(position);if(info!=null)m.queueInformation(operation,integer(info.get("countPlayers")),integer(info.get("maxPlayers")),integer(info.get("Year")),integer(info.get("Month")),integer(info.get("Day")),integer(info.get("Hour")),integer(info.get("Minutes")));}
+    public static void serverTime(Object state,long operation){if(state==null)return;try{readClock(state.getClass().getClassLoader(),operation);}catch(ReflectiveOperationException ignored){}}
+    private static int getter(Class<?> type,Object value,String method)throws ReflectiveOperationException{return integer(type.getMethod(method).invoke(value));}
+    private static void readClock(ClassLoader loader,long operation)throws ReflectiveOperationException{
+        LoadingModel m=model;if(m==null||m.snapshot().generation!=operation)return;Class<?> time=gameType("zombie.GameTime",loader);Object value=read(time,null,"instance");if(value==null)return;Object age=time.getMethod("getWorldAgeHours").invoke(value);if(!(age instanceof Double hours))return;
+        m.serverClock(operation,getter(time,value,"getYear"),getter(time,value,"getMonth"),getter(time,value,"getDay"),getter(time,value,"getHour"),getter(time,value,"getMinutes"),hours);
+    }
+    private static void refreshClock(ClassLoader loader)throws ReflectiveOperationException{LoadingModel.Snapshot s=snapshot();if(s!=null&&s.clockObserved)readClock(loader,s.generation);}
+    public static void serverOptions(Object state,long operation){LoadingModel m=model;if(m==null||state==null||m.snapshot().generation!=operation)return;try{Class<?> options=gameType("zombie.network.ServerOptions",state.getClass().getClassLoader());Object value=read(options,null,"instance");if(value!=null)m.maximum(operation,getter(options,value,"getMaxPlayers"));}catch(ReflectiveOperationException ignored){}}
+    private static Object read(Class<?> type,Object instance,String name){try{Field f=type.getDeclaredField(name);if(!f.canAccess(instance))f.setAccessible(true);return f.get(instance);}catch(ReflectiveOperationException|RuntimeException unavailable){return null;}}
+    private static boolean flag(Class<?> type,String name){return Boolean.TRUE.equals(read(type,null,name));}
+    private static int number(Class<?> type,Object instance,String name){Object value=read(type,instance,name);return value instanceof Integer count?count:-1;}
+    private static String string(Class<?> type,String name){Object value=read(type,null,name);return value instanceof String text?text:"";}
+    private static int listSize(Object value){return value instanceof ArrayList<?> list?list.size():-1;}
+    private static Class<?> gameType(String name,ClassLoader loader)throws ClassNotFoundException{return Class.forName(name,false,loader);}
+    public static void worldBegin(Object state){
+        LoadingModel m=model;if(m==null||state==null)return;issueFloor=System.currentTimeMillis();
+        try{ClassLoader loader=state.getClass().getClassLoader();Class<?> client=gameType("zombie.network.GameClient",loader),core=gameType("zombie.core.Core",loader);Object mode=read(client,null,"client");if(!(mode instanceof Boolean server)){m.handoff(false);return;}
+            // The multiplayer save field can encode address/user IDs: never read it for servers.
+            if(!server)publicQuery.cancel();m.worldBegin(server,server?"":string(core,"gameSaveWorld"),server?"":string(core,"gameMode"),server?string(client,"gameMap"):string(core,"gameMap"));refreshServer(loader);refreshClock(loader);
+        }catch(ReflectiveOperationException unavailable){handoff(false);}
+    }
+    public static void worldEnd(){publicQuery.cancel();LoadingModel m=model;if(m!=null)m.worldEnd();}
     public static void worldFrame(Object state){
-        LoadingModel m=model;if(m==null||state==null)return;
+        LoadingModel m=model;if(m==null||state==null||!m.snapshot().world)return;
         Class<?> type=state.getClass();
-        if(flag(type,"worldVersionError")||flag(type,"unexpectedError")||flag(type,"playerWrongIP")||flag(type,"done")){m.waitingForInput();return;}
-        try{
-            Class<?> game=Class.forName("zombie.GameWindow",false,type.getClassLoader());
-            if(flag(game,"serverDisconnected")){m.waitingForInput();return;}
-            Object value=type.getField("gameLoadingString").get(null);if(value instanceof String text)m.worldStatus(text);
-        }catch(ReflectiveOperationException ignored){}
+        for(String guard:new String[]{"worldVersionError","unexpectedError","playerWrongIP","done"}){Object value=read(type,null,guard);if(!(value instanceof Boolean enabled)||enabled){handoff(false);return;}}
+        try{ClassLoader loader=type.getClassLoader();Class<?> game=gameType("zombie.GameWindow",loader);Object disconnected=read(game,null,"serverDisconnected");if(!(disconnected instanceof Boolean ended)||ended){handoff(false);return;}
+            m.worldStatus(string(type,"gameLoadingString"));m.conversion(flag(type,"convertingWorld"),number(type,null,"convertingFileCount"),number(type,null,"convertingFileMax"));refreshServer(loader);refreshClock(loader);
+        }catch(ReflectiveOperationException unavailable){handoff(false);}
+    }
+    private static void refreshServer(ClassLoader loader)throws ReflectiveOperationException{
+        LoadingModel m=model;if(m==null||m.snapshot().context!=LoadingModel.Context.SERVER)return;
+        Class<?> client=gameType("zombie.network.GameClient",loader),core=gameType("zombie.core.Core",loader);Object instance=read(client,null,"instance");
+        String map=string(client,"gameMap");if(map.isBlank())map=string(core,"gameMap");m.serverStats(map,instance==null?-1:listSize(read(client,instance,"serverMods")));
+    }
+    public static void connectionState(Object state){
+        LoadingModel m=model;if(m==null||state==null)return;Class<?> type=state.getClass();Object current=read(type,state,"state");
+        if(current instanceof Enum<?> actual){String actualStage=actual.name();if(actualStage.equals("Exit")){handoff(true);return;}
+            int projects=switch(actualStage){case "WorkshopQuery","WorkshopConfirm","ServerWorkshopItemScreen","WorkshopUpdate" -> listSize(read(type,state,"workshopItems"));default -> -1;};
+            m.serverStage(actualStage,projects,-1);
+            // TestTCP initializes the map before entering workshop states. CheckMods
+            // replaces serverMods only before Finish; earlier values can belong to an old server.
+            if(!actualStage.equals("Start")&&!actualStage.equals("TestTCP"))try{
+                Class<?> client=gameType("zombie.network.GameClient",type.getClassLoader());
+                Object instance=read(client,null,"instance");m.serverStats(string(client,"gameMap"),actualStage.equals("Finish")&&instance!=null?listSize(read(client,instance,"serverMods")):-1);
+            }catch(ReflectiveOperationException ignored){}
+        }
+    }
+    public static void sync(){LoadingModel m=model;if(m!=null)m.serverStage("Loading",-1,-1);}
+    public static void queueUpdate(Object state){if(state!=null&&flag(state.getClass(),"cancel"))handoff(false);}
+    public static void queueRedirect(Object next){handoff(next!=null&&next.getClass().getName().equals("zombie.gameStates.GameLoadingState"));}
+    public static void connectionEvent(String state){switch(state){case "Failed","Disconnected","Disconnecting","ClientVersionMismatch" -> handoff(false);default -> {}}}
+    public static void workshopEvent(Object flag,Object item,Object bytes,Object total){
+        LoadingModel m=model;if(m==null||!(flag instanceof String kind))return;
+        switch(kind){case "Error" -> handoff(false);case "Required" -> m.workshop(listSize(item),-1,-1);
+            case "Progress" -> {if(item instanceof String&&bytes instanceof Long received&&total instanceof Long size)m.workshop(-1,received,size);}
+            case "Success" -> m.serverStage("CheckMods",-1,-1);default -> {}}
+    }
+    public static void worldEvent(String event){LoadingModel m=model;if(m==null)return;m.worldStatus(switch(event){case "OnLoadedTileDefinitions" -> "已读取地形定义";case "OnLoadedMapZones" -> "已读取地图区域";case "OnGameTimeLoaded" -> "已读取世界时间";default -> "";});}
+    public static String enterFrame(String type){String prior=frame.get();frame.set(type.equals("zombie.gameStates.MainScreenState")?"MENU":type.equals("zombie.gameStates.LoadingQueueState")?"QUEUE":"");return prior;}
+    public static void exitFrame(String prior){if(prior==null)frame.remove();else frame.set(prior);}
+    public static void background(Object state){
+        LoadingModel.Snapshot s=snapshot();String scope=frame.get();if(s==null||!s.active||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||scope==null||scope.isEmpty()||state==null)return;
+        try{ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use))return;QueuedBackdrop.enqueue(loader,new QueuedBackdrop.Ticket(s,scope));}
+        catch(Throwable error){failed(error);}
     }
     private static boolean currentContext(){try{return GameDisplay.created()&&GL.getCapabilities()!=null;}catch(Throwable notCurrent){return false;}}
-    public static void beforeSwap(){
-        lastSwap=System.nanoTime();LoadingModel m=model;
-        if(m==null||drawing||!m.snapshot().active||!currentContext())return;
-        drawing=true;
-        try {
-            long now=System.currentTimeMillis();if(now-lastIssueRead>=250){lastIssueRead=now;m.issue(session.readIssue(now,issueFloor));}
-            if(renderer==null)renderer=new GameRenderer();
-            java.lang.Runtime memory=java.lang.Runtime.getRuntime();
-            renderer.draw(m.snapshot(),session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory());
-        }catch(Throwable failure){failed(failure);}finally{drawing=false;}
+    /** Called by the fixed generated drawer; exceptions cannot escape into native UI commands. */
+    public static void queuedDraw(QueuedBackdrop.Ticket ticket){
+        try{LoadingModel.Snapshot current=snapshot();if(ticket==null||current==null||!current.active||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE"))||drawing||!currentContext())return;
+            if(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING)!=0)return;
+            draw(ticket.state);
+        }catch(Throwable error){failed(error);}
     }
-    /** During game-thread loading the render queue can be empty. Use that same
-     * render thread/context to present at most 30 idle frames per second. */
-    public static void idle(){
-        LoadingModel m=model;
-        if(m==null||drawing||!m.snapshot().active||System.nanoTime()-lastSwap<33_333_333L||!currentContext())return;
-        try{GameDisplay.swap();}catch(Throwable failure){failed(failure);}
+    private static void draw(LoadingModel.Snapshot state)throws Exception{
+        drawing=true;try{LoadingModel m=model;long now=System.currentTimeMillis();if(now-lastIssueRead>=250){lastIssueRead=now;m.issue(session.readIssue(now,issueFloor));}
+            if(renderer==null)renderer=new GameRenderer();java.lang.Runtime memory=java.lang.Runtime.getRuntime();renderer.draw(state,session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory());
+        }finally{drawing=false;}
     }
-    public static void failed(Throwable failure){
-        LoadingModel m=model;if(m!=null)m.disable();
-        if(!reportedFailure){reportedFailure=true;System.err.println("[OZL-STARTUP-JAVA] presentation disabled: "+failure.getClass().getSimpleName());}
-    }
+    public static void beforeSwap(){lastSwap=System.nanoTime();LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||!currentContext())return;try{draw(s);}catch(Throwable failure){failed(failure);}}
+    /** Full overlays can idle on the existing render thread. Behind-UI frames use only the game's queue. */
+    public static void idle(){LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||System.nanoTime()-lastSwap<33_333_333L||!currentContext())return;try{GameDisplay.swap();}catch(Throwable failure){failed(failure);}}
+    public static void failed(Throwable failure){publicQuery.cancel();LoadingModel m=model;if(m!=null)m.disable();if(!reportedFailure){reportedFailure=true;System.err.println("[OZL-STARTUP-JAVA] presentation disabled: "+failure.getClass().getSimpleName());}}
 }

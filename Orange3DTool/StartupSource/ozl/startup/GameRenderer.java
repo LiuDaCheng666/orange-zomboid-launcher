@@ -16,6 +16,7 @@ public final class GameRenderer implements LoadingScene.Canvas {
     private final Font font=new Font("Microsoft YaHei",Font.PLAIN,16);
     private final BufferedImage measureImage=new BufferedImage(1,1,BufferedImage.TYPE_INT_ARGB);
     private final Graphics2D measure=measureImage.createGraphics();
+    private final AnimationClock animation=new AnimationClock();
     public GameRenderer(){measure.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);}
     public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum) throws Exception {
         if(!GameDisplay.created()||GL.getCapabilities()==null)return;
@@ -34,7 +35,8 @@ public final class GameRenderer implements LoadingScene.Canvas {
             GL11.glMatrixMode(GL11.GL_PROJECTION);GL11.glPushMatrix();projection=true;GL11.glLoadIdentity();GL11.glOrtho(0,width,height,0,-1,1);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPushMatrix();modelview=true;GL11.glLoadIdentity();
             if(logo==null){try(InputStream input=GameRenderer.class.getResourceAsStream("/ozl/startup/orange.png")){if(input==null)throw new IOException("Missing OZL mark");logo=upload(ImageIO.read(input));}}
-            LoadingScene.draw(this,width,height,state,state.elapsed,"light".equals(session.theme),session.reducedMotion,used,maximum);
+            double visible=animation.seconds(state.epoch,state.context+":"+state.route,System.nanoTime());
+            LoadingScene.draw(this,width,height,state,visible,"light".equals(session.theme),session.reducedMotion,used,maximum);
         } finally {
             if(modelview){GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPopMatrix();}
             if(projection){GL11.glMatrixMode(GL11.GL_PROJECTION);GL11.glPopMatrix();}
@@ -53,11 +55,15 @@ public final class GameRenderer implements LoadingScene.Canvas {
     public void arc(double x,double y,double radius,double thickness,double start,double length,int color){
         GL11.glDisable(GL11.GL_TEXTURE_2D);color(color);int steps=Math.max(8,(int)(length*32));GL11.glBegin(GL11.GL_TRIANGLE_STRIP);for(int i=0;i<=steps;i++){double a=start+length*i/steps,dx=Math.cos(a),dy=Math.sin(a);GL11.glVertex2d(x+dx*(radius-thickness/2),y+dy*(radius-thickness/2));GL11.glVertex2d(x+dx*(radius+thickness/2),y+dy*(radius+thickness/2));}GL11.glEnd();
     }
-    public void logo(double x,double y,double size,double alpha){if(logo!=null)quad(logo,x-size/2,y-size/2,size,size,alpha);}
+    public void line(double x1,double y1,double x2,double y2,double thickness,int color){
+        double length=Math.hypot(x2-x1,y2-y1);if(length==0)return;double dx=-(y2-y1)/length*thickness/2,dy=(x2-x1)/length*thickness/2;
+        GL11.glDisable(GL11.GL_TEXTURE_2D);color(color);GL11.glBegin(GL11.GL_QUADS);GL11.glVertex2d(x1+dx,y1+dy);GL11.glVertex2d(x2+dx,y2+dy);GL11.glVertex2d(x2-dx,y2-dy);GL11.glVertex2d(x1-dx,y1-dy);GL11.glEnd();
+    }
+    public void logo(double x,double y,double size,double alpha,double angle){if(logo!=null){GL11.glPushMatrix();try{GL11.glTranslated(x,y,0);GL11.glRotated(Math.toDegrees(angle),0,0,1);quad(logo,-size/2,-size/2,size,size,alpha);}finally{GL11.glPopMatrix();}}}
     private static void quad(Texture texture,double x,double y,double w,double h,double alpha){
         GL11.glEnable(GL11.GL_TEXTURE_2D);GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture.id);GL11.glColor4d(1,1,1,alpha);GL11.glBegin(GL11.GL_QUADS);GL11.glTexCoord2d(0,0);GL11.glVertex2d(x,y);GL11.glTexCoord2d(1,0);GL11.glVertex2d(x+w,y);GL11.glTexCoord2d(1,1);GL11.glVertex2d(x+w,y+h);GL11.glTexCoord2d(0,1);GL11.glVertex2d(x,y+h);GL11.glEnd();GL11.glDisable(GL11.GL_TEXTURE_2D);
     }
-    private Font sized(double size){return font.deriveFont((float)Math.max(9,Math.min(64,size)));}
+    private Font sized(double size){return font.deriveFont((float)LoadingScene.font(size));}
     public double measure(String text,double size){return measure.getFontMetrics(sized(size)).stringWidth(text);}
     public void text(String value,double x,double y,double size,int color,boolean right){
         if(value.isEmpty())return;

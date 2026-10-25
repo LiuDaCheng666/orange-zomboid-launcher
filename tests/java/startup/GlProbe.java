@@ -44,7 +44,7 @@ public final class GlProbe {
             BufferedImage image=new BufferedImage(1440,900,BufferedImage.TYPE_INT_ARGB);int orange=0;long sumX=0;
             for(int y=0;y<900;y++)for(int x=0;x<1440;x++){int at=((899-y)*1440+x)*4,r=pixels.get(at)&255,g=pixels.get(at+1)&255,b=pixels.get(at+2)&255;image.setRGB(x,y,0xff000000|(r<<16)|(g<<8)|b);if(x>630&&x<810&&y>290&&y<480&&r>150&&r>g*1.25&&g>b*1.1){orange++;sumX+=x;}}
             Files.createDirectories(Path.of(args[0]));ImageIO.write(image,"png",Path.of(args[0],"actual-gl.png").toFile());
-            check(orange>700,"game texture state prevented logo rendering");
+            check(orange>50,"game texture state prevented first-visible growing logo rendering");
             check(Math.abs(sumX/(double)orange-720)<18,"game texture matrix moved the orange mark");
             check(GL11.glGetError()==GL11.GL_NO_ERROR,"renderer left an OpenGL error");
             System.out.println("PASS real OpenGL renderer and preserved game state");
