@@ -12,6 +12,8 @@ namespace PZ3D {
  }
 
  sealed class GameStartupSnapshot {
+  internal DateTime ObservationUtc;
+  internal long ObservationFloor;
   public string SessionId, Stage, Message;
   public string[] Lines;
   public GameLogIssue[] Issues=new GameLogIssue[0];

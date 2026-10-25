@@ -114,8 +114,15 @@ namespace PZ3D {
    if(process.HasExited||process.StartTime.ToUniversalTime().Ticks!=snapshot.ProcessBirth)return false;string name=process.ProcessName,image=process.MainModule.FileName;bool java=name=="java"||name=="javaw";if(java&&GameProcessGuard.ReadJavaRole(launch.GamePath,name,image,process)!=JavaProcessRole.Client)return false;return GameStartupMonitor.MatchesClientIdentity(launch.GamePath,launch.StartedUtc,name,image,new DateTime(snapshot.ProcessBirth,DateTimeKind.Utc),java);
   }}catch{return false;}}
   static byte[] IssueBytes(string session,GameLogIssue issue,long? timestamp=null){return new UTF8Encoding(false).GetBytes(string.Join("\n",new[]{"OZL1",session,(timestamp??DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).ToString(CultureInfo.InvariantCulture),Encode(issue==null?"":Safe(issue.title,160)),Encode(issue==null?"":Safe(issue.meaning,768)),Encode(issue==null?"":string.Join("、",(issue.mods??new string[0]).Take(8).Select(m=>Safe(m,96)))),Encode(issue==null?"":string.Join("\n",(issue.evidence??new GameLogEvidence[0]).Where(v=>v!=null).Take(3).Select(v=>Safe(v.text,384)))),Encode(issue==null?"":Safe(issue.advice,768))})+"\n");}
-  static GameLogIssue Primary(GameStartupSnapshot snapshot){return (snapshot.Issues??new GameLogIssue[0]).FirstOrDefault(i=>i!=null&&i.attention=="primary"&&!string.IsNullOrWhiteSpace(i.title)&&!string.IsNullOrWhiteSpace(i.meaning));}
-  internal static string IssueIdentity(GameStartupSnapshot snapshot){var issue=Primary(snapshot);return Convert.ToBase64String(IssueBytes("",issue,0))+"|"+(issue==null?0:issue.count).ToString(CultureInfo.InvariantCulture);}
+  static bool Eligible(GameStartupSnapshot snapshot,GameLogIssue issue){
+   if(issue==null||issue.attention!="primary"||string.IsNullOrWhiteSpace(issue.title)||string.IsNullOrWhiteSpace(issue.meaning))return false;
+   // History is diagnostic only after the verified menu handoff or the packet TTL.
+   // These bounds use original occurrence data, never the most recent reparse.
+   if(snapshot.ObservationFloor>0&&issue.ObservationLine<=snapshot.ObservationFloor)return false;
+   return snapshot.ObservationUtc==DateTime.MinValue||issue.ObservationUtc!=DateTime.MinValue&&(snapshot.ObservationUtc-issue.ObservationUtc).TotalSeconds<=30;
+  }
+  static GameLogIssue Primary(GameStartupSnapshot snapshot){return (snapshot.Issues??new GameLogIssue[0]).Where(i=>Eligible(snapshot,i)).OrderByDescending(GameLogAnalyzer.Priority).ThenByDescending(i=>i.ObservationLine).FirstOrDefault();}
+  internal static string IssueIdentity(GameStartupSnapshot snapshot){var issue=Primary(snapshot);return Convert.ToBase64String(IssueBytes("",issue,0))+"|"+(issue==null?0:issue.ObservationLine).ToString(CultureInfo.InvariantCulture);}
   internal static bool WriteIssues(GameStartupLaunch launch,GameStartupSnapshot snapshot){
    if(launch==null||snapshot==null||!Nonce(launch.SessionId)||launch.SessionId!=snapshot.SessionId)return false;
    try{Paths(launch.GamePath,launch.UserPath);using(var lease=Lease(launch.GamePath)){bool acquired=Acquire(lease);if(!acquired)return false;try{

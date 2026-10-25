@@ -115,6 +115,42 @@ namespace PZ3D {
     }finally{monitor.Dispose();if(client!=null){client.StandardInput.WriteLine("finish");client.WaitForExit(5000);client.Dispose();}}
    }
   }}
+  static string Exported(Fixture f,int field){return Encoding.UTF8.GetString(Convert.FromBase64String(File.ReadAllLines(f.PathOf("issues.txt"))[field]));}
+  static void IssueSelection(){
+   using(var f=new Fixture()){
+    Call("Prepare",f.E,Nonce);var launch=Launch(f,Nonce);var reducer=new GameStartupReducer(launch,false);var fake=new FakeMonitor();Action<GameStartupSnapshot> publish=null;using(var observer=new GameStartupObserver((request,changed)=>{publish=changed;return fake;})){
+     observer.Handle(launch);reducer.Line("java.lang.IllegalStateException: older failure");var old=reducer.Snapshot(launch.StartedUtc);publish(old);string oldIdentity=(string)Call("IssueIdentity",old);
+     reducer.Line("java.lang.OutOfMemoryError: Java heap space");var heap=reducer.Snapshot(launch.StartedUtc.AddSeconds(1));Check(heap.Issues.First(i=>i.attention=="primary").type=="java-heap"&&(string)Call("IssueIdentity",heap)!=oldIdentity,"new core heap failure outranks an older lower-priority exception");publish(heap);Check(Exported(f,3).Contains("堆内存"),"observer exports the newly selected core failure");
+     string heapIdentity=(string)Call("IssueIdentity",heap);DateTime marker=new DateTime(2026,1,1,0,0,0,DateTimeKind.Utc);File.SetLastWriteTimeUtc(f.PathOf("issues.txt"),marker);reducer.Line("java.lang.IllegalArgumentException: newer lower-priority failure");var newer=reducer.Snapshot(launch.StartedUtc.AddSeconds(2));publish(newer);Check(newer.Issues.First(i=>i.attention=="primary").type=="java-heap"&&(string)Call("IssueIdentity",newer)==heapIdentity&&File.GetLastWriteTimeUtc(f.PathOf("issues.txt"))==marker,"newer lower-priority noise cannot displace or refresh the core failure");
+    }
+   }
+   using(var f=new Fixture()){
+    Call("Prepare",f.E,Nonce);var launch=Launch(f,Nonce);var reducer=new GameStartupReducer(launch,false);reducer.Line("java.lang.IllegalStateException: first equal-priority occurrence");var first=reducer.Snapshot(launch.StartedUtc);reducer.Line("java.lang.IllegalArgumentException: second equal-priority occurrence");var second=reducer.Snapshot(launch.StartedUtc.AddSeconds(1));Check(second.Issues.First(i=>i.attention=="primary").meaning.Contains("second equal-priority"),"equal-priority selection uses the actual newer occurrence");
+    reducer.Line("java.lang.IllegalStateException: first equal-priority occurrence");var repeated=reducer.Snapshot(launch.StartedUtc.AddSeconds(2));Check(repeated.Issues.First(i=>i.attention=="primary").meaning.Contains("first equal-priority")&&(string)Call("IssueIdentity",repeated)!=(string)Call("IssueIdentity",first),"merged repeated blocks retain their true latest occurrence order");Check(!new JavaScriptSerializer().Serialize(repeated).Contains("Observation"),"internal observation metadata is excluded from serialized snapshots");
+   }
+   using(var f=new Fixture()){
+    Call("Prepare",f.E,Nonce);var launch=Launch(f,Nonce);var reducer=new GameStartupReducer(launch,false);var fake=new FakeMonitor();Action<GameStartupSnapshot> publish=null;using(var observer=new GameStartupObserver((request,changed)=>{publish=changed;return fake;})){
+     observer.Handle(launch);for(int i=0;i<150;i++)reducer.Line("LOG : General f:0> older ordinary row "+i);reducer.Line("java.lang.OutOfMemoryError: Java heap space");var first=reducer.Snapshot(launch.StartedUtc);publish(first);string identity=(string)Call("IssueIdentity",first);DateTime marker=new DateTime(2026,1,1,0,0,0,DateTimeKind.Utc);File.SetLastWriteTimeUtc(f.PathOf("issues.txt"),marker);
+     for(int i=0;i<20;i++)reducer.Line("LOG : General f:0> overlapping ordinary row "+i);var shifted=reducer.Snapshot(launch.StartedUtc.AddSeconds(1));publish(shifted);Check((string)Call("IssueIdentity",shifted)==identity&&File.GetLastWriteTimeUtc(f.PathOf("issues.txt"))==marker,"relative buffer-window shifts never refresh an already observed issue");
+     for(int i=0;i<400;i++)reducer.Line("LOG : General f:0> later ordinary row "+i);var evicted=reducer.Snapshot(launch.StartedUtc.AddSeconds(2));publish(evicted);Check((string)Call("IssueIdentity",evicted)==identity&&File.GetLastWriteTimeUtc(f.PathOf("issues.txt"))==marker,"retained history after raw-window eviction has no fabricated freshness");
+     reducer.Line("java.lang.OutOfMemoryError: Java heap space");var recurrence=reducer.Snapshot(launch.StartedUtc.AddSeconds(3));publish(recurrence);Check((string)Call("IssueIdentity",recurrence)!=identity&&File.GetLastWriteTimeUtc(f.PathOf("issues.txt"))!=marker&&Exported(f,3).Contains("堆内存"),"genuine identical-error recurrence after eviction gets fresh IPC");
+    }
+   }
+  }
+  static void IssueEligibility(){
+   using(var f=new Fixture()){
+    Call("Prepare",f.E,Nonce);var launch=Launch(f,Nonce);var reducer=new GameStartupReducer(launch,false);var fake=new FakeMonitor();Action<GameStartupSnapshot> publish=null;using(var observer=new GameStartupObserver((request,changed)=>{publish=changed;return fake;})){
+     observer.Handle(launch);reducer.Line("java.lang.OutOfMemoryError: Java heap space");publish(reducer.Snapshot(launch.StartedUtc));publish(reducer.Snapshot(launch.StartedUtc.AddSeconds(31)));Check(Exported(f,3)=="","expired observations clear IPC while remaining in diagnostic history");
+     DateTime marker=new DateTime(2026,1,1,0,0,0,DateTimeKind.Utc);File.SetLastWriteTimeUtc(f.PathOf("issues.txt"),marker);var stale=reducer.Snapshot(launch.StartedUtc.AddSeconds(32));publish(stale);Check(stale.Issues.Any(i=>i.type=="java-heap")&&File.GetLastWriteTimeUtc(f.PathOf("issues.txt"))==marker,"expiry retains history without repeatedly refreshing the empty packet");
+     reducer.ObservedLine("java.lang.IllegalStateException: fresh lower-priority world failure",launch.StartedUtc.AddSeconds(33));publish(reducer.Snapshot(launch.StartedUtc.AddSeconds(33)));Check(Exported(f,4).Contains("fresh lower-priority"),"fresh later-operation failure is selected ahead of expired high-priority history");
+    }
+   }
+   using(var f=new Fixture()){
+    Call("Prepare",f.E,Nonce);var launch=Launch(f,Nonce);var reducer=new GameStartupReducer(launch,false);var fake=new FakeMonitor();Action<GameStartupSnapshot> publish=null;using(var observer=new GameStartupObserver((request,changed)=>{publish=changed;return fake;})){
+     observer.Handle(launch);reducer.Line("java.lang.OutOfMemoryError: Java heap space");publish(reducer.Snapshot(launch.StartedUtc));reducer.Line("LOG : Lua f:0> [OZL-STARTUP] menu-ready "+Nonce);reducer.Line("java.lang.IllegalStateException: later world operation failure");var world=reducer.Snapshot(launch.StartedUtc.AddSeconds(1));publish(world);Check(world.Issues.Any(i=>i.type=="java-heap")&&Exported(f,4).Contains("later world operation"),"verified menu handoff excludes boot history from later-operation issue selection");
+    }
+   }
+  }
   static void Headless(){
    var field=typeof(ModernForm).GetField("gameStartupObserver",BindingFlags.Instance|BindingFlags.NonPublic);Check(field!=null&&field.FieldType==typeof(GameStartupObserver)&&typeof(ModernForm).GetField("gameStartupPresenter",BindingFlags.Instance|BindingFlags.NonPublic)==null,"production host no longer owns external startup presenter");
    var launch=new GameStartupLaunch{SessionId=Nonce,StartedUtc=DateTime.UtcNow.AddMinutes(-3),TargetKind="normal"};
@@ -128,7 +164,7 @@ namespace PZ3D {
     }Check(fake.Disposed==1,"observer disposal is idempotent");
    }
   }
-  public static void Run(){Check(Component!=null,"owned startup component exists");Deployment();CrashRecovery();Conflicts();Upgrade();Boundaries();Exchange();Headless();ContinuedObservation();}
+  public static void Run(){Check(Component!=null,"owned startup component exists");IssueSelection();IssueEligibility();Deployment();CrashRecovery();Conflicts();Upgrade();Boundaries();Exchange();Headless();ContinuedObservation();}
   [STAThread] public static int Main(){try{Run();Console.WriteLine("ALL OWNED STARTUP COMPONENT TESTS PASSED");return 0;}catch(Exception error){Console.WriteLine(error);return 1;}}
  }
 }

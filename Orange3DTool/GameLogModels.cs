@@ -11,6 +11,10 @@ namespace PZ3D {
  sealed class GameLogFrame {public string mod,file,function;public int line;}
  sealed class GameLogIssue {
   public string id,type,severity,attention,impact,title,meaning,advice,phase,attemptId;
+  // Internal occurrence data stays out of exported diagnostic JSON.
+  internal long ObservationLine;
+  internal DateTime ObservationUtc;
+  internal string ObservationKey;
   public int count;
   public string[] mods=new string[0];
   public GameLogFrame[] frames=new GameLogFrame[0];
