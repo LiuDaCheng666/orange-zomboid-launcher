@@ -20,7 +20,8 @@ namespace PZ3D {
   static readonly Lazy<byte[]> BundledPayload=new Lazy<byte[]>(LoadPayload);
   [DllImport("user32.dll")]static extern bool SystemParametersInfo(uint action,uint parameter,out bool enabled,uint flags);
   static bool ReducedMotion(){try{bool enabled;return SystemParametersInfo(0x1042,0,out enabled,0)&&!enabled;}catch{return false;}}
-  sealed class Ownership {public string version,jar,session,issues;}
+  sealed class Ownership {public string version,jar,session,issues;internal bool PreparationPending;}
+  sealed class PendingOwnership {public string version,kind,jar,session,issues,nextJar,nextSession,nextIssues;}
   static string Folder(string game){return Path.Combine(Path.GetFullPath(game),"OrangeLauncherRuntime","startup");}
   static string Encode(string value){return Convert.ToBase64String(Encoding.UTF8.GetBytes(value??""));}
   static string Decode(string value){return new UTF8Encoding(false,true).GetString(Convert.FromBase64String(value));}
@@ -34,13 +35,43 @@ namespace PZ3D {
   static bool Acquire(Mutex lease){try{return lease.WaitOne(5000);}catch(AbandonedMutexException){return true;}}
   static void Atomic(string path,byte[] bytes){LauncherMaintenance.NoReparse(path);Directory.CreateDirectory(Path.GetDirectoryName(path));string temp=path+".new-"+Guid.NewGuid().ToString("N");try{using(var output=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None)){output.Write(bytes,0,bytes.Length);output.Flush(true);}LauncherMaintenance.NoReparse(path);if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);}finally{if(File.Exists(temp))File.Delete(temp);}}
   static bool Same(byte[] a,byte[] b){return a==null?b==null:b!=null&&a.SequenceEqual(b);}
+  static string OptionalHash(byte[] bytes){return bytes==null?null:Hash(bytes);}
+  static bool HashValue(string value,bool nullable){return nullable&&value==null||Regex.IsMatch(value??"",@"\A[A-F0-9]{64}\z");}
   static void RequireHash(string path,byte[] bytes,string hash){if(bytes==null||!Regex.IsMatch(hash??"",@"\A[A-F0-9]{64}\z")||Hash(bytes)!=hash)throw new IOException("启动组件文件缺失或被修改，未覆盖："+Path.GetFileName(path));}
+  static void RequireTransition(string name,byte[] bytes,string before,string after){if(!HashValue(before,true)||!HashValue(after,false))throw new IOException("启动组件恢复记录校验无效。");string actual=OptionalHash(bytes);if(actual!=before&&actual!=after)throw new IOException("启动组件恢复遇到外部修改，未覆盖："+name);}
   static Ownership Existing(string folder,byte[] jar,byte[] session,byte[] issues,byte[] record){
    if(record==null){if(jar!=null||session!=null||issues!=null)throw new IOException("已有同名启动组件文件缺少所有权记录，未覆盖。");return null;}
-   Ownership owner;try{CoreReleaseProtocol.ReadStoredObject(record,"version","jar","session","issues");owner=Json.Deserialize<Ownership>(new UTF8Encoding(false,true).GetString(record));}catch{throw new IOException("启动组件所有权记录无效，未覆盖。");}
+   Ownership owner;try{string text=new UTF8Encoding(false,true).GetString(record);var header=Json.Deserialize<Dictionary<string,object>>(text);object version;if(header==null||!header.TryGetValue("version",out version))throw new IOException();
+    if(Equals(version,"OZL1-PENDING")){
+     CoreReleaseProtocol.ReadStoredObject(record,"version","kind","jar","session","issues","nextJar","nextSession","nextIssues");var pending=Json.Deserialize<PendingOwnership>(text);if(pending.kind!="prepare"&&pending.kind!="issues")throw new IOException("未知的启动组件事务。");
+     RequireTransition("OrangeStartup.jar",jar,pending.jar,pending.nextJar);RequireTransition("session.properties",session,pending.session,pending.nextSession);RequireTransition("issues.txt",issues,pending.issues,pending.nextIssues);
+     return new Ownership{version="OZL1",jar=OptionalHash(jar),session=OptionalHash(session),issues=OptionalHash(issues),PreparationPending=pending.kind=="prepare"};
+    }
+    CoreReleaseProtocol.ReadStoredObject(record,"version","jar","session","issues");owner=Json.Deserialize<Ownership>(text);
+   }catch{throw new IOException("启动组件所有权或恢复记录无效，未覆盖。");}
    if(owner==null||owner.version!="OZL1")throw new IOException("启动组件所有权记录无效，未覆盖。");
    RequireHash(Path.Combine(folder,"OrangeStartup.jar"),jar,owner.jar);
    RequireHash(Path.Combine(folder,"session.properties"),session,owner.session);RequireHash(Path.Combine(folder,"issues.txt"),issues,owner.issues);return owner;
+  }
+  static int FileLimit(string path,string config){return path==config?ConfigLimit:Path.GetFileName(path)=="OrangeStartup.jar"?JarLimit:Path.GetFileName(path)=="ownership.json"?4096:Path.GetFileName(path)=="session.properties"?SessionLimit:IssueLimit;}
+  // The write-ahead record authorizes only exact old/new file states, never code
+  // execution. A later Prepare can renew a partially written session in place.
+  // Persisting this record before every mutation makes abrupt process exit safe.
+  static void CommitOwned(string folder,Dictionary<string,byte[]> before,Dictionary<string,byte[]> after,string config=null){
+   string jar=Path.Combine(folder,"OrangeStartup.jar"),session=Path.Combine(folder,"session.properties"),issues=Path.Combine(folder,"issues.txt"),record=Path.Combine(folder,"ownership.json");
+   if(after.All(item=>Same(item.Value,before[item.Key])))return;
+   string[] targets=(config==null?new[]{jar,session,issues}:new[]{jar,session,issues,config});
+   var pending=new PendingOwnership{version="OZL1-PENDING",kind=config==null?"issues":"prepare",jar=OptionalHash(before[jar]),session=OptionalHash(before[session]),issues=OptionalHash(before[issues]),nextJar=Hash(after[jar]),nextSession=Hash(after[session]),nextIssues=Hash(after[issues])};byte[] journal=Encoding.UTF8.GetBytes(Json.Serialize(pending));
+   foreach(var item in before)if(!Same(Read(item.Key,FileLimit(item.Key,config)),item.Value))throw new IOException("启动写入前文件已改变，未覆盖。");
+   Atomic(record,journal);var written=new List<string>();
+   try{
+    foreach(string path in targets){if(Same(after[path],before[path]))continue;if(!Same(Read(path,FileLimit(path,config)),before[path]))throw new IOException("启动准备期间文件改变，未覆盖。");Atomic(path,after[path]);written.Add(path);}
+    if(!Same(Read(record,4096),journal))throw new IOException("启动组件恢复记录在提交前改变，未覆盖。");Atomic(record,after[record]);
+   }catch{
+    foreach(string path in written.AsEnumerable().Reverse()){try{if(Same(Read(path,FileLimit(path,config)),after[path])){if(before[path]==null)File.Delete(path);else Atomic(path,before[path]);}}catch{ /* The durable journal remains recoverable if rollback is interrupted. */ }}
+    try{if(targets.All(path=>Same(Read(path,FileLimit(path,config)),before[path]))&&Same(Read(record,4096),journal)){if(before[record]==null)File.Delete(record);else Atomic(record,before[record]);}}catch{ /* Keep the exact old/new recovery record; never overwrite foreign edits. */ }
+    throw;
+   }
   }
   static Dictionary<string,string> Session(string game,string user,byte[] bytes,bool fresh){
    if(bytes==null||bytes.Length>SessionLimit||bytes.Any(b=>b>127||b==13||b==0))throw new IOException("启动组件会话格式无效。");var values=new Dictionary<string,string>(StringComparer.Ordinal);
@@ -64,21 +95,18 @@ namespace PZ3D {
   // Read-only preflight may offer to replace an intact recorded prior version.
   // Launch validation still requires IsOwnedArgument after preparation succeeds.
   internal static bool CanPrepareOwnedArgument(Engine e,string argument){if(argument!=Argument||e==null)return false;try{
-   Paths(e.Game,e.User);string folder=Folder(e.Game);byte[] session=Read(Path.Combine(folder,"session.properties"),SessionLimit);var owner=Existing(folder,Read(Path.Combine(folder,"OrangeStartup.jar"),JarLimit),session,Read(Path.Combine(folder,"issues.txt"),IssueLimit),Read(Path.Combine(folder,"ownership.json"),4096));return owner!=null&&Session(e.Game,e.User,session,false)!=null;
+   Paths(e.Game,e.User);string folder=Folder(e.Game);byte[] session=Read(Path.Combine(folder,"session.properties"),SessionLimit);var owner=Existing(folder,Read(Path.Combine(folder,"OrangeStartup.jar"),JarLimit),session,Read(Path.Combine(folder,"issues.txt"),IssueLimit),Read(Path.Combine(folder,"ownership.json"),4096));return owner!=null&&(session==null||Session(e.Game,e.User,session,false)!=null);
   }catch{return false;}}
   internal static void Prepare(Engine e,string sessionId){
    if(e==null)throw new ArgumentNullException("e");if(!Nonce(sessionId))throw new IOException("启动组件会话标识无效。");Paths(e.Game,e.User);LauncherMaintenance.NoReparse(e.Config);LauncherMaintenance.NoReparse(LaunchProfiles.Journal(e));if(LaunchProfiles.Pending(e))throw new IOException("启动会话尚未恢复，未改动启动组件。");e.GuardLaunch();byte[] payload=Payload();
    using(var lease=Lease(e.Game)){bool acquired=Acquire(lease);if(!acquired)throw new IOException("另一个启动组件准备正在进行。");try{
     string folder=Folder(e.Game),jarPath=Path.Combine(folder,"OrangeStartup.jar"),sessionPath=Path.Combine(folder,"session.properties"),issuesPath=Path.Combine(folder,"issues.txt"),recordPath=Path.Combine(folder,"ownership.json");
     var before=new Dictionary<string,byte[]>{{jarPath,Read(jarPath,JarLimit)},{sessionPath,Read(sessionPath,SessionLimit)},{issuesPath,Read(issuesPath,IssueLimit)},{recordPath,Read(recordPath,4096)},{e.Config,Read(e.Config,ConfigLimit)}};
-    var owner=Existing(folder,before[jarPath],before[sessionPath],before[issuesPath],before[recordPath]);Dictionary<string,string> previous=null;if(owner!=null)previous=Session(e.Game,e.User,before[sessionPath],false);
-    byte[] config=Configuration(before[e.Config]);long created=DateTimeOffset.UtcNow.ToUnixTimeSeconds();bool reuse=previous!=null&&previous["session"]==sessionId&&long.Parse(previous["expires"],CultureInfo.InvariantCulture)>created;
+    var owner=Existing(folder,before[jarPath],before[sessionPath],before[issuesPath],before[recordPath]);Dictionary<string,string> previous=null;if(owner!=null&&before[sessionPath]!=null)previous=Session(e.Game,e.User,before[sessionPath],false);
+    byte[] config=Configuration(before[e.Config]);long created=DateTimeOffset.UtcNow.ToUnixTimeSeconds();bool reuse=previous!=null&&previous["session"]==sessionId&&long.Parse(previous["expires"],CultureInfo.InvariantCulture)>created&&before[issuesPath]!=null&&new UTF8Encoding(false,true).GetString(before[issuesPath]).StartsWith("OZL1\n"+sessionId+"\n",StringComparison.Ordinal);
     byte[] session=reuse?before[sessionPath]:Encoding.ASCII.GetBytes(string.Join("\n",new[]{"version=OZL1","session="+sessionId,"created="+created.ToString(CultureInfo.InvariantCulture),"expires="+(created+600).ToString(CultureInfo.InvariantCulture),"game="+Encode(Path.GetFullPath(e.Game)),"user="+Encode(Path.GetFullPath(e.User)),"issues="+Encode(issuesPath),"theme="+(LauncherTheme.Load(e.Data).Light?"light":"dark"),"reducedMotion="+(ReducedMotion()?"true":"false")})+"\n");
     Session(e.Game,e.User,session,true);byte[] issues=reuse?before[issuesPath]:IssueBytes(sessionId,null);byte[] record=Encoding.UTF8.GetBytes(Json.Serialize(new Ownership{version="OZL1",jar=Hash(payload),session=Hash(session),issues=Hash(issues)}));
-    var after=new Dictionary<string,byte[]>{{jarPath,payload},{sessionPath,session},{issuesPath,issues},{recordPath,record},{e.Config,config}};var written=new List<string>();
-    // Configuration commits last, after every owned runtime file is ready.
-    try{foreach(string path in new[]{jarPath,sessionPath,issuesPath,recordPath,e.Config}){if(Same(after[path],before[path]))continue;if(!Same(Read(path,path==jarPath?JarLimit:path==e.Config?ConfigLimit:IssueLimit),before[path]))throw new IOException("启动准备期间文件改变，未覆盖。");Atomic(path,after[path]);written.Add(path);}}
-    catch{foreach(string path in written.AsEnumerable().Reverse()){try{if(Same(Read(path,path==jarPath?JarLimit:path==e.Config?ConfigLimit:IssueLimit),after[path])){if(before[path]==null)File.Delete(path);else Atomic(path,before[path]);}}catch{ /* Preserve any concurrent edit rather than overwriting it. */ }}throw;}
+    var after=new Dictionary<string,byte[]>{{jarPath,payload},{sessionPath,session},{issuesPath,issues},{recordPath,record},{e.Config,config}};CommitOwned(folder,before,after,e.Config);
    }finally{lease.ReleaseMutex();}}
   }
   static string Safe(string text,int maximum){text=GameDiagnostics.Sanitize(text??"");return text.Length>maximum?text.Substring(0,maximum):text;}
@@ -91,11 +119,9 @@ namespace PZ3D {
   internal static bool WriteIssues(GameStartupLaunch launch,GameStartupSnapshot snapshot){
    if(launch==null||snapshot==null||!Nonce(launch.SessionId)||launch.SessionId!=snapshot.SessionId)return false;
    try{Paths(launch.GamePath,launch.UserPath);using(var lease=Lease(launch.GamePath)){bool acquired=Acquire(lease);if(!acquired)return false;try{
-    string folder=Folder(launch.GamePath),jarPath=Path.Combine(folder,"OrangeStartup.jar"),sessionPath=Path.Combine(folder,"session.properties"),path=Path.Combine(folder,"issues.txt"),recordPath=Path.Combine(folder,"ownership.json");byte[] session=Read(sessionPath,SessionLimit),old=Read(path,IssueLimit),record=Read(recordPath,4096);var owner=Existing(folder,Read(jarPath,JarLimit),session,old,record);if(owner==null)return false;var binding=Session(launch.GamePath,launch.UserPath,session,false);if(binding["session"]!=launch.SessionId||(long.Parse(binding["expires"],CultureInfo.InvariantCulture)<=DateTimeOffset.UtcNow.ToUnixTimeSeconds()&&!LiveClient(launch,snapshot)))return false;
+    string folder=Folder(launch.GamePath),jarPath=Path.Combine(folder,"OrangeStartup.jar"),sessionPath=Path.Combine(folder,"session.properties"),path=Path.Combine(folder,"issues.txt"),recordPath=Path.Combine(folder,"ownership.json");byte[] jar=Read(jarPath,JarLimit),session=Read(sessionPath,SessionLimit),old=Read(path,IssueLimit),record=Read(recordPath,4096);var owner=Existing(folder,jar,session,old,record);if(owner==null||owner.PreparationPending||jar==null||session==null)return false;var binding=Session(launch.GamePath,launch.UserPath,session,false);if(binding["session"]!=launch.SessionId||(long.Parse(binding["expires"],CultureInfo.InvariantCulture)<=DateTimeOffset.UtcNow.ToUnixTimeSeconds()&&!LiveClient(launch,snapshot)))return false;
     var issue=Primary(snapshot);byte[] next=IssueBytes(launch.SessionId,issue);if(next.Length>IssueLimit)return false;
-    // The lease serializes our writers; compare again before replacing user-visible data.
-    if(!Same(Read(sessionPath,SessionLimit),session)||!Same(Read(path,IssueLimit),old)||!Same(Read(recordPath,4096),record))return false;
-    owner.issues=Hash(next);Atomic(path,next);try{Atomic(recordPath,Encoding.UTF8.GetBytes(Json.Serialize(owner)));}catch{if(Same(Read(path,IssueLimit),next))Atomic(path,old);throw;}return true;
+    owner.issues=Hash(next);var before=new Dictionary<string,byte[]>{{jarPath,jar},{sessionPath,session},{path,old},{recordPath,record}};var after=new Dictionary<string,byte[]>{{jarPath,jar},{sessionPath,session},{path,next},{recordPath,Encoding.UTF8.GetBytes(Json.Serialize(owner))}};CommitOwned(folder,before,after);return true;
    }finally{lease.ReleaseMutex();}}}catch{return false;}
   }
  }
