@@ -36,14 +36,16 @@ check(!presentation.skipTexture(mainScreen, knownLogo, SCALED), "lease does not 
 - [ ] Match native queue initial place=-1/immediate branches (no background/UI). Add the conditional Core.EndFrameUI entry fallback after clear, once per accepted frame. Narrowly retire passive LoadingQueueUI decoration when own queue scene is accepted, preserve update/Esc/controller cancel and accurate hint. Assert original Core lifecycle counts and command order; cover lost connection and redirect.
 - [ ] Run focused green; actual 42.21 no-initialization API probes; hidden GL composition captures (including native status and button), full existing Java suite with new tests, and native GameStartupSuiteTests --headless if Jar changes affect it. Inspect frames at 1280×720 and 1920×1080. Build with `Build-StartupComponent.ps1 -GameDirectory E:/Steam/steamapps/common/ProjectZomboid`; no real game initialization. Commit owned files and report commands/results/remaining limits to task-1-report.md.
 
-### Task 2: Sustained orange growth and visual verification
+### Task 2: Three distinct primary scenes and sustained orange growth
 
-**Files:** focused animation helper if needed in `StartupSource/ozl/startup`, `LoadingScene.java`, `GameRenderer.java`, `AnimationClock.java`; `tests/java/startup/SceneContractTest.java`, `SceneProbe.java`, hidden GL animation fixtures. Rebuild owned Jar.
+**Files:** focused animation helper if needed in `StartupSource/ozl/startup`, `LoadingScene.java`, `GameRenderer.java`, `AnimationClock.java`; `Hooks.java`, `StartupRuntime.java`, `LoadingModel.java`, `NativeConnectionPresentation.java` only for guarded native status observations; `tests/java/startup/SceneContractTest.java`, `SceneProbe.java`, isolated native-status and hidden GL animation fixtures. Rebuild owned Jar.
 
 **Interfaces:** scene animation takes accepted draw time; it never creates progress/log events. Extend Canvas with bounded body/leaf region drawing only if required, with equivalent GL and raster alpha/geometry. The existing image and icon assets remain byte-identical.
 
 - [ ] Add RED tests that fail the old one-second-only growth: long-wait frames at 4, 7, 11 and 16 seconds must include changing body/leaf growth beyond a mere angle difference; reduced motion must be pixel-identical at all times. Verify a continuous loop boundary without a one-frame disappearance or jump. Test alpha in the raster adapter with a known fractional-opacity pixel.
 - [ ] Implement a restrained 7–9-second seed→body→leaf→settle/breathe cycle with rotation secondary. Keep the full brand recognizable through the loop; avoid blinking/resetting the complete screen or moving information. Scene/background-specific map/network activity remains. No animation timing masquerades as completion.
+- [ ] Make BOOT amber/warm startup, SERVER navy/cyan connection, SAVE forest/emerald world-map visibly different in layout and palette. Show available identity and actual stage information without empty placeholders, fake percentages or internal explanations. Preserve Task1 status/Abort lanes, queue hint, right-aligned issue/mod information and existing observed server details across connection→queue→world. Use meaningful complete critical fields such as endpoint, with readable constrained wrapping where needed.
+- [ ] Add RED then GREEN exact native-status fixtures from actual OnConnectionStateChanged Lua. Capture localized native label only after original allowed passive events for current owner/generation/page; whitelist direct states plus known Message suffixes and validated PlaceInQueue, reject arbitrary failure/auth/unknown payloads. Record once per actual change. Test SteamConnecting/AuthPending/UDPConnecting/GettingServerInfo/Connected, hidden/failed/auth pages, unknown fields and stale generation; poison username/QR fields must never be read. Exact research in workshop-download-research.md section98. Do not infer Steam status from TestTCP.
 
 ```java
 GrowthFrame a = growth.at(4.0, false), b = growth.at(7.0, false);
@@ -52,7 +54,20 @@ check(growth.at(0,true).equals(growth.at(60,true)), "reduced motion is stable");
 ```
 
 - [ ] Make production and raster canvases share body/leaf geometry and alpha. Render contact sheets from actual production scene commands at entrance, late-loop and boundaries, for boot/save/server with current native connection status/Cancel, and reduced motion. Root views contact sheets and hidden GL frames; do not treat numeric pixel changes alone as visual approval.
+- [ ] Produce a compact animated preview from the same code-native scene frames if straightforward, to make sustained motion reviewable without running the game. Keep image/icon source bytes unchanged.
 - [ ] Run focused green and full Java suite once for final Jar, then the native suite if final payload changed since Task1. Record counts without claiming actual game speedup. Commit owned changes and task-2-report.md with exact image paths and Jar hash.
+
+### Task 3: Distinct native-compatible workshop download scene
+
+**Files:** focused workshop observation/layout helper under `StartupSource/ozl/startup`; extend `NativeConnectionPresentation.java`, `StartupRuntime.java`, `Hooks.java`, `LoadingModel.java`, `LoadingScene.java`/focused download scene; extend isolated actual-Lua fixtures, hidden GL and no-initialization API checks. Rebuild owned Jar.
+
+**Interfaces:** read `artifacts/loading-repair-20261026/workshop-download-research.md` for verified fields/callbacks. Reuse accepted-frame BEHIND_UI slot; a separate phase observation selects download scene only after successful native Install + same-owner actual transfer. Preserve Tasks1/2 leases, animation and native lifecycle.
+
+- [ ] RED→GREEN Required(all projects)→Details(out-of-order IDs)→original Install→Progress(A)→Ready(A)→Progress(B)→Success; observed Ready includes installed items. Associate titles by ID, current-item bytes only, total1 indeterminate, no invented final bytes. First speed sample unknown, fresh monotonic delta only; reset/expire on item switch/regression/total change/error/reconnect. Reject late owner/generation/ID samples and malformed inputs. Do not invoke native getState/update or new Steam queries.
+- [ ] A clearly distinct indigo/violet upper download layout shows current cached title/publicID, actual bytes/bar/rate when known, `已就绪 X / N 工坊项目`, and server identity. Do not flash for already-ready or metadata-only checks. Confirmation/error/auth remains native. No automatic Install, nonexistent Retry action or reenabling Install on error.
+- [ ] Preserve actual native list/scroll/joypad and native Install-disabled/Disconnect, exact callbacks/previous screen/focus. Suppress only validated parent decoration/title/MainScreen logo. Reflow exact list/label via original setters updating Lua+Java for phase lifetime; restore before every yield/end/error/rejection/failure/reload. Unknown children/APIs/FBO/layout must keep full native page. No whole-parent/traversal suppression.
+- [ ] Execute actual installed Workshop create/prerender/render/row/event functions with fixture metadata; verify geometry/hit-test agreement and original Disconnect once, plus query/item errors, late success, cancellation, native-state mutation, FBO and renderer failure. Hidden GL captures include actual native list/buttons at720/1080 for root inspection; exact installed API probes remain noninitializing.
+- [ ] Run final full Java and native headless suites for current Jar, record hash and resource audit; commit owned changes and task-3-report.md. No actualgame/Steam/UI/server operations.
 
 ## Completion
 

@@ -22,12 +22,28 @@ Preserve existing world/save error, done, click prompt and multiplayer SendDone 
 
 ## Growth that remains visible during a long wait
 
-Retain the existing brand image and three scene layouts. Use a gentle repeating seed → body expansion → leaf unfold → settle/breathe cycle (about 7–9 seconds) rather than a one-second whole-image scale followed only by rotation. Rotation is secondary. Body and leaf can be drawn as code-rendered regions of the unchanged authenticated image; no new raster generation or unrelated icon redesign. Geometry/reveal is bounded and independent of progress. Reduced motion draws the complete stable logo, with no growth/rotation/pulse.
+Retain the existing brand image. Use a gentle repeating seed → body expansion → leaf unfold → settle/breathe cycle (about 7–9 seconds) rather than a one-second whole-image scale followed only by rotation. Rotation is secondary. Body and leaf can be drawn as code-rendered regions of the unchanged authenticated image; no new raster generation or unrelated icon redesign. Geometry/reveal is bounded and independent of progress. Reduced motion draws the complete stable logo, with no growth/rotation/pulse.
 
 Production GL and offscreen canvases must share actual animation geometry and alpha/reveal semantics. Existing SceneProbe currently ignores logo alpha; correct that adapter before trusting the new contact sheet. Verify beginning, late-cycle and loop-boundary frames, including a stationary log, server/native status/Cancel composition, 640×480 through 3840×2160 and reduced motion.
+
+## Clearly different contexts and actual information
+
+The user clarified while Task1 was in progress: the three primary pages must differ clearly in color and composition. BOOT uses warm amber/orange startup and a central growing brand; SERVER uses deep navy/cyan connection activity and prominent server identity/information; SAVE uses forest/emerald map/chunk activity and save identity/world-loading status. Shared typography and restrained memory/log regions preserve coherence. Downloading is an additional distinct subscene, not the sole difference between these three.
+
+Show actually observed server name/address, players/maximum, game clock/date/day, map and mod/project counts when available. Observe genuine native connection statuses such as SteamConnecting, AuthPending, UDPConnecting and GettingServerInfo; do not rename TestTCP as Steam or treat Connected as world-ready. Use exact current passive page plus owner/generation and a whitelist of actual status events to observe the native localized connectLabel only after its original handler. No free-form failure/auth message scraping. Append status changes once, leave native status/Abort authoritative. Preserve known information through queue/world transitions and avoid empty placeholders or implementation explanations.
+
+## Separate workshop download presentation
+
+Research: `artifacts/loading-repair-20261026/workshop-download-research.md`. Keep native confirmation/preparation/error pages. A successful original Install normal return plus same-owner WorkshopUpdate and validated DownloadPending/Progress can select a distinct indigo/violet download scene in the existing queued slot. No fake downloading for all-ready items, extra Steam polling, retry callback invention or automatic confirmation.
+
+The upper download region displays server identity, cached current item title/public ID, actual per-item bytes/bar, measured fresh byte rate and validated `已就绪 X / N 工坊项目`. Required counts all projects. Join Details by ID. A denominator of1 can be unknown; no aggregate byte estimates or fabricated final100%. Speed resets per item/operation/regression/denominator change and expires after missing fresh observations.
+
+Retain the actual native list/scroll/joypad and Install-disabled/Disconnect buttons. Narrowly reflow the exact original list and prompt into a lower region through original setters updating both Lua and Java geometry for phase/input lifetime. Restore captured geometry on every yield, error, rejection, failure, reload and completion. Suppress only exact parent/title/logo decoration during a validated accepted-frame lease. Preserve original callbacks, focus and previous-screen behavior. Missing/unknown/modded controls or unsupported layouts stay native. Use actual Lua create/render/row functions in isolated fixtures and hidden GL with real native list/buttons.
 
 ## Performance and delivery
 
 Keep a precise timing report of observed native/game stages and attributable limits. Do not silently disable/reorder Shelves/Viewpoint/other mods, alter memory or trust settings, cache executable authorization, or claim the game mod-loading interval is reduced without a comparable actual run. Fixing composition and animation is independent of optimizing third-party initialization.
+
+Enabled-mod follow-up research confirms that full dependency expansion is selected, while identity discovery still reads all known candidate mod.info bytes to detect real IDs and duplicates. Prepare, Stage and final validation do not rebuild the full catalog. Record this precise scope; do not describe the earlier optimization as eliminating all inactive metadata reads or conflate it with JVM mod initialization.
 
 Use TDD with real Lua-function fixtures plus actual API/bytecode probes and hidden GL, not only layout-only mocks. Source/payload tests and integration review precede a fresh local candidate6 containing the repaired agent. No version bump, server operation, website edit or automatic release in this repair; actual native interactive acceptance remains explicitly distinct from offline fixture verification.
