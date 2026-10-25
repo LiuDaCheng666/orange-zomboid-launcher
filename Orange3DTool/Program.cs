@@ -95,17 +95,18 @@ namespace PZ3D {
   public bool Enabled {get{try{return Args(ReadConfig()).Any(Agent) && File.Exists(Mods) && Regex.IsMatch(File.ReadAllText(Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}catch{return false;}}}
   internal bool FrameworkConfigured {get{try{return Args(ReadConfig()).Any(Agent);}catch{return false;}}}
   public void Guard(){GuardCore(false);}
+  internal void GuardContent(bool ownProfileTransaction=false){foreach(string path in new[]{Game,Config,User,Mods,Data})LauncherMaintenance.NoReparse(path);GuardCore(ownProfileTransaction,false,false,true);}
   internal void GuardHeap(){GuardCore(false,false,false);}
   public void GuardLaunch(){GuardCore(false,true);}
   internal void GuardMaintenance(){GuardCore(false);if(!TestMode&&RuntimeRunning())throw new Exception("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后清理缓存或重建工坊。");}
   internal void GuardPlayProfile(){GuardCore(true);}
-  void GuardCore(bool ownProfileTransaction,bool launch=false,bool checkSteam=true){
+  void GuardCore(bool ownProfileTransaction,bool launch=false,bool checkSteam=true,bool content=false){
    if(!ownProfileTransaction&&PlayProfileTransaction.Pending(this))throw new Exception(PlayProfileTransaction.PendingMessage);
    BuddyTakeover.Guard(this);
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
    if(launch&&!TestMode&&RuntimeRunning(true))throw new Exception("客户端或无法核实用途的游戏 Java 进程仍在运行，请退出后再启动。");
-   foreach(string name in new[]{"ProjectZomboid64.bat","ProjectZomboid32.bat"}){string bat=Path.Combine(Game,name);LauncherMaintenance.NoReparse(bat);if(File.Exists(bat)){if(new FileInfo(bat).Length>2097152)throw new Exception("备用启动 BAT 过大，无法核实。");var cleanup=BuddyLaunchArguments.CleanBat(File.ReadAllText(bat));if(!cleanup.Safe)throw new Exception("备用启动 BAT 参数不明确，请人工检查 Buddy 启动语法。");if(cleanup.Changed)throw new Exception("备用启动 BAT 有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
-   if(checkSteam){var options=ReadSteamOptions();options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
+   if(!launch&&!content)foreach(string name in new[]{"ProjectZomboid64.bat","ProjectZomboid32.bat"}){string bat=Path.Combine(Game,name);LauncherMaintenance.NoReparse(bat);if(File.Exists(bat)){if(new FileInfo(bat).Length>2097152)throw new Exception("备用启动 BAT 过大，无法核实。");var cleanup=BuddyLaunchArguments.CleanBat(File.ReadAllText(bat));if(!cleanup.Safe)throw new Exception("备用启动 BAT 参数不明确，请人工检查 Buddy 启动语法。");if(cleanup.Changed)throw new Exception("备用启动 BAT 有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
+   if(checkSteam){var options=ReadSteamOptions();if(!launch&&!TestMode&&options.State==SteamLaunchOptionsState.UnknownIdentity)options=SteamLaunchOptions.NativeCurrent(this).Options;if(!launch||options.State!=SteamLaunchOptionsState.UnknownIdentity)options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
   }
   public static string FindSteam(){using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){return k==null?null:(k.GetValue("SteamPath") as string);}}
   public static string DetectGame(){
@@ -126,7 +127,8 @@ namespace PZ3D {
    var block=Regex.Match(mod,@"\bmods\s*\{(?<body>[^}]*)\}");if(!block.Success)throw new Exception("客户端模组文件格式无法识别，未作修改。");
    string body=block.Groups["body"].Value;
    string[] affected=component=="base"?ModIds.Concat(on?new string[0]:new[]{ShootClient.Id,ChinesePatch.Id}).ToArray():component=="buddy"?(on?new[]{"ZombieBuddy"}:ModIds.Concat(new[]{ShootClient.Id,ChinesePatch.Id}).ToArray()):new[]{"Viewpoint"};
-   foreach(string id in affected)body=Regex.Replace(body,@"(?m)^[ \t]*mod\s*=\s*"+Regex.Escape(id)+@"\s*,[^\r\n]*(?:\r?\n|$)","");
+   if(!on)affected=affected.Concat(ViewpointAddons.All.Select(a=>a.Id)).Concat(component=="viewpoint"?new[]{"PZVoxelStudioViewpoint",ShootClient.Id}:new string[0]).Distinct().ToArray();
+   foreach(string id in affected)body=Regex.Replace(body,@"(?m)^[ \t]*mod\s*=\s*"+@"\\?"+Regex.Escape(id)+@"\s*,[^\r\n]*(?:\r?\n|$)","");
    if(on)body="\r\n"+(loader?"    mod = ZombieBuddy,\r\n":"")+(view?"    mod = Viewpoint,\r\n":"")+(models?"    mod = PZVoxelStudioViewpoint,\r\n":"")+body.TrimStart('\r','\n');
    string updated=mod.Substring(0,block.Groups["body"].Index)+body+mod.Substring(block.Groups["body"].Index+block.Groups["body"].Length);
    cfg["vmArgs"]=Args(cfg).Where(a=>!Agent(a)).Concat(on?new[]{"-agentlib:zbNative"}:new string[0]).ToArray();
@@ -158,7 +160,7 @@ namespace PZ3D {
     foreach(var c in changes){string p=(string)c["path"];c["afterSHA256"]=File.Exists(p)?Hash(File.ReadAllBytes(p)):null;}
     SaveReport(backup,changes,"已完成");Step(bridgeRetirement.Contains("[待清理]")?-1:100,component!="base"?(component=="buddy"?"ZombieBuddy":"Viewpoint")+(on?" 已启用，下次启动生效":" 已停用"):on?"3D 与 Buddy 已启用，下次启动生效":bridgeRetirement.Contains("[待清理]")?"3D 与 Buddy 已关闭；旧瞄准桥接仍有待清理文件":"3D 与 Buddy 已关闭");
    }catch(Exception failure){Step(0,"操作失败，正在恢复本阶段原文件");var errors=new List<string>();foreach(var entry in originals){try{if(entry.Value==null){if(File.Exists(entry.Key))File.Delete(entry.Key);}else{Directory.CreateDirectory(Path.GetDirectoryName(entry.Key));File.WriteAllBytes(entry.Key,entry.Value);}}catch(Exception err){errors.Add(entry.Key+": "+err.Message);}}try{SaveReport(backup,changes,errors.Count==0?"失败，已回滚":"失败，回滚不完整："+string.Join("; ",errors));}catch{}throw new Exception(failure.Message+"\r\n"+(errors.Count==0?"已恢复本阶段原文件。":"部分文件未恢复："+string.Join("; ",errors))+(!on?"\r\n此前已停用的开镜 / DLSS / 汉化组件不在本阶段回滚范围，需核对状态后重新安装。":"")+"\r\n人工恢复说明："+Path.Combine(backup,"人工关闭3D.txt"),failure);}
-   return (component=="base"?(on?"3D 和 ZombieBuddy 已启用，下次启动应用。":"已关闭 3D 和 ZombieBuddy，加载器已移入备份。"):(component=="buddy"?"ZombieBuddy":"Viewpoint")+(on?" 已启用，下次启动应用。":" 已停用，下载文件保留。"))+"\r\n备份："+backup+"\r\n下次启动应用。已有存档可在存档管理中调整模组列表。"+(bridgeRetirement==""?"":"\r\n"+bridgeRetirement);
+   return (component=="base"?(on?"3D 和 ZombieBuddy 已启用，下次启动应用。":"已关闭 3D 和 ZombieBuddy，加载器已移入备份。"):(component=="buddy"?"ZombieBuddy":"Viewpoint")+(on?" 已启用，下次启动应用。":" 已停用，下载文件保留。"))+(!on?"\r\n依赖 Viewpoint 的扩展、物件和瞄准组件已同步停用。":"")+"\r\n备份："+backup+"\r\n下次启动应用。已有存档可在存档管理中调整模组列表。"+(bridgeRetirement==""?"":"\r\n"+bridgeRetirement);
    }catch(Exception error){if(bridgeRetirement=="")throw;string message=error.Message+"\r\n"+bridgeRetirement;if(error is OperationCanceledException)throw new OperationCanceledException(message,error,((OperationCanceledException)error).CancellationToken);throw new Exception(message,error);}
   }
   static string Hash(byte[] bytes){using(var sha=System.Security.Cryptography.SHA256.Create()){return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","");}}

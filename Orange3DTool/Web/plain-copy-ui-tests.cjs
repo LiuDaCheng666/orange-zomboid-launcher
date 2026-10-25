@@ -43,11 +43,11 @@ test('component details describe requirements without generic disclaimers',async
  assert.equal(await page.locator('[data-card="base"] [data-operation="uninstall"]').count(),1);
  await page.close();
 });
-test('launch feedback reports submission without claiming server entry',async browser=>{
+test('launch success stays quiet while pending submission remains indeterminate',async browser=>{
  const {page}=await setup(browser);await page.waitForFunction(()=>!Object.keys(orange.state.experienceReads).length);
- await page.locator('#launch').click();await page.waitForFunction(()=>!orange.state.launchAttempt);
+ await page.evaluate(()=>fx.hold='launch');await page.locator('#launch').click();await page.waitForFunction(()=>held.length===1);assert.equal(await page.locator('[data-experience-progress]').getAttribute('value'),null);await page.evaluate(()=>{fx.hold='';replyNative(held.shift());});await page.waitForFunction(()=>!orange.state.launchAttempt);
  const text=await page.locator('[data-launch-feedback]').innerText();
- assert.match(text,/已提交|请求已发送/);
+ assert.equal(text,'','ordinary successful submission clears local launch status');assert.equal(await page.evaluate(()=>sent.filter(m=>m.action==='launch').length),1);
  assert.doesNotMatch(text,/待验证|等待游戏确认|已进入服务器|已进入存档/);
  await page.close();
 });

@@ -39,13 +39,13 @@ namespace PZ3D {
    if(safe){try{if(File.Exists(e.Config)&&new FileInfo(e.Config).Length<=2097152){string text=File.ReadAllText(e.Config);var cleanup=BuddyLaunchArguments.CleanJson(text);if(!cleanup.Safe||cleanup.Changed)reason="启动 JSON 存在不明确或重复的 Buddy 参数，请在组件或维护页核对。";else reason=LauncherLaunch.Reason(e,false,false);}else reason="游戏启动配置缺失或超出安全读取上限，请核对游戏目录。";config=reason=="";}catch{reason="游戏启动配置无法安全读取，请核对游戏目录与 JSON。";}}
    else reason="检查路径不安全，未读取启动配置。";
    items.Add(Item("launch-config",config?"ok":"error","游戏与启动配置",config?"游戏启动文件和参数正常。":reason,"components"));
-   bool guarded=false;if(safe&&config&&!pending){try{e.GuardLaunch();guarded=true;}catch{}}
-   items.Add(Item("launch-guard",guarded?"ok":safe&&config&&pending?"warning":"error","旧启动参数与 Steam 检查",guarded?"现有 Buddy、备用 BAT 和 Steam 启动项安全检查通过。":pending?"请完成待恢复会话后重新检查启动参数。":"启动参数安全检查未通过，请在维护页核对旧 Buddy、备用 BAT 与 Steam 状态。","maintenance"));
+   bool guarded=false;string guardReason="启动参数无法核实，请检查当前游戏配置。";if(safe&&config&&!pending){try{e.GuardLaunch();guarded=true;}catch(Exception ex){guardReason=LauncherJournal.Sanitize(ex.Message);if(guardReason.Length>512)guardReason=guardReason.Substring(0,512);}}
+   items.Add(Item("launch-guard",guarded?"ok":safe&&config&&pending?"warning":"error","旧启动参数与 Steam 检查",guarded?"当前启动配置检查通过。":pending?"请完成待恢复会话后重新检查启动参数。":guardReason,"maintenance"));
    bool modsChecked=false;
    if(safe){try{
     var budget=new LaunchReadBudget(16777216);byte[] bytes=SaveProfiles.DefaultBytes(e);string[] mods=ModConfigurations.ValidatePreflightMods(SaveProfiles.DefaultMods(bytes)),defaultMods=mods;byte[] parsed=SaveProfiles.ReplaceDefaultMods(bytes,mods);
     if(targetKind=="server"){string[] retained=LaunchProfiles.Retained(e,budget);LaunchProfiles.BuildDefault(new UTF8Encoding(false,true).GetString(bytes??parsed).TrimStart('\uFEFF'),"server",retained);mods=mods.Where(retained.Contains).ToArray();}
-    var sorted=ModConfigurations.SortForPreflight(e,mods,budget);bool invalid=sorted.errors.Length>0||sorted.changed,canAutoSort=sorted.errors.Length==0&&sorted.changed;
+    var sorted=ModConfigurations.SortForPreflight(e,mods,budget);sorted.warnings=sorted.warnings.Where(w=>w!="作者元数据超过显示限制；目录保留有界原文摘要。"&&w!="封面路径无效。").ToArray();bool invalid=sorted.errors.Length>0||sorted.changed,canAutoSort=sorted.errors.Length==0&&sorted.changed;
     if(canAutoSort&&targetKind=="server"){var defaults=ModConfigurations.SortForPreflight(e,defaultMods);canAutoSort=defaults.errors.Length==0&&defaults.changed;}
     string message=sorted.errors.Length>0?"本次启动模组存在缺失、依赖或冲突问题，请按下列详情核对。":sorted.changed?"本次启动模组加载顺序与作者声明不一致，请按下列详情排序后继续启动。":sorted.warnings.Length>0?"部分模组信息读取不完整，请查看下方详情。":targetKind=="server"?"客户端组件检查通过，将使用服务器模组清单连接。":"已知本地来源的默认模组依赖与加载顺序通过。";
     items.Add(Item("mods",invalid?"error":sorted.warnings.Length>0?"warning":"ok",targetKind=="server"?"服务器保留模组依赖与顺序":"默认模组依赖与顺序",message,"mods",sorted.errors.Concat(sorted.violations).Concat(sorted.warnings).ToArray(),canAutoSort));modsChecked=true;

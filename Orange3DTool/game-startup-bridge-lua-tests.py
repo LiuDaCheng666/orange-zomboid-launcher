@@ -33,9 +33,9 @@ def run():
         ("MainScreen.instance.termsOfServiceDialog={isVisible=function() return true end};", "MainScreen.instance.termsOfServiceDialog=nil"),
     ]:
         lua = fixture(prefix, kind="normal")
-        assert output(lua) == [], "hidden/terms-covered menu cannot be ready"
+        assert MARKER not in output(lua), "hidden/terms-covered menu cannot be ready"
         lua.execute(release + ";emit('OnRenderTick')")
-        assert output(lua) == [MARKER]
+        assert output(lua)[-1] == MARKER
     print("PASS: hidden and terms-covered menus wait for real visibility")
     for age in [-1,601]:
         lua = fixture(kind="normal", age=age)
@@ -50,9 +50,16 @@ def run():
     print("PASS: TTL, nonce, payload length and target validation gate readiness")
     for kind in ["save","server"]:
         lua = fixture(kind=kind)
-        assert output(lua) == [MARKER]
+        assert output(lua) == ["[OZL-STARTUP] target-submitted " + "a"*32]
         assert (lua.globals().saveArgs is not None) == (kind=="save")
         assert (lua.globals().connectArgs is not None) == (kind=="server")
+    lua = fixture("MainScreen.instance.termsOfServiceDialog={isVisible=function() return true end};",kind="normal")
+    assert output(lua) == ["[OZL-STARTUP] input-required " + "a"*32]
+    lua.execute("MainScreen.instance.termsOfServiceDialog=nil;emit('OnTickEvenPaused')")
+    assert output(lua)[-1] == MARKER
+    for prefix,kind in [("MainScreen.continueLatestSave=function() error('fixture') end;","save"),("ConnectToServer.instance.connect=function() error('fixture') end;","server")]:
+        lua = fixture(prefix,kind=kind)
+        assert output(lua) == ["[OZL-STARTUP] target-failed " + "a"*32]
     print("PASS: save and server entry retain original target submission after readiness")
 
 if __name__ == '__main__':

@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 namespace PZ3D {
+ sealed class GameLaunchOutcome { public string message; public string stage; public string warning; }
  sealed class ProfileLaunchRequest {
   public string Kind,Id,Mode,Save,Host,Username,UserPassword,ServerPassword;
   public int Port; public bool UseSteamRelay;
@@ -42,14 +43,14 @@ namespace PZ3D {
   static string Clean(string s,int maximum=256){s=s??"";if(s.Length>maximum||s.Any(c=>c<' '||c=='\u007f'))throw new Exception("启动配置包含无效长度或控制字符。");return s;}
   public static string BuildDefault(string original,string kind,string[] retained){
    if(kind!="save"&&kind!="server"&&kind!="normal")throw new Exception("未知启动类型。");var mods=Regex.Matches(original,@"(?m)^\s*mod\s*=\s*([^,\r\n]+)\s*,").Cast<Match>().Select(m=>m.Groups[1].Value.Trim()).ToList();
-   var keep=kind=="server"?mods.Where(id=>retained.Contains(id)).ToList():mods;keep.RemoveAll(x=>x==ModId);keep.Insert(0,ModId);
+   var keep=kind=="server"?mods.Where(id=>retained.Contains(id.TrimStart('\\'))).ToList():mods;keep.RemoveAll(x=>x==ModId);keep.Insert(0,ModId);
    var block=Regex.Match(original,@"\bmods\s*\{(?<body>[^}]*)\}");if(!block.Success||Regex.Matches(original,@"\bmods\s*\{").Count!=1)throw new Exception("无法安全识别本地模组清单。");
    string body="\r\n"+string.Join("",keep.Distinct().Select(id=>"    mod = "+id+",\r\n"));string result=original.Substring(0,block.Groups["body"].Index)+body+original.Substring(block.Groups["body"].Index+block.Groups["body"].Length);
    if(kind=="server"){var maps=Regex.Match(result,@"\bmaps\s*\{(?<body>[^}]*)\}");if(!maps.Success)throw new Exception("本地地图清单无法识别。");result=result.Substring(0,maps.Groups["body"].Index)+"\r\n"+result.Substring(maps.Groups["body"].Index+maps.Groups["body"].Length);}
    return result;
   }
   internal static string[] Retained(Engine e){return Retained(e,null);}
-  internal static string[] Retained(Engine e,LaunchReadBudget budget){var list=new List<string>(ServerLaunchTranslations.Ids);if(!ShootClient.BaseReady(e))return list.ToArray();list.AddRange(new[]{"ZombieBuddy","Viewpoint"});if(e.HasModels)list.Add("PZVoxelStudioViewpoint");if(ShootClient.Enabled(e))list.Add(ShootClient.Id);if(ChinesePatch.Enabled(e))list.Add(ChinesePatch.Id);foreach(var addon in ViewpointAddons.All.Where(a=>ViewpointAddons.Enabled(e,a))){try{var files=ViewpointAddons.Find(e,addon,budget);if(addon.Key=="weather"&&files.Jar!=null||ViewpointAddons.Preload(files,budget))list.Add(addon.Id);}catch{if(budget!=null)budget.Unknown();}}return list.ToArray();}
+  internal static string[] Retained(Engine e,LaunchReadBudget budget){var list=new List<string>(ServerLaunchTranslations.Ids);var active=new HashSet<string>(ModConfigurations.Managed(SaveProfiles.DefaultMods(SaveProfiles.DefaultBytes(e))).Select(id=>id.TrimStart('\\')),StringComparer.Ordinal);if(!CoreComponents.FrameworkReady(e))return list.ToArray();list.Add("ZombieBuddy");if(active.Contains(ChinesePatch.Id))list.Add(ChinesePatch.Id);if(!active.Contains("Viewpoint"))return list.ToArray();list.Add("Viewpoint");if(active.Contains("PZVoxelStudioViewpoint")&&e.HasModels)list.Add("PZVoxelStudioViewpoint");if(active.Contains(ShootClient.Id))list.Add(ShootClient.Id);foreach(var addon in ViewpointAddons.All.Where(a=>active.Contains(a.Id))){try{var files=ViewpointAddons.Find(e,addon,budget);if(addon.Key=="weather"&&files.Jar!=null||ViewpointAddons.Preload(files,budget))list.Add(addon.Id);}catch{if(budget!=null)budget.Unknown();}}return list.ToArray();}
   static void Atomic(string path,byte[] bytes){LauncherMaintenance.NoReparse(path);Directory.CreateDirectory(Path.GetDirectoryName(path));string temporary=path+".orange-"+Guid.NewGuid().ToString("N");try{File.WriteAllBytes(temporary,bytes);if(File.Exists(path))File.Replace(temporary,path,null);else File.Move(temporary,path);}finally{if(File.Exists(temporary))File.Delete(temporary);}}
   static byte[] Script(){return BundledAssets.ReadOwnAsset("OrangeLaunchBridge.lua");}
   static void PrivateRequest(string path,string text){LauncherMaintenance.NoReparse(path);if(File.Exists(path))throw new Exception("存在尚未清理的启动请求，拒绝覆盖。");var security=new FileSecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new FileSystemAccessRule(WindowsIdentity.GetCurrent().User,FileSystemRights.FullControl,AccessControlType.Allow));using(var file=new FileStream(path,FileMode.CreateNew,FileSystemRights.Write,FileShare.None,4096,FileOptions.None,security)){byte[] bytes=new UTF8Encoding(false).GetBytes(text);file.Write(bytes,0,bytes.Length);}}
@@ -83,7 +84,7 @@ namespace PZ3D {
   public static object State(Engine e){string warning="";try{if(Pending(e))warning="存在一次性启动会话；可继续编辑配置，退出后清理会话并保留期间的编辑。";string stage="";foreach(string status in new[]{LuaFile(e,StatusName),LuaFile(e,"OrangeLauncherSession.status"),Path.Combine(e.User,"OrangeLauncherSession.status")}){LauncherMaintenance.NoReparse(status);if(File.Exists(status)){if(new FileInfo(status).Length<=1024)stage=File.ReadAllText(status).Trim();break;}}return new{pending=Pending(e),stage=StageText(stage),warning=warning};}catch(Exception ex){return new{pending=Pending(e),stage="恢复需检查",warning=ex.Message};}}
   internal static string RecoverWatched(Engine e,string nonce){using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;try{while(!acquired){try{acquired=mutex.WaitOne(5000);}catch(AbandonedMutexException){acquired=true;}if(!acquired){if(!Pending(e))return "";if(Load(e).Nonce!=nonce)return "旧会话已结束；未改动新会话。";}}return Recover(e,true,nonce);}finally{if(acquired)mutex.ReleaseMutex();}}}
   // Steam keeps its original URI and arguments; the owned one-shot mod only observes menu readiness.
-  internal static object LaunchNormal(Engine e,string sessionId,Action openSteam){
+  internal static GameLaunchOutcome LaunchNormal(Engine e,string sessionId,Action openSteam){
    if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");
    if(openSteam==null)throw new ArgumentNullException("openSteam");
    string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));if(reason!="")throw new Exception(reason);
@@ -95,8 +96,8 @@ namespace PZ3D {
      try{openSteam();}catch{Recover(e,true);throw;}
      var record=Load(e);record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));
      try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }
-     catch{return new{message="游戏启动请求已发送，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送"};}
-     return new{message="已通过 Steam 请求启动游戏。",stage="游戏启动请求已发送"};
+     catch{return new GameLaunchOutcome{message="游戏启动请求已发送，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送",warning="启动监控未能启动，请在退出游戏后打开“修复”处理启动状态。"};}
+     return new GameLaunchOutcome{message="已通过 Steam 请求启动游戏。",stage="游戏启动请求已发送"};
     }finally{if(acquired)mutex.ReleaseMutex();}
    }
   }
@@ -150,7 +151,7 @@ namespace PZ3D {
     RecoverWatched(e,nonce);return 0;
    }finally{if(client!=null)client.Dispose();}
   }
-  public static object Launch(Engine e,ProfileLaunchRequest r){if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));if(reason!="")throw new Exception(reason);string mutexName=MutexName(e);using(var mutex=new Mutex(false,mutexName)){bool acquired=false;try{try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}if(!acquired)throw new Exception("另一个启动器正在准备游戏。");Recover(e);Stage(e,r);var start=new ProcessStartInfo(Path.Combine(e.Game,"ProjectZomboid64.exe")){UseShellExecute=false,WorkingDirectory=e.Game};Process game;try{game=Process.Start(start);}catch{Recover(e,true);throw;}var record=Load(e);record.Pid=game.Id;record.Birth=game.StartTime.ToUniversalTime().Ticks;record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));game.Dispose();try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }catch{return new{message="游戏已启动，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送"};}return new{message="游戏已启动，正在准备所选目标。",stage="游戏启动请求已发送"};}finally{if(acquired)mutex.ReleaseMutex();}}}
+  public static GameLaunchOutcome Launch(Engine e,ProfileLaunchRequest r){if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));if(reason!="")throw new Exception(reason);string mutexName=MutexName(e);using(var mutex=new Mutex(false,mutexName)){bool acquired=false;try{try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}if(!acquired)throw new Exception("另一个启动器正在准备游戏。");Recover(e);Stage(e,r);var start=new ProcessStartInfo(Path.Combine(e.Game,"ProjectZomboid64.exe")){UseShellExecute=false,WorkingDirectory=e.Game};Process game;try{game=Process.Start(start);}catch{Recover(e,true);throw;}var record=Load(e);record.Pid=game.Id;record.Birth=game.StartTime.ToUniversalTime().Ticks;record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));game.Dispose();try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }catch{return new GameLaunchOutcome{message="游戏已启动，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送",warning="启动监控未能启动，请在退出游戏后打开“修复”处理启动状态。"};}return new GameLaunchOutcome{message="游戏已启动，正在准备所选目标。",stage="游戏启动请求已发送"};}finally{if(acquired)mutex.ReleaseMutex();}}}
   public static int Watch(string token,string nonce){try{if(!Regex.IsMatch(token??"",@"^[A-F0-9]{64}$")||!Regex.IsMatch(nonce??"",@"^[a-f0-9]{32}$"))return 1;string data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PZ3DManager"),journal=Path.Combine(data,"launch-sessions",token+".json");LauncherMaintenance.NoReparse(journal);if(!File.Exists(journal))return 0;var r=Json.Deserialize<ProfileSessionRecord>(File.ReadAllText(journal));string user=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Zomboid");if(r.User!=user||r.Token!=token||r.Nonce!=nonce||!GameDiscovery.IsGameFolder(r.Game))return 1;var e=new Engine(r.Game,user,data);Load(e);if(r.Kind=="normal")return WatchNormal(e,nonce,TimeSpan.FromSeconds(180),1000);Process original=null;try{original=Process.GetProcessById(r.Pid);if(original.StartTime.ToUniversalTime().Ticks!=r.Birth){original.Dispose();original=null;}}catch{}try{while(Alive(original)||e.RuntimeRunning(true)){ExpireRequest(e,nonce);Thread.Sleep(2000);}}finally{if(original!=null)original.Dispose();}Thread.Sleep(2000);RecoverWatched(e,nonce);return 0;}catch{return 1;}}
  }
 }

@@ -45,11 +45,11 @@ namespace PZ3D {
    Check(Intact(mp,"first.bin")&&Intact(outside,"players.db"),"reparse preflight preserves both multiplayer and outside bytes");
   }
   static void RuntimeAndPartialFailure(){
-   bool occupied=true;Func<string,Process[]> inventory=name=>occupied&&name=="ProjectZomboid64"?new[]{Process.GetCurrentProcess()}:new Process[0];var e=Fixture("runtime",false,inventory);string mp=PathIn(e.User,"Saves/Multiplayer/server");string[] files={"players.db","vehicles.db","map_symbols.bin"};foreach(string f in files)Put(mp,f);
+   bool occupied=true;OwnedClientFixture owned=null;Func<string,Process[]> inventory=name=>occupied&&owned!=null&&name=="ProjectZomboid64"?new[]{Process.GetProcessById(owned.Process.Id)}:new Process[0];var e=Fixture("runtime",false,inventory);using(owned=new OwnedClientFixture(e.Game)){string mp=PathIn(e.User,"Saves/Multiplayer/server");string[] files={"players.db","vehicles.db","map_symbols.bin"};foreach(string f in files)Put(mp,f);
    Check(Failure(()=>Clear(e))!=""&&files.All(f=>Intact(mp,f)),"full cleanup refuses occupied runtime before changing any local data");
    occupied=false;e.Progress=(v,t)=>occupied=true;string error=Failure(()=>Clear(e));
    Check(error.Contains("未完成")&&error.Contains("1 个文件")&&error.Contains("0 个目录")&&files.Count(f=>Intact(mp,f))==2,"new runtime occupancy stops full cleanup with exact partial deletion counts");
-   var task=new JavaScriptSerializer().Deserialize<LauncherTaskStore>(File.ReadAllText(PathIn(e.Data,"diagnostics/tasks.json"))).history[0];Check(task.status=="failed"&&task.progress!=100&&task.message.Contains("1 个文件"),"partially deleted full cleanup remains failed in task history with actual counts");
+   var task=new JavaScriptSerializer().Deserialize<LauncherTaskStore>(File.ReadAllText(PathIn(e.Data,"diagnostics/tasks.json"))).history[0];Check(task.status=="failed"&&task.progress!=100&&task.message.Contains("1 个文件"),"partially deleted full cleanup remains failed in task history with actual counts");}
   }
   static void LockedFile(){
    var e=Fixture("locked");string mp=PathIn(e.User,"Saves/Multiplayer/server");Put(mp,"vehicles.db");string error;

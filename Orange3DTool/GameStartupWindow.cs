@@ -57,8 +57,8 @@ namespace PZ3D {
    issueEvidence=IssueLabel("startup-issue-evidence","原始依据将在这里显示",this.theme.Muted);issueEvidence.Font=logFont;
    issueDetails=Button("startup-issue-details","查看全部问题与原始日志");issuesPanel.Controls.Add(issueDetails);issueDetails.BackColor=BackColor;issueDetails.Font=logFont;issueDetails.Padding=Padding.Empty;issueDetails.Margin=Padding.Empty;issueDetails.FlatAppearance.MouseOverBackColor=BackColor;issueDetails.FlatAppearance.MouseDownBackColor=BackColor;issueDetails.ForeColor=this.theme.Accent;issueDetails.TextAlign=ContentAlignment.MiddleLeft;issueDetails.Click+=(sender,args)=>{using(var detail=CreateIssueDetails())detail.ShowDialog(this);};issueDetails.Enabled=false;
    elapsed=Label("startup-elapsed","已用时  0:00",this.theme.Muted);elapsed.Font=smallFont;elapsed.TextAlign=ContentAlignment.MiddleRight;
-   minimize=Button("startup-minimize","隐藏画面");minimize.Click+=(s,e)=>Close();
-   close=Button("startup-close","Esc 关闭观察");close.Click+=(s,e)=>Close();
+   minimize=Button("startup-minimize","查看游戏");minimize.Click+=(s,e)=>Close();
+   close=Button("startup-close","Esc 返回游戏");close.Click+=(s,e)=>Close();
    UpdateSnapshot(new GameStartupSnapshot{SessionId=sessionId,Stage=launch.Stage,Message=launch.Message,Failed=launch.Stage=="failed"});
    issuesPanel.BringToFront();PerformLayout();
   }
@@ -153,7 +153,7 @@ namespace PZ3D {
   }
   static string Bound(string value,int limit){if(value==null)return "";return (value.Length>limit?value.Substring(0,limit):value).Replace("\0","");}
   static string Bytes(long value,int decimals){return (value/1073741824d).ToString("F"+decimals,CultureInfo.InvariantCulture)+" GB";}
-  static string StageLabel(string value){switch(value){case "preparing":return "准备启动";case "submitted":return "等待游戏启动";case "loading":return "正在加载游戏";case "mods":return "正在加载模组";case "scripts":return "正在加载游戏脚本";case "lua":return "正在加载 Lua 与界面";case "clothing":return "正在加载服装资源";case "models":return "正在加载模型与动画";case "textures":return "正在加载贴图资源";case "booting":case "initializing":return "正在完成初始化";case "connecting":return "正在连接服务器";case "waiting":return "等待游戏输出";default:return "正在启动游戏";}}
+  static string StageLabel(string value){switch(value){case "preflight":return "核对启动条件";case "preparing":return "准备启动";case "submitted":return "等待游戏启动";case "loading":return "正在加载游戏";case "mods":return "正在加载模组";case "scripts":return "正在加载游戏脚本";case "lua":return "正在加载 Lua 与界面";case "clothing":return "正在加载服装资源";case "models":return "正在加载模型与动画";case "textures":return "正在加载贴图资源";case "booting":case "initializing":return "正在完成初始化";case "connecting":return "正在连接服务器";case "waiting":return "等待游戏输出";default:return "正在启动游戏";}}
   protected override void Dispose(bool disposing){if(disposing){lock(pendingGate)pending=null;messageTip.Dispose();headingFont.Dispose();smallFont.Dispose();logFont.Dispose();contentFont.Dispose();if(appIcon!=null)appIcon.Dispose();}base.Dispose(disposing);}
 
   internal sealed class StartupProgress:Control {

@@ -12,12 +12,12 @@ using Microsoft.Win32.SafeHandles;
 namespace PZ3D {
  // Reduces observed evidence only. Phase changes never invent a percentage.
  sealed class GameStartupReducer {
-  readonly string session;readonly DateTime started;readonly Queue<string> lines=new Queue<string>();
+  readonly string target;readonly string session;readonly DateTime started;readonly Queue<string> lines=new Queue<string>();
   readonly Queue<string> rawLines=new Queue<string>();readonly List<GameLogIssue> issues=new List<GameLogIssue>();int rawBytes,rawVersion,analyzedVersion;DateTime analyzedUtc=DateTime.MinValue;bool analyzedTerminal;
   internal string Stage,Message;internal bool Complete,Failed,WaitingForInput;
-  internal int? ProcessId;internal long? WorkingSetBytes,TotalPhysicalBytes,HeapLimitBytes;
+  internal long ProcessBirth;internal int? ProcessId;internal long? WorkingSetBytes,TotalPhysicalBytes,HeapLimitBytes;
   static readonly Regex Record=new Regex(@"^(?<severity>LOG\s*:|DEBUG:)\s*(?<category>[A-Za-z]+)\s+f:[0-9]+(?:\s+(?:t|st):[0-9.]+)*(?:\s+at\s+(?<caller>[A-Za-z0-9_.$]+)(?:\([^\r\n)]{1,100}\))?)?\s*>\s?(?<body>.*)$",RegexOptions.CultureInvariant);
-  internal GameStartupReducer(GameStartupLaunch launch){session=launch.SessionId;started=launch.StartedUtc;Stage=launch.Stage??"preparing";Message=GameDiagnostics.Sanitize(launch.Message??"正在准备游戏启动");}
+  internal GameStartupReducer(GameStartupLaunch launch){target=launch.TargetKind;session=launch.SessionId;started=launch.StartedUtc;Stage=launch.Stage??"preparing";Message=GameDiagnostics.Sanitize(launch.Message??"正在准备游戏启动");}
   internal void Submitted(){if(Failed||Complete)return;Stage="submitted";Message="启动请求已提交，等待本次游戏进程与加载日志";}
   internal void Fail(string message){if(Complete||Failed)return;Failed=true;WaitingForInput=false;Stage="failed";Message=GameDiagnostics.Sanitize(message??"游戏启动失败");}
   internal void Line(string line){
@@ -28,11 +28,13 @@ namespace PZ3D {
    if(rawLines.Count>=160||rawBytes+size>65536){CollectProblems();while(rawLines.Count>16||rawBytes>8192){string removed=rawLines.Dequeue();rawBytes-=Encoding.UTF8.GetByteCount(removed)+1;}}
    rawLines.Enqueue(raw);rawBytes+=size;rawVersion++;
    string clean=GameDiagnostics.Sanitize(raw);if(clean.Length>4096)clean=clean.Substring(0,4096);lines.Enqueue(clean);while(lines.Count>80)lines.Dequeue();
-   if(Complete||Failed)return;
+   if(Complete||Failed||Stage=="manual")return;
    Match record=Record.Match(line??"");if(!record.Success)return;string body=record.Groups["body"].Value,category=record.Groups["category"].Value;
    // The existing one-shot Lua bridge prints only after verifying its ORANGE1
    // nonce/TTL and the visible, delayed-finished main menu with no TOS dialog.
-   if(IsMenuReady(line,session)){Complete=true;WaitingForInput=false;Stage="ready";Message="游戏主菜单已就绪";return;}
+   if(IsMenuReady(line,session)&&(target==null||target=="normal")){Complete=true;WaitingForInput=false;Stage="ready";Message="游戏主菜单已就绪";return;}
+   if(IsSignal(line,session,"input-required")){WaitingForInput=true;Stage="authorization";Message="请在游戏中完成确认";return;}
+   if(IsSignal(line,session,"target-submitted")||IsSignal(line,session,"target-failed")){Manual("请在游戏中继续所选目标；加载画面已交还控制");return;}
    if(category!="General"||record.Groups["severity"].Value=="DEBUG:"||record.Groups["caller"].Success)return;
    // Verified in ZombieBuddy Loader immediately before blocking approvePendingMods;
    // GameWindow.DoLoadingText forwards the exact text to DebugLog.log.
@@ -48,6 +50,8 @@ namespace PZ3D {
    if(phase!=null){Stage=phase;Message=message;WaitingForInput=false;}
   }
   internal static bool IsMenuReady(string line,string session){if(session==null||!Regex.IsMatch(session,@"\A[a-f0-9]{32}\z",RegexOptions.CultureInvariant))return false;Match record=Record.Match(line??"");return record.Success&&record.Groups["severity"].Value!="DEBUG:"&&record.Groups["category"].Value=="Lua"&&!record.Groups["caller"].Success&&record.Groups["body"].Value=="[OZL-STARTUP] menu-ready "+session;}
+  internal static bool IsSignal(string line,string session,string signal){return (line??"").Contains("[OZL-STARTUP] "+signal+" ")&&IsMenuReady((line??"").Replace("[OZL-STARTUP] "+signal+" ","[OZL-STARTUP] menu-ready "),session);}
+  internal void Manual(string message){if(Complete||Failed||Stage=="manual")return;Stage="manual";WaitingForInput=false;Message=message;}
   // Analysis is observational: even a fatal-looking log cannot complete or fail the launch.
   // The UI receives copies; retained observations survive the rolling input and terminal snapshot.
   static string Safe(string value,int limit){string text=GameDiagnostics.Sanitize(value??"");return text.Length>limit?text.Substring(0,limit):text;}
@@ -63,7 +67,7 @@ namespace PZ3D {
    if(rawVersion==analyzedVersion)return;analyzedVersion=rawVersion;
    try{var report=GameLogAnalyzer.AnalyzeText(String.Join("\n",rawLines.ToArray()),"本次启动");foreach(var item in report.issues??new GameLogIssue[0]){var safe=DisplayIssue(item);if(safe==null)continue;string key=IssueKey(safe);int index=issues.FindIndex(x=>IssueKey(x)==key);if(index>=0){safe.count=Math.Max(safe.count,issues[index].count);issues.RemoveAt(index);}issues.Add(safe);while(issues.Count>24)issues.Remove(issues.OrderBy(IssuePriority).First());}}catch{ /* Log analysis never interrupts startup or removes prior observations. */ }
   }
-  internal GameStartupSnapshot Snapshot(DateTime now){AnalyzeProblems(now);return new GameStartupSnapshot{SessionId=session,Stage=Stage,Message=Message,Lines=lines.ToArray(),Issues=issues.AsEnumerable().Reverse().OrderByDescending(IssuePriority).Select(DisplayIssue).ToArray(),ElapsedSeconds=Math.Max(0,(now-started).TotalSeconds),ProcessId=ProcessId,WorkingSetBytes=WorkingSetBytes,TotalPhysicalBytes=TotalPhysicalBytes,HeapLimitBytes=HeapLimitBytes,Complete=Complete,Failed=Failed,WaitingForInput=WaitingForInput,CompletedItems=null,TotalItems=null};}
+  internal GameStartupSnapshot Snapshot(DateTime now){if(!Complete&&!Failed&&Stage!="manual"&&(now-started).TotalSeconds>=(ProcessId.HasValue?90:180))Manual("尚未确认游戏就绪，请在游戏窗口继续检查；自动加载画面已结束");AnalyzeProblems(now);return new GameStartupSnapshot{SessionId=session,Stage=Stage,Message=Message,Lines=lines.ToArray(),Issues=issues.AsEnumerable().Reverse().OrderByDescending(IssuePriority).Select(DisplayIssue).ToArray(),ElapsedSeconds=Math.Max(0,(now-started).TotalSeconds),ProcessId=ProcessId,ProcessBirth=ProcessBirth,WorkingSetBytes=WorkingSetBytes,TotalPhysicalBytes=TotalPhysicalBytes,HeapLimitBytes=HeapLimitBytes,Complete=Complete,Failed=Failed,WaitingForInput=WaitingForInput,CompletedItems=null,TotalItems=null};}
  }
 
  // A byte boundary captured before launch excludes old logs and old half-lines.
@@ -129,7 +133,7 @@ namespace PZ3D {
     while(!stop.WaitOne(0)){
      try{bool firstClient=client==null;if(firstClient)FindClient();long? effectiveHeap=firstClient&&client!=null?ReadHeap():null;long? working=null;int? pid=null;bool exited=false,unreadable=false;string[] logs=new string[0];
       if(client!=null){try{client.Refresh();exited=client.HasExited||client.StartTime.ToUniversalTime().Ticks!=clientBirth;if(!exited){pid=client.Id;working=client.WorkingSet64;}}catch{exited=true;}try{bool retryBoundary=tail==null;if(retryBoundary&&consolePath!=null)tail=new GameStartupLogTail(consolePath);if(tail!=null)logs=firstClient||retryBoundary?tail.ReadStartupEvidence(launch.SessionId):tail.Read();}catch{unreadable=true;}}
-      lock(gate){if(disposed)return;if(firstClient&&client!=null)state.HeapLimitBytes=effectiveHeap;state.ProcessId=pid;state.WorkingSetBytes=working;if(exited&&!state.Complete)state.Fail("游戏进程在确认就绪前退出；请查看最近日志或游戏诊断");foreach(string line in logs)state.Line(line);if(client==null&&!state.Failed)state.Message="等待本次启动的游戏进程；观察窗口可随时关闭";else if(unreadable&&!state.Complete&&!state.Failed)state.Message="游戏进程正在运行；日志暂不可读取，正在继续观察";Publish();if(state.Complete||state.Failed)return;}
+      lock(gate){if(disposed)return;if(firstClient&&client!=null)state.HeapLimitBytes=effectiveHeap;state.ProcessId=pid;state.ProcessBirth=clientBirth;state.WorkingSetBytes=working;if(exited&&!state.Complete)state.Fail("游戏进程在确认就绪前退出；请查看最近日志或游戏诊断");foreach(string line in logs)state.Line(line);if(client==null&&!state.Failed)state.Message="等待本次启动的游戏进程；观察窗口可随时关闭";else if(unreadable&&!state.Complete&&!state.Failed)state.Message="游戏进程正在运行；日志暂不可读取，正在继续观察";Publish();if(state.Complete||state.Failed||state.Stage=="manual")return;}
      }catch{lock(gate){if(disposed)return;state.Message="暂时无法读取游戏状态；正在继续观察，游戏启动不受影响";Publish();}}
      if(stop.WaitOne(500))return;
     }

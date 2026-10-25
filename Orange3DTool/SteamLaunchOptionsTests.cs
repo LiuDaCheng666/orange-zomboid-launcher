@@ -20,7 +20,17 @@ namespace PZ3D {
    }
    Fixture(root,42,Wrap("\"108600\" { \"LaunchOptions\" \"bad\0value\" }"));Check(SteamLaunchOptions.Read(root,42).State==SteamLaunchOptionsState.Invalid,"raw NUL remains invalid");
   }
+  static void NativeIdentity(){
+   string root=Path.Combine(LauncherTestPaths.Root,"native-identity-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);File.WriteAllText(Path.Combine(root,"steam.exe"),"fixture");Fixture(root,42,Wrap("\"108600\" { \"LaunchOptions\" \"-Xmx8g\" }"));
+   Func<SteamNativeEvidence> proof=()=>new SteamNativeEvidence{root=root,exe=Path.Combine(root,"steam.exe"),pid=99,birth=700,appId=108600,steamId="76561197960265770"};int reads=0;
+   Func<string,uint,SteamLaunchOptionsSnapshot> read=(r,a)=>{reads++;Check(r==root&&a==42,"native proof reads only verified account");return SteamLaunchOptions.Read(r,a);};
+   var good=SteamLaunchOptions.NativeCurrent(proof,read);Check(good.Native&&good.Options.State==SteamLaunchOptionsState.Ready&&good.Pid==99&&good.Birth==700,"native proof establishes scoped options without registry account");
+   foreach(string kind in new[]{"account","birth","pid","root","app","type","zero","registryAccount","registryPid"}){int calls=0;Reject(()=>SteamLaunchOptions.NativeCurrent(()=>{var v=proof();if(++calls==2){if(kind=="account")v.steamId="76561197960265771";if(kind=="birth")v.birth++;if(kind=="pid")v.pid++;if(kind=="root"){v.root=root+"other";v.exe=Path.Combine(v.root,"steam.exe");}if(kind=="app")v.appId=999;if(kind=="registryAccount")v.registryAccount=43;if(kind=="registryPid")v.registryPid=100;if(kind=="type")v.steamId="0";if(kind=="zero")v.steamId="76561197960265728";}return v;},read),"native "+kind+" change across VDF read refuses");}
+   foreach(string id in new[]{"0","76561197960265728","not-id","18446744073709551615","76561193665298474"}){int before=reads;Reject(()=>SteamLaunchOptions.NativeCurrent(()=>{var v=proof();v.steamId=id;return v;},read),"invalid SteamID refused before account file read");Check(before==reads,"invalid native identity never reads userdata");}
+   Fixture(root,42,"invalid");Check(SteamLaunchOptions.NativeCurrent(proof,read).Options.State==SteamLaunchOptionsState.Invalid,"native verified malformed VDF remains Invalid");
+  }
   public static void Run(){
+   NativeIdentity();
    Discovery();
    LiteralWhitespace();
    string root=Path.Combine(LauncherTestPaths.Root,"steam-options-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);

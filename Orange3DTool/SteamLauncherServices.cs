@@ -13,6 +13,7 @@ using System.Web.Script.Serialization;
 namespace PZ3D {
  // Only the short-lived worker loads Steam. The launcher itself holds no app identity.
  static class SteamLauncherServices {
+  static readonly SemaphoreSlim nativeLane=new SemaphoreSlim(1,1);
   internal const uint App=108600;
   internal const int UgcBytes=9776,ServerBytes=376;
   const int MaxResponseBytes=16*1024*1024;
@@ -22,10 +23,10 @@ namespace PZ3D {
   static ulong ItemId(object value){ulong id;string text=Text(value);if(text.Length==0||text.Length>20||text.Any(c=>c<'0'||c>'9')||!ulong.TryParse(text,NumberStyles.None,CultureInfo.InvariantCulture,out id)||id==0)throw new Exception("工坊条目 ID 必须为有效正整数。");return id;}
   internal static Dictionary<string,object> Normalize(string action,Dictionary<string,object> payload){
    var clean=new Dictionary<string,object>();
-   if(action=="connection"||action=="subscriptions")return clean;
+   if(action=="identity"||action=="connection"||action=="subscriptions")return clean;
    if(action=="search"||action=="hall"){
     string query=Text(Field(payload,"query")).Trim();if(query.Length>200||query.Any(c=>char.IsControl(c)))throw new Exception("搜索文本最多 200 字符且不能包含控制字符。");clean["query"]=query;
-    if(action=="search"){object raw=Field(payload,"page");int page=1;if(raw!=null&&(!int.TryParse(Text(raw),NumberStyles.None,CultureInfo.InvariantCulture,out page)||page<1||page>1000))throw new Exception("工坊页码必须为 1 至 1000 的整数。");clean["page"]=page;}return clean;
+    if(action=="search"){object raw=Field(payload,"page"),token=Field(payload,"cursor");int page=1;if(raw!=null&&(!int.TryParse(Text(raw),NumberStyles.None,CultureInfo.InvariantCulture,out page)||page<1))throw new Exception("工坊页码必须为正整数。");string cursor=null;if(token!=null){if(!(token is string))throw new Exception("工坊游标必须为文本。");cursor=ValidateCursor((string)token,false);}else if(page==1)cursor="*";if(cursor==null&&page>1000)throw new Exception("传统工坊页码不能超过 1000，请使用游标。");clean["page"]=page;if(cursor!=null)clean["cursor"]=cursor;}return clean;
    }
    if(action=="details"||action=="download"){
     clean["id"]=ItemId(Field(payload,"id")).ToString(CultureInfo.InvariantCulture);
@@ -33,6 +34,9 @@ namespace PZ3D {
    }
    throw new Exception("不支持的 Steam 操作。");
   }
+  internal static string ValidateCursor(string cursor,bool allowEmpty){if(cursor==null||(!allowEmpty&&cursor.Length==0)||cursor.Any(char.IsControl)||new UTF8Encoding(false,true).GetByteCount(cursor)>255)throw new Exception("工坊游标无效或超过 255 字节。");return cursor;}
+  internal static string QueryCursor(byte[] response){if(response==null||response.Length!=280)throw new Exception("Steam 查询回调长度不完整。");int end=21;while(end<277&&response[end]!=0)end++;if(end==277)throw new Exception("Steam 查询游标缺少终止符。");return ValidateCursor(new UTF8Encoding(false,true).GetString(response,21,end-21),true);}
+  internal static int SearchOrder(string query){return string.IsNullOrEmpty(query)?0:11;}
   internal static string Utf8(byte[] bytes,int offset,int length){int end=offset;while(end<offset+length&&bytes[end]!=0)end++;return Encoding.UTF8.GetString(bytes,offset,end-offset);}
   static void RequireUgc(byte[] bytes,ulong expected){
    if(bytes==null||bytes.Length!=UgcBytes)throw new Exception("Steam 工坊 ABI 数据长度不完整。");
@@ -73,7 +77,8 @@ namespace PZ3D {
    var args=Normalize(action,payload);cancel.ThrowIfCancellationRequested();if(engine==null)throw new Exception("没有选择游戏安装。");
    if(action=="download"){engine.Guard();}
    string basePath=Path.Combine(Path.GetFullPath(engine.Data),"steam-services");
-   return Transport(basePath,engine.Game,new Dictionary<string,object>{{"action",action},{"args",args}},Process.GetCurrentProcess().MainModule.FileName,action=="download"?510000:90000,progress,cancel,hallBatch);
+   if(!nativeLane.Wait(action=="identity"?15000:90000,cancel))throw new Exception("Steam 查询仍在使用中，请稍后重试。");
+   try{return Transport(basePath,engine.Game,new Dictionary<string,object>{{"action",action},{"args",args}},Process.GetCurrentProcess().MainModule.FileName,action=="download"?510000:action=="identity"?15000:90000,progress,cancel,hallBatch);}finally{nativeLane.Release();}
   }
   static void NoReparse(string path){string full=Path.GetFullPath(path);for(var at=new DirectoryInfo(full);at!=null;at=at.Parent)if(at.Exists&&(at.Attributes&FileAttributes.ReparsePoint)!=0)throw new Exception("Steam 临时请求目录不能经过链接。");}
   static string Quote(string value){var quoted=new StringBuilder("\"");int slashes=0;foreach(char c in value){if(c=='\\'){slashes++;continue;}if(c=='\"'){quoted.Append('\\',slashes*2+1);quoted.Append(c);}else{quoted.Append('\\',slashes);quoted.Append(c);}slashes=0;}quoted.Append('\\',slashes*2);return quoted.Append('"').ToString();}

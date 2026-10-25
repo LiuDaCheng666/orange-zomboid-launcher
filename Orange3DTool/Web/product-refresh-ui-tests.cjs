@@ -6,13 +6,13 @@ test('three independent core cards dispatch only the selected component; Chinese
  assert.deepEqual(await page.locator('[data-core-components] [data-card]').evaluateAll(es=>es.map(e=>e.dataset.card)),['buddy','viewpoint','chinese']);
  assert.equal(await page.locator('[data-optional-components]').evaluate(e=>e.open),false);
  for(const [id,title] of [['chinese','老余汉化 · JAVA 版'],['buddy','ZombieBuddy'],['viewpoint','Project Viewpoint']]){
-  await page.getByRole('button',{name:'安装 '+title,exact:true}).click();
+  await page.getByRole('button',{name:'安装并启用 '+title,exact:true}).click();
   await page.waitForFunction(id=>orange.state.status.components.find(c=>c.id===id).configured,id);
  }
  assert.deepEqual(await page.evaluate(()=>sent.filter(m=>m.action==='componentsAction').map(m=>m.payload)),['chinese','buddy','viewpoint'].map(component=>({component,operation:'install',confirmed:true})));
  await page.locator('[data-card="chinese"] details>summary').click();await page.locator('[data-card="chinese"] [data-operation="update"]').click();
  await page.waitForFunction(()=>sent.filter(m=>m.action==='componentsAction').length===4);
- await page.getByRole('button',{name:'卸载 ZombieBuddy',exact:true}).click();await page.waitForFunction(()=>!orange.state.status.components.find(c=>c.id==='buddy').configured);
+ await page.getByRole('button',{name:'关闭 ZombieBuddy',exact:true}).click();await page.waitForFunction(()=>!orange.state.status.components.find(c=>c.id==='buddy').configured);
  assert.deepEqual(await page.evaluate(()=>sent.filter(m=>m.action==='componentsAction').slice(-2).map(m=>m.payload)),[{component:'chinese',operation:'update',confirmed:true},{component:'buddy',operation:'uninstall',confirmed:true}]);
  await page.evaluate(()=>orange.acceptStatus({...demoStatus,components:[...demoStatus.components.map(c=>c.id==='buddy'?{...c,version:''}:c),{id:'base',version:'combined-only',configured:true}]}));
  assert.doesNotMatch(await page.locator('[data-card="buddy"]').innerText(),/combined-only/);assert.match(await page.locator('[data-card="buddy"]').innerText(),/未声明/);

@@ -34,7 +34,7 @@ const tests=[{name:'rejected memory save unlocks draft, retry and reread before 
 }},{name:'shared rejected profile save releases controls and retains draft while status is delayed',fn:async browser=>{
  const {page,errors}=await setup(browser);
  try {
-  await route(page,'mods');await page.locator('[data-mod-profile-open="p1"]').click();
+  await route(page,'mods');await page.locator('#mod-workspace-select').selectOption('p1');
   await page.locator('#mod-profile-name').fill('Keep rejected draft');
   await page.evaluate(()=>{failure='modProfileSave';holdAction='status';});
   await page.locator('[data-mod-profile-save]').click();

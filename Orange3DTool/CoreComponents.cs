@@ -6,8 +6,8 @@ namespace PZ3D {
  static class CoreComponents {
   public const ulong Buddy=3619862853,Viewpoint=3809306528;
   public static bool BuddyDownloaded(Engine e){return File.Exists(Path.Combine(e.BuddyLib,"ZombieBuddy.jar"))&&File.Exists(Path.Combine(e.BuddyLib,"zbNative.dll"));}
-  public static bool FrameworkReady(Engine e){try{return e.FrameworkConfigured&&File.Exists(Path.Combine(e.Game,"ZombieBuddy.jar"))&&File.Exists(Path.Combine(e.Game,"zbNative.dll"))&&Regex.IsMatch(File.ReadAllText(e.Mods),@"(?m)^\s*mod\s*=\s*ZombieBuddy\s*,");}catch{return false;}}
-  public static bool ViewpointConfigured(Engine e){return FrameworkReady(e)&&File.Exists(e.Mods)&&Regex.IsMatch(File.ReadAllText(e.Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}
+  public static bool FrameworkReady(Engine e){try{return e.FrameworkConfigured&&File.Exists(Path.Combine(e.Game,"ZombieBuddy.jar"))&&File.Exists(Path.Combine(e.Game,"zbNative.dll"))&&Regex.IsMatch(File.ReadAllText(e.Mods),@"(?m)^\s*mod\s*=\s*\\?ZombieBuddy\s*,");}catch{return false;}}
+  public static bool ViewpointConfigured(Engine e){return FrameworkReady(e)&&File.Exists(e.Mods)&&Regex.IsMatch(File.ReadAllText(e.Mods),@"(?m)^\s*mod\s*=\s*\\?Viewpoint\s*,");}
   public static string Version(Engine e){
    try{
     string jar=Path.Combine(e.Game,"ZombieBuddy.jar");if(!File.Exists(jar))jar=Path.Combine(e.BuddyLib,"ZombieBuddy.jar");

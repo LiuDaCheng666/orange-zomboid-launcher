@@ -39,7 +39,7 @@ test('Memory allocation leads compact system metrics',async browser=>{
 });
 test('Management catalog exposes six readable rows without page scrolling',async browser=>{
  const {page,errors}=await setup(browser,{catalogRows:8});await page.setViewportSize({width:1280,height:900});await route(page,'mods');
- const geometry=await page.locator('.catalog-row').evaluateAll(rows=>rows.map(e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,font:parseFloat(getComputedStyle(e.querySelector('.key')).fontSize)};}));
+ const geometry=await page.locator('[data-mod-row]').evaluateAll(rows=>rows.map(e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,font:parseFloat(getComputedStyle(e.querySelector('.mod-row-title span')).fontSize)};}));
  assert.ok(geometry.filter(r=>r.top>=0&&r.bottom<=900).length>=6,JSON.stringify(geometry));assert.ok(geometry.every(r=>r.font>=12));assert.deepEqual(errors,[]);await page.close();
 });
 test('Core cards bound author art and collapsed management height',async browser=>{
@@ -106,6 +106,6 @@ test('Long server workshop panel keeps import and running-job cancellation reach
 test('Reorganized component and profile actions retain bridge payloads',async browser=>{
  const {page}=await setup(browser);await route(page,'components');await page.locator('[data-component="buddy"][data-operation="uninstall"]').click();if(await page.locator('#confirm').isVisible())await page.locator('#confirm-yes').click();
  await page.waitForFunction(()=>sent.some(m=>m.action==='componentsAction'));assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='componentsAction').payload),{component:'buddy',operation:'uninstall',confirmed:true});
- await route(page,'mods');await page.locator('[data-mod-profile-open="relax"]').click();await page.waitForFunction(()=>sent.some(m=>m.action==='modProfileGet'));assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='modProfileGet').payload),{id:'relax'});await page.close();
+ await route(page,'mods');await page.locator('#mod-workspace-select').selectOption('relax');await page.waitForFunction(()=>sent.some(m=>m.action==='modProfileGet'));assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='modProfileGet').payload),{id:'relax'});await page.close();
 });
 if(require.main===module)(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});let failed=0;try{for(const t of tests){try{await t.fn(browser);console.log('PASS '+t.name);}catch(e){failed++;console.error('FAIL '+t.name+'\n'+e.stack);}}}finally{await browser.close();}if(failed)process.exitCode=1;})();

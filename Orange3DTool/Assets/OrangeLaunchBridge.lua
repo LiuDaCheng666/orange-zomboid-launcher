@@ -59,11 +59,21 @@ local function serverOrder()
     local ordered=pcall(function() ZombieBuddy.setAutoFixModOrder(false) end)
     if not ordered then print('[OZL] Buddy order preference unavailable; original game connection continues.') end
 end
+local inputNonce=nil
+local function inputRequired()
+    local reader=getFileReader('OrangeLauncherSession.request.txt',false)
+    if not reader then return end
+    local protocol=reader:readLine();local nonce=reader:readLine();local timestamp=tonumber(reader:readLine());reader:close()
+    local now=getTimestamp()
+    if protocol=='ORANGE1' and safe(nonce,32) and #nonce==32 and nonce:match('^[a-f0-9]+$') and timestamp and now>=timestamp and now-timestamp<=600 and inputNonce~=nonce then
+        inputNonce=nonce;print('[OZL-STARTUP] input-required '..nonce)
+    end
+end
 local function tick()
     if finished then return end
     local menu=MainScreen and MainScreen.instance
     if not menu or not menu.isVisible or not menu:isVisible() or (menu.delay and menu.delay>0) then return end
-    if menu.termsOfServiceDialog and menu.termsOfServiceDialog:isVisible() then return end
+    if menu.termsOfServiceDialog and menu.termsOfServiceDialog:isVisible() then inputRequired();return end
     local reader=getFileReader('OrangeLauncherSession.request.txt',false)
     if not reader then finished=true;return end
     local lines={}
@@ -81,13 +91,12 @@ local function tick()
         print('[OZL-STARTUP] menu-ready '..lines[2])
         status('menu-ready')
     elseif lines[4]=='save' and segment(lines[5]) and segment(lines[6]) and lines[5]~='Multiplayer' and MainScreen.continueLatestSave then
-        print('[OZL-STARTUP] menu-ready '..lines[2])
         sessionKind='save'
         status('submitted-save')
         ok=pcall(MainScreen.continueLatestSave,lines[5],lines[6])
         if not ok then sessionKind=nil;status('failed-save-manual-entry-required') end
+        print('[OZL-STARTUP] '..(ok and 'target-submitted ' or 'target-failed ')..lines[2])
     elseif lines[4]=='server' and safe(lines[7],256) and lines[7]~='' and tonumber(lines[8]) and tonumber(lines[8])>=1 and tonumber(lines[8])<=65535 and lines[9]~='' and (lines[12]=='0' or lines[12]=='1') then
-        print('[OZL-STARTUP] menu-ready '..lines[2])
         -- Original Buddy preference: do not pin local core IDs ahead of the server list.
         -- This API persists that order preference, but does not approve JARs or disable checksums.
         serverOrder()
@@ -99,10 +108,12 @@ local function tick()
             ConnectToServer.instance:connect(menu,'',lines[9],lines[10],lines[7],'',lines[8],lines[11],lines[12]=='1',true,1)
         end)
         if not ok then sessionKind=nil;status('failed-server-manual-entry-required') end
+        print('[OZL-STARTUP] '..(ok and 'target-submitted ' or 'target-failed ')..lines[2])
     else status('invalid-target-manual-entry-required') end
     lines=nil
 end
 Events.OnTick.Add(tick)
+if Events.OnTickEvenPaused and Events.OnTickEvenPaused.Add then Events.OnTickEvenPaused.Add(tick) end
 -- Observe the original Required event only; vanilla confirmation remains untouched.
 if Events.OnServerWorkshopItems and Events.OnServerWorkshopItems.Add then
     Events.OnServerWorkshopItems.Add(function(kind,items)

@@ -23,9 +23,27 @@ namespace PZ3D {
   internal byte[] RawBytes {get{return raw==null?null:(byte[])raw.Clone();}}
   internal SteamLaunchOptionsSnapshot(string root,uint account,string path,SteamLaunchOptionsState state,byte[] bytes=null,Encoding encoding=null,int start=-1,int length=0,string value=null){Root=root;Account=account;ConfigPath=path;State=state;raw=bytes==null?null:(byte[])bytes.Clone();Encoding=encoding;FieldStart=start;FieldLength=length;LaunchOptions=value;}
   internal string ScopedStamp {get{string identity=(Root??"").ToUpperInvariant()+"\n"+Account+"\n"+State+"\n"+(HasField?"present":"absent");byte[] field=HasField?raw.Skip(FieldStart).Take(FieldLength).ToArray():new byte[0];return DlssInstaller.Hash(System.Text.Encoding.UTF8.GetBytes(identity).Concat(field).ToArray());}}
-  internal void RequireReadable(){if(State==SteamLaunchOptionsState.UnknownIdentity)throw new Exception("无法确认当前 Steam 账号，请登录所选 Steam 客户端后重试。");if(State==SteamLaunchOptionsState.Invalid)throw new Exception("当前游戏 Steam 启动配置无法安全解析，请检查配置后重试。");}
+  internal void RequireReadable(){if(State==SteamLaunchOptionsState.UnknownIdentity)throw new Exception("未能核实当前 Steam 账号，未读取或修改账号启动配置。");if(State==SteamLaunchOptionsState.Invalid)throw new Exception("当前游戏 Steam 启动配置无法安全解析，请检查配置后重试。");}
+ }
+ internal sealed class SteamNativeEvidence {
+  public string root,exe,steamId;public int pid;public long birth;public uint appId;internal uint registryAccount,registryPid;
+  internal uint Account {get{ulong value;if(!ulong.TryParse(steamId,out value)||(value>>56)!=1||((value>>52)&15)!=1||((value>>32)&1048575)!=1||(uint)value==0)throw new InvalidOperationException("Steam account evidence invalid");return (uint)value;}}
+  internal void Validate(){if((registryAccount!=0&&registryAccount!=Account)||(registryPid!=0&&registryPid!=(uint)pid)||appId!=108600||Account==0||pid<=0||birth<=0||!Path.IsPathRooted(root)||!string.Equals(Path.GetFullPath(exe),Path.Combine(Path.GetFullPath(root),"steam.exe"),StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Steam client evidence invalid");LauncherMaintenance.NoReparse(root);LauncherMaintenance.NoReparse(exe);}
+  internal bool Same(SteamNativeEvidence b){return b!=null&&pid==b.pid&&birth==b.birth&&Account==b.Account&&appId==b.appId&&string.Equals(root,b.root,StringComparison.OrdinalIgnoreCase)&&string.Equals(exe,b.exe,StringComparison.OrdinalIgnoreCase);}
+  internal static SteamNativeEvidence Observe(){
+   uint activeAccount=0,activePid=0;string root;using(var k=Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){root=k==null?null:k.GetValue("SteamPath") as string;if(k!=null)using(var a=k.OpenSubKey("ActiveProcess")){if(a!=null){object account=a.GetValue("ActiveUser"),pid=a.GetValue("pid");if(account is int)activeAccount=unchecked((uint)(int)account);if(pid is int)activePid=unchecked((uint)(int)pid);}}}if(string.IsNullOrEmpty(root)||!Path.IsPathRooted(root))throw new InvalidOperationException();root=Path.GetFullPath(root).TrimEnd('\\','/');LauncherMaintenance.NoReparse(root);
+   var processes=Process.GetProcessesByName("steam");try{if(processes.Length!=1)throw new InvalidOperationException();var p=processes[0];string exe=p.MainModule.FileName;if(p.HasExited||!string.Equals(Path.GetFullPath(exe),Path.Combine(root,"steam.exe"),StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException();return new SteamNativeEvidence{root=root,exe=exe,pid=p.Id,birth=p.StartTime.ToUniversalTime().Ticks,registryAccount=activeAccount,registryPid=activePid};}finally{foreach(var p in processes)p.Dispose();}
+  }
+  internal static SteamNativeEvidence Probe(Engine e){var before=Observe();var json=new System.Web.Script.Serialization.JavaScriptSerializer();var result=json.Deserialize<SteamNativeEvidence>(json.Serialize(SteamLauncherServices.Execute(e,"identity",new Dictionary<string,object>(),null,System.Threading.CancellationToken.None)));result.Validate();var after=Observe();before.steamId=after.steamId=result.steamId;before.appId=after.appId=result.appId;before.Validate();after.Validate();if(!before.Same(result)||!after.Same(result))throw new InvalidOperationException();return result;}
  }
  internal static class SteamLaunchOptions {
+  // Fresh native proof is requested only for explicit operations, never status polling.
+  internal static BuddySteamIdentity NativeCurrent(Engine e){
+   try{return NativeCurrent(()=>SteamNativeEvidence.Probe(e),Read);}catch{return new BuddySteamIdentity(new SteamLaunchOptionsSnapshot(null,0,null,SteamLaunchOptionsState.UnknownIdentity));}
+  }
+  internal static BuddySteamIdentity NativeCurrent(Func<SteamNativeEvidence> probe,Func<string,uint,SteamLaunchOptionsSnapshot> read){
+   var first=probe();first.Validate();var options=read(first.root,first.Account);var last=probe();last.Validate();if(!first.Same(last))throw new InvalidOperationException("Steam identity changed");return new BuddySteamIdentity(options,first.pid,first.birth,first.exe){Native=true};
+  }
   const int Limit=16777216;
   internal static SteamLaunchOptionsSnapshot Unavailable(){return new SteamLaunchOptionsSnapshot(null,0,null,SteamLaunchOptionsState.Unavailable);}
   internal static SteamLaunchOptionsSnapshot Current(){return Current(ClientIdentity,ProcessPath);}

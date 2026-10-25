@@ -3,23 +3,23 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {setup:targetSetup,route,chromium}=require('./experience-ui-tests.cjs');
 const tests=[],test=(name,run)=>tests.push({name,run});
 const shots=path.resolve(process.env.ORANGE_PCL_EVIDENCE_DIR||path.resolve(__dirname,'../../artifacts/pcl-layout-production'));
-async function setup(b,theme){const f=await targetSetup(b,theme);if(process.env.ORANGE_PCL_PAGE_URL){await f.page.goto(process.env.ORANGE_PCL_PAGE_URL);await f.page.waitForFunction(()=>!!orange.state.status);}await f.page.locator('[data-home-manage],[data-home-details]').evaluateAll(es=>es.forEach(e=>e.open=false));return f;}
+async function setup(b,theme){const f=await targetSetup(b,theme);await f.page.emulateMedia({reducedMotion:'reduce'});if(process.env.ORANGE_PCL_PAGE_URL){await f.page.goto(process.env.ORANGE_PCL_PAGE_URL);await f.page.waitForFunction(()=>!!orange.state.status);}await f.page.locator('[data-home-manage],[data-home-details]').evaluateAll(es=>es.forEach(e=>e.open=false));return f;}
 const settled=p=>p.waitForFunction(()=>!Object.keys(orange.state.experienceReads).length);
 async function status(p,extra={}){await p.evaluate(extra=>orange.acceptStatus({...orange.state.status,...extra}),extra);}
 const mutations=p=>p.evaluate(()=>sent.filter(m=>['componentsAction','javaSave','steamDownload','playProfileApply','launch'].includes(m.action)));
-test('top navigation and dominant right photo retain one visible launch in both themes and all sizes',async b=>{
+test('side navigation and fullwidth photo retain one reachable launch in both themes and all sizes',async b=>{
  for(const theme of ['dark','light']){const{page,errors}=await setup(b,theme);await settled(page);
   for(const size of [{width:1366,height:768},{width:1920,height:1080},{width:733,height:507}]){
-   await page.setViewportSize(size);await page.locator('main').evaluate(e=>e.scrollTop=0);
+   await page.setViewportSize(size);await page.evaluate(()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))));await page.locator('main').evaluate(e=>e.scrollTop=0);
    if(size.width>1100)assert.equal(await page.locator('#theme').isVisible(),true,'desktop tools stay visible');
-   const nav=await page.locator('header nav[aria-label="主导航"]').boundingBox();assert.ok(nav,'six primary routes belong across the top');
-   assert.equal(await page.locator('header nav>button').count(),6);
+   const nav=await page.locator('nav[aria-label="主导航"]').boundingBox();assert.ok(nav,'grouped primary navigation remains reachable');
+   assert.equal(await page.locator('nav[aria-label="主导航"]>button').count(),8);
    const launch=await page.locator('.play-launch').boundingBox(),cover=await page.locator('[data-home-cover]').boundingBox(),overlay=await page.locator('[data-home-actual]').boundingBox();
-   assert.ok(cover.x>launch.x+launch.width-1,'photo sits to the right of launch');assert.ok(cover.width>launch.width,'photo dominates launch column');
-   assert.ok(cover.height>=(size.width===733?270:400),`photo height ${cover.height}`);
-   assert.ok(overlay.x>=cover.x&&overlay.y>=cover.y&&overlay.x+overlay.width<=cover.x+cover.width+1&&overlay.y+overlay.height<=cover.y+cover.height+1,'actual state is inside photo');
+   assert.ok(Math.abs(cover.x-launch.x)<=2&&Math.abs(cover.width-launch.width)<=2,'fullwidth photo aligns with launch');
+   const expectedHeight=size.height<=600?340:size.width<=899?440:Math.min(490,Math.max(340,size.height*.48));assert.ok(Math.abs(cover.height-expectedHeight)<=1,`responsive photo height ${cover.height}`);
+   assert.ok(overlay.x>=cover.x&&overlay.y>=cover.y&&overlay.x+overlay.width<=cover.x+cover.width+1&&overlay.y+overlay.height<=cover.y+cover.height+1,'actual state remains contained within photo');
    const title=await page.locator('#home-cover-title').boundingBox();assert.ok(title.y+title.height<=overlay.y||title.x+title.width<=overlay.x,'title never collides with actual state');
-   assert.equal(await page.locator('#launch').count(),1);assert.equal(await page.locator('#launch').evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true,'launch stays visible');
+   assert.equal(await page.locator('#launch').count(),1);await page.locator('#launch').scrollIntoViewIfNeeded();assert.equal(await page.locator('#launch').evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true,'launch remains reachable');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('main').scrollWidth<=document.querySelector('main').clientWidth),true);
    fs.mkdirSync(shots,{recursive:true});await page.screenshot({path:path.join(shots,`${theme}-home-${size.width}.png`)});
   }assert.deepEqual(errors,[]);await page.close();

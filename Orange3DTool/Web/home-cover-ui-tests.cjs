@@ -6,7 +6,7 @@ const stage=process.env.ORANGE_HOME_COVER_STAGE||'green';
 const sizes=[{width:733,height:507},{width:1366,height:768},{width:1920,height:1080}];
 
 async function homePage(browser,theme){
- const fixture=await setup(browser,theme);
+ const fixture=await setup(browser,theme);await fixture.page.emulateMedia({reducedMotion:'reduce'});
  if(process.env.ORANGE_HOME_COVER_PAGE_URL){
   await fixture.page.goto(process.env.ORANGE_HOME_COVER_PAGE_URL);
   await fixture.page.waitForFunction(()=>!!orange.state.status);
@@ -27,7 +27,7 @@ async function homePage(browser,theme){
     for(const size of sizes){
      const name=`${theme}-${size.width}x${size.height}`;
      try{
-      await page.setViewportSize(size);
+      await page.setViewportSize(size);await page.evaluate(()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))));
       await page.locator('main').evaluate(e=>e.scrollTop=0);
       await page.screenshot({path:path.join(shots,`${stage}-${name}.png`)});
       const cover=page.locator('[data-home-cover]');
@@ -44,9 +44,9 @@ async function homePage(browser,theme){
       assert.equal(path.basename(new URL(image.url).pathname),'home.png');
       assert.ok(image.width>0&&image.height>0,'local artwork must decode successfully');
       const bounds=await cover.boundingBox();
-      assert.ok(bounds.height>=(size.width===733?270:400),`dominant photo height: ${bounds.height}`);
+      const expectedHeight=size.height<=600?340:size.width<=899?440:Math.min(490,Math.max(340,size.height*.48));assert.ok(Math.abs(bounds.height-expectedHeight)<=1,`responsive hero height: ${bounds.height}, expected ${expectedHeight}`);
       const launchBounds=await page.locator('.play-launch').boundingBox();
-      assert.ok(bounds.width>launchBounds.width&&bounds.x>=launchBounds.x+launchBounds.width,'photo dominates the right side of launch');
+      assert.ok(Math.abs(bounds.width-launchBounds.width)<=2&&Math.abs(bounds.x-launchBounds.x)<=2,'fullwidth hero aligns with the launch panel');assert.ok(bounds.y+bounds.height<=launchBounds.y+2,'hero precedes launch controls without overlap');
       assert.equal(await page.getByRole('button',{name:'启动到主菜单',exact:true}).count(),1,'homepage keeps a single launch button');
       assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'main must have no horizontal overflow');
       await page.locator('#play-profile-select').scrollIntoViewIfNeeded();

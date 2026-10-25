@@ -48,12 +48,12 @@ namespace PZ3D {
    Check(Intact(mp,"map_1_2.bin")&&Intact(outside,"9.bin"),"junction rejection preserves both ordinary targets and outside bytes");
   }
   static void RunningGuard(){
-   bool occupied=true;Func<string,Process[]> inventory=name=>occupied&&name=="ProjectZomboid64"?new[]{Process.GetCurrentProcess()}:new Process[0];
-   var e=Fixture("guard",false,inventory);string mp=PathIn(e.User,"Saves/Multiplayer/server");string[] files={"map_1_2.bin","map_3_4.bin","map_5_6.bin"};foreach(string f in files)Put(mp,f);
+   bool occupied=true;OwnedClientFixture owned=null;Func<string,Process[]> inventory=name=>occupied&&owned!=null&&name=="ProjectZomboid64"?new[]{Process.GetProcessById(owned.Process.Id)}:new Process[0];
+   var e=Fixture("guard",false,inventory);using(owned=new OwnedClientFixture(e.Game)){string mp=PathIn(e.User,"Saves/Multiplayer/server");string[] files={"map_1_2.bin","map_3_4.bin","map_5_6.bin"};foreach(string f in files)Put(mp,f);
    Check(Denied(()=>LauncherMaintenance.ClearMultiplayerCache(e))&&files.All(f=>Intact(mp,f)),"occupied runtime blocks cleanup before any chunk is deleted");
    occupied=false;e.Progress=(v,t)=>occupied=true;
    Check(Denied(()=>LauncherMaintenance.ClearMultiplayerCache(e)),"cleanup rechecks occupancy before each chunk deletion");
-   Check(files.Count(f=>Intact(mp,f))==2,"new runtime occupancy stops cleanup after the first chunk");
+   Check(files.Count(f=>Intact(mp,f))==2,"new runtime occupancy stops cleanup after the first chunk");}
   }
  }
 }

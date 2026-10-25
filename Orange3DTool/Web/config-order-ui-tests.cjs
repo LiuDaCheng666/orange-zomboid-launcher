@@ -49,8 +49,8 @@ test('explicit repair rechecks readiness and continues the selected save without
   const {page}=await fixture(browser);try{
     await page.locator('#launch-target-kind').selectOption('save');await page.locator('#launch-target-id').selectOption('Sandbox/one');await blocked(page);
     await page.getByRole('button',{name:'自动排序并继续启动',exact:true}).click();await doneSort(page);
-    assert.deepEqual(await launchActions(page),[{action:'launchPreflight',payload:{targetKind:'save'}},{action:'modAutoSort',payload:{confirmed:true}},{action:'launchPreflight',payload:{targetKind:'save'}},{action:'profileLaunch',payload:{kind:'save',id:'Sandbox/one'}}]);
-    assert.match(await page.locator('[data-launch-feedback]').innerText(),/指定存档.*等待游戏确认/s);assert.doesNotMatch(await page.locator('[data-launch-feedback]').innerText(),/已进入游戏|启动成功/);
+    assert.deepEqual(await launchActions(page),[{action:'launchPreflight',payload:{startupId:'0123456789abcdef0123456789abcdef',targetKind:'save'}},{action:'modAutoSort',payload:{confirmed:true}},{action:'launchPreflight',payload:{startupId:'0123456789abcdef0123456789abcdef',targetKind:'save'}},{action:'profileLaunch',payload:{startupId:'0123456789abcdef0123456789abcdef',kind:'save',id:'Sandbox/one'}}]);
+    assert.doesNotMatch(await page.locator('[data-launch-feedback]').innerText(),/100%|已进入|加载成功|本次已提交目标/);assert.doesNotMatch(await page.locator('[data-launch-feedback]').innerText(),/已进入游戏|启动成功/);
     await page.screenshot({path:path.join(shots,'sort-continued.png')});
   }finally{await page.close();}
 });
@@ -78,22 +78,22 @@ test('a target changed during sorting is preserved and cannot be launched by the
     assert.equal(await page.locator('#launch-target-id').inputValue(),'own');assert.match(await page.locator('[data-launch-feedback]').innerText(),/启动选择已变化/);
   }finally{await page.close();}
 });
-test('a draft opened while sorting is preserved and cancels automatic continuation',async browser=>{
+test('an unapplied named mod draft opened while sorting survives automatic continuation',async browser=>{
   const {page}=await fixture(browser,{holdSort:true});try{
     await blocked(page);await page.getByRole('button',{name:'自动排序并继续启动',exact:true}).click();await page.waitForFunction(()=>configUI.heldSort);
-    await route(page,'mods');await page.locator('[data-mod-profile-open="p1"]').click();await page.locator('#mod-profile-name').fill('New draft during repair');
+    await route(page,'mods');await page.locator('#mod-workspace-select').selectOption('p1');await page.locator('#mod-profile-name').fill('New draft during repair');
     await page.evaluate(()=>reply(configUI.heldSort));await doneSort(page);
     assert.equal(await page.locator('#mod-profile-name').inputValue(),'New draft during repair');assert.equal(await page.evaluate(()=>orange.state.modProfileDirty),true);
-    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launchPreflight','modAutoSort']);assert.match(await page.locator('#notice').innerText(),/未保存编辑|编辑状态已变化/);
+    assert.deepEqual((await launchActions(page)).map(x=>x.action),['launchPreflight','modAutoSort','launchPreflight','launch']);
   }finally{await page.close();}
 });
 test('failed named-profile save remains by the buttons and successful retry clears it with a receipt',async browser=>{
   const {page}=await fixture(browser);try{
-    await route(page,'mods');await page.locator('[data-mod-profile-open="p1"]').click();await page.locator('#mod-profile-name').fill('Retry this draft');await page.locator('[data-profile-mod-up="base"]').click();
+    await route(page,'mods');await page.locator('#mod-workspace-select').selectOption('p1');await page.locator('#mod-profile-name').fill('Retry this draft');await page.locator('[data-profile-mod-up="base"]').click();
     await page.evaluate(()=>configUI.profileSaveError='游戏、服务器或 Java 仍在占用相关文件，无法保存配置。');await page.locator('[data-mod-profile-save]').click();await page.waitForFunction(()=>orange.state.notice.includes('仍在占用'));
-    assert.match(await page.locator('.mod-profile-editor [data-mod-profile-save-feedback][role="alert"]').innerText(),/游戏、服务器或 Java 仍在占用相关文件/);
-    assert.equal(await page.locator('#mod-profile-name').inputValue(),'Retry this draft');assert.deepEqual(await page.locator('[data-profile-mod-id]').evaluateAll(es=>es.map(e=>e.dataset.profileModId)),['base','extra']);assert.equal(await page.locator('[data-mod-profile-save]').isEnabled(),true);
-    await page.locator('[data-profile-sort]').click();await page.waitForFunction(()=>orange.state.sortPreview);assert.match(await page.locator('[data-mod-profile-save-feedback]').innerText(),/仍在占用/);await page.screenshot({path:path.join(shots,'profile-save-error.png')});
+    assert.match(await page.locator('[data-mod-manager] [data-mod-profile-save-feedback][role="alert"]').innerText(),/游戏、服务器或 Java 仍在占用相关文件/);
+    assert.equal(await page.locator('#mod-profile-name').inputValue(),'Retry this draft');assert.deepEqual(await page.evaluate(()=>orange.state.modProfileMods),['base','extra']);assert.equal(await page.locator('[data-mod-profile-save]').isEnabled(),true);
+    assert.equal(await page.locator('[data-mod-profile-save-feedback][role="alert"]').count(),1);await page.screenshot({path:path.join(shots,'profile-save-error.png')});
     await page.evaluate(()=>configUI.profileSaveError='');await page.locator('[data-mod-profile-save]').click();await page.waitForFunction(()=>!orange.state.modProfileDirty);
     assert.match(await page.locator('[data-mod-profile-save-feedback]').innerText(),/Profile saved|已保存/);assert.equal(await page.locator('[data-mod-profile-save-feedback][role="alert"]').count(),0);await page.screenshot({path:path.join(shots,'profile-save-success.png')});
   }finally{await page.close();}
@@ -101,14 +101,14 @@ test('failed named-profile save remains by the buttons and successful retry clea
 test('running game leaves configuration activation, saving, Java decisions and recovery usable',async browser=>{
   const {page}=await fixture(browser,{running:true});try{
     await page.evaluate(()=>orange.acceptStatus({...orange.state.status,running:true,launch:{pending:true,state:'waiting'},components:[{id:'base',title:'Fixture component',item:'123',configured:true,downloaded:true}]}));
-    await route(page,'mods');assert.equal(await page.locator('[data-mod-profile-activate="p1"]').isEnabled(),true);
-    await page.locator('[data-mod-profile-activate="p1"]').click();await page.locator('#confirm-yes').click();await page.waitForFunction(()=>sent.some(m=>m.action==='modProfileActivate'));
-    await page.locator('[data-mod-profile-open="p1"]').click();await page.locator('#mod-profile-name').fill('Saved while running');await page.locator('[data-mod-profile-save]').click();await page.waitForFunction(()=>!orange.state.modProfileDirty);
+    await route(page,'mods');assert.equal(await page.locator('[data-mod-save-activate]').isDisabled(),true,'unchanged current list is already enabled');
+    await page.locator('#mod-workspace-select').selectOption('p1');await page.locator('[data-mod-save-activate]').click();await page.waitForFunction(()=>sent.some(m=>m.action==='modProfileActivate'));
+    await page.locator('#mod-workspace-select').selectOption('p1');await page.locator('#mod-profile-name').fill('Saved while running');await page.locator('[data-mod-profile-save]').click();await page.waitForFunction(()=>!orange.state.modProfileDirty);
     await route(page,'components');assert.equal(await page.locator('[data-component="base"]').first().isEnabled(),true);
     await route(page,'help');await page.locator('#java-help').evaluate(e=>e.open=true);await page.waitForSelector('[data-java-allow]');assert.equal(await page.locator('[data-java-allow]').isEnabled(),true);
     await page.locator('[data-java-allow]').click();await page.locator('#confirm-yes').click();await page.waitForFunction(()=>sent.some(m=>m.action==='javaSave'));
     assert.equal(await page.evaluate(()=>sent.find(m=>m.action==='javaSave').payload.decision),true);
-    await route(page,'home');assert.equal(await page.locator('[data-profile-recover]').isEnabled(),true);assert.equal(await page.locator('#launch').isDisabled(),true,'duplicate launch remains blocked');await page.screenshot({path:path.join(shots,'running-config-controls.png')});
+    await page.evaluate(()=>{orange.state.playProfiles.pendingRecovery={pending:true,canRecover:true,stamp:'fixture-recovery',locations:['Fixture owned config'],warnings:[]};});await route(page,'home');assert.equal(await page.locator('[data-play-recover]').isEnabled(),true);assert.equal(await page.locator('#launch').isDisabled(),true,'duplicate launch remains blocked');await page.screenshot({path:path.join(shots,'running-config-controls.png')});
   }finally{await page.close();}
 });
 test('running game still allows confirmed play-profile application',async browser=>{
@@ -148,7 +148,7 @@ test('component restore retains in-flight and pending failed-transaction locks',
 });
 test('profile save keeps its real in-flight editor lock and re-enables the draft after failure',async browser=>{
   const {page}=await fixture(browser);try{
-    await route(page,'mods');await page.locator('[data-mod-profile-open="p1"]').click();await page.locator('#mod-profile-name').fill('Pending save');await page.evaluate(()=>window.holdAction='modProfileSave');await page.locator('[data-mod-profile-save]').click();await page.waitForFunction(()=>held.some(x=>x.request.action==='modProfileSave'));
+    await route(page,'mods');await page.locator('#mod-workspace-select').selectOption('p1');await page.locator('#mod-profile-name').fill('Pending save');await page.evaluate(()=>window.holdAction='modProfileSave');await page.locator('[data-mod-profile-save]').click();await page.waitForFunction(()=>held.some(x=>x.request.action==='modProfileSave'));
     assert.equal(await page.locator('#mod-profile-name').isDisabled(),true);assert.equal(await page.locator('[data-mod-profile-save]').isDisabled(),true);
     await page.evaluate(()=>{const h=held.find(x=>x.request.action==='modProfileSave');reply({data:{id:h.request.id,ok:false,error:'Actual fixture file lock <img src=x onerror=alert(1)>'}});});await page.waitForFunction(()=>!orange.state.busy);
     assert.equal(await page.locator('#mod-profile-name').isEnabled(),true);assert.equal(await page.locator('[data-mod-profile-save]').isEnabled(),true);assert.match(await page.locator('[data-mod-profile-save-feedback]').innerText(),/Actual fixture file lock <img/);assert.equal(await page.locator('[data-mod-profile-save-feedback] img').count(),0);

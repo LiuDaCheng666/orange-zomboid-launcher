@@ -16,6 +16,7 @@ namespace PZ3D {
   public string[] Lines;
   public GameLogIssue[] Issues=new GameLogIssue[0];
   public double ElapsedSeconds;
+  public long ProcessBirth;
   public int? ProcessId, CompletedItems, TotalItems;
   public long? WorkingSetBytes, TotalPhysicalBytes, HeapLimitBytes;
   public bool Complete, Failed, WaitingForInput;
