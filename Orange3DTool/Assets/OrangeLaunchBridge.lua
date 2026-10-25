@@ -105,7 +105,8 @@ local function tick()
         captureEndpoint=lines[7]..':'..lines[8]
         status('submitted-server')
         ok=pcall(function()
-            ConnectToServer.instance:connect(menu,'',lines[9],lines[10],lines[7],'',lines[8],lines[11],lines[12]=='1',true,1)
+            -- Native connect hides previousScreen; its MainScreen parent must stay visible.
+            ConnectToServer.instance:connect(menu.bottomPanel,'',lines[9],lines[10],lines[7],'',lines[8],lines[11],lines[12]=='1',true,1)
         end)
         if not ok then sessionKind=nil;status('failed-server-manual-entry-required') end
         print('[OZL-STARTUP] '..(ok and 'target-submitted ' or 'target-failed ')..lines[2])
