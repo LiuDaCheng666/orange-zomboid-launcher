@@ -23,7 +23,7 @@ try {
  New-Item -ItemType Directory $destination,(Join-Path $destination 'Web'),(Join-Path $destination 'Assets'),(Join-Path $destination 'ThirdPartyNotices') | Out-Null
  $launcher=Join-Path $destination '橙子启动器.exe'
  # The embedded marker is immutable launcher content, never a disk-controlled switch.
- $resources=@("/resource:$buildRoot\VERSION,Launcher.Version.txt","/resource:$public,Launcher.UpdatePublicKey.xml","/resource:$buildRoot\build\velopack-distribution.txt,Launcher.Distribution.Velopack")
+ $resources=@("/resource:$buildRoot\VERSION,Launcher.Version.txt","/resource:$public,Launcher.UpdatePublicKey.xml","/resource:$buildRoot\build\velopack-distribution.txt,Launcher.Distribution.Velopack","/resource:$project\Assets\orange-app.png,OrangeAppLogo.png")
  $refs=@('/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Web.dll','/reference:System.Net.Http.dll','/reference:System.Management.dll','/reference:System.IO.Compression.dll','/reference:System.IO.Compression.FileSystem.dll','/reference:System.Security.dll',"/reference:$core","/reference:$forms","/reference:$($deps.SdkAssembly)","/reference:$($deps.NewtonsoftAssembly)")
  & C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe /nologo /define:OZL_PRODUCTION,OZL_VELOPACK /target:winexe /main:PZ3D.Program /platform:x64 /optimize+ "/out:$launcher" "/win32manifest:$project\app.manifest" "/win32icon:$project\Assets\orange-app.ico" $refs $resources $versionAttributes $sources | Out-Host
  if($LASTEXITCODE){throw 'Velopack launcher compilation failed'}

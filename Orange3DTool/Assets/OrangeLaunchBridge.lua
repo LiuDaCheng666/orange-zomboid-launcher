@@ -64,7 +64,6 @@ local function tick()
     local menu=MainScreen and MainScreen.instance
     if not menu or not menu.isVisible or not menu:isVisible() or (menu.delay and menu.delay>0) then return end
     if menu.termsOfServiceDialog and menu.termsOfServiceDialog:isVisible() then return end
-    if not ConnectToServer or not ConnectToServer.instance then return end
     local reader=getFileReader('OrangeLauncherSession.request.txt',false)
     if not reader then finished=true;return end
     local lines={}
@@ -78,12 +77,17 @@ local function tick()
     for i=4,12 do valid=valid and safe(lines[i],(i==10 or i==11) and 4096 or 1024) end
     if not valid then status('expired-or-invalid-request');return end
     local ok=false
-    if lines[4]=='save' and segment(lines[5]) and segment(lines[6]) and lines[5]~='Multiplayer' and MainScreen.continueLatestSave then
+    if lines[4]=='normal' then
+        print('[OZL-STARTUP] menu-ready '..lines[2])
+        status('menu-ready')
+    elseif lines[4]=='save' and segment(lines[5]) and segment(lines[6]) and lines[5]~='Multiplayer' and MainScreen.continueLatestSave then
+        print('[OZL-STARTUP] menu-ready '..lines[2])
         sessionKind='save'
         status('submitted-save')
         ok=pcall(MainScreen.continueLatestSave,lines[5],lines[6])
         if not ok then sessionKind=nil;status('failed-save-manual-entry-required') end
     elseif lines[4]=='server' and safe(lines[7],256) and lines[7]~='' and tonumber(lines[8]) and tonumber(lines[8])>=1 and tonumber(lines[8])<=65535 and lines[9]~='' and (lines[12]=='0' or lines[12]=='1') then
+        print('[OZL-STARTUP] menu-ready '..lines[2])
         -- Original Buddy preference: do not pin local core IDs ahead of the server list.
         -- This API persists that order preference, but does not approve JARs or disable checksums.
         serverOrder()

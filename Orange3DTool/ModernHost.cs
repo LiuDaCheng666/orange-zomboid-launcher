@@ -18,7 +18,7 @@ namespace PZ3D {
  ){if(args.Length>0&&args[0]=="--core-update-health")new CoreHealthStartup(args);else{string root=AppDomain.CurrentDomain.BaseDirectory;CoreDeployment.AdoptPortable(root);if(CoreUpdaterProgram.HandoffRecovery(root,CoreUpdateTrust.PublicKeyXml))return 0;}}string assets=ModernAssets.Prepare();return Start(assets,args);}catch(Exception e){if(args.Length>1&&args[0]=="--modern-preview"){File.WriteAllText(args[1]+".error.txt",e.ToString());return 1;}MessageBox.Show("界面启动失败："+e.Message+"\n\n请确认微软 WebView2 Runtime 已安装。官方地址：https://developer.microsoft.com/microsoft-edge/webview2/\n未修改游戏安装或配置。","OZL",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
   [MethodImpl(MethodImplOptions.NoInlining)]static int Start(string assets,string[] args){using(var form=new ModernForm(assets,args)){Application.Run(form);return form.ExitCode;}}
  }
- sealed class ModernForm:Form {
+ sealed partial class ModernForm:Form {
   readonly string assets;readonly string[] args;readonly CoreUpdateService coreUpdate;readonly CoreHealthStartup health;bool restartClosing,closeApproved;readonly WebView2 web;readonly ModernController controller;readonly ModernDispatchQueue dispatcher=new ModernDispatchQueue();readonly bool capture,liveRead;readonly JavaScriptSerializer json=new JavaScriptSerializer{MaxJsonLength=2097152,RecursionLimit=40};bool closing;public int ExitCode;
   static string Option(string[] args,string name,string fallback){int i=Array.IndexOf(args,name);return i>=0&&i+1<args.Length?args[i+1]:fallback;}
   public ModernForm(string assets,string[] args):this(assets,args,null,null){}
@@ -28,7 +28,7 @@ namespace PZ3D {
    try{Icon=Icon.ExtractAssociatedIcon(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);}catch{}
    if(selected!=null)controller=selected;else{string data=capture?Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"OrangeLauncherRuntime","PreviewData"):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PZ3DManager"),user=capture?Path.Combine(data,"user"):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Zomboid"),game=capture?Path.Combine(data,"game"):GameDiscovery.Find(GameDiscovery.SteamRoots());string saved=Path.Combine(data,"game-path.txt");if(File.Exists(saved)&&GameDiscovery.IsGameFolder(File.ReadAllText(saved).Trim()))game=File.ReadAllText(saved).Trim();
    if(!capture)LauncherDiagnostics.Install(data);controller=new ModernController(game,user,data,capture&&!liveRead);}if(!capture)controller.RecoverStartup();controller.Progress=(value,text)=>{if(IsDisposed||!IsHandleCreated)return;BeginInvoke(new Action(()=>Post(new{ @event="progress",data=new{value=value,text=text}})));};
-   controller.Event=(name,dataValue)=>{if(IsDisposed||!IsHandleCreated)return;BeginInvoke(new Action(()=>Post(new{@event=name,data=dataValue})));};
+   controller.Event=(name,dataValue)=>{if(IsDisposed||!IsHandleCreated)return;BeginInvoke(new Action(()=>Post(new{@event=name,data=dataValue})));};InitializeStartupPresentation();
    web=new WebView2{Dock=DockStyle.Fill,DefaultBackgroundColor=BackColor};Controls.Add(web);Shown+=async(sender,e)=>await Initialize();FormClosing+=HandleClosing;FormClosed+=(sender,e)=>{coreUpdate.Dispose();controller.Dispose();web.Dispose();};
    if(capture){ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;Location=new Point(-25000,-25000);}
   }
