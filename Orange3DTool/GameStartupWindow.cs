@@ -124,7 +124,7 @@ namespace PZ3D {
    memoryBar.Value=validMemory&&validTotal?(int)Math.Min(1000d,Math.Max(0d,(double)snapshot.WorkingSetBytes.Value/snapshot.TotalPhysicalBytes.Value*1000d)):0;
    memoryBar.AccessibleDescription=validMemory&&validTotal?"进程物理内存占系统总内存的实际比例；与 Java 堆上限分别展示":"物理内存数据尚未采样，比例未知";
    heap.Text="Java 堆上限（配置） · "+(snapshot.HeapLimitBytes.HasValue&&snapshot.HeapLimitBytes.Value>0?Bytes(snapshot.HeapLimitBytes.Value,2):"未知");
-   status.Text=snapshot.Failed?"最近日志已保留，可关闭此窗口查看或重试":snapshot.WaitingForInput?"请切换到游戏窗口完成授权或确认，此窗口不会抢占前台":snapshot.Complete?"游戏已进入主菜单":snapshot.ProcessId.HasValue?"正在观察游戏进程 PID "+snapshot.ProcessId.Value+" · 物理内存不代表 Java 堆使用量":"正在等待游戏进程与新日志";
+   status.Text=snapshot.Failed?"最近日志已保留，可关闭此窗口查看或重试":snapshot.WaitingForInput?"请在游戏窗口完成授权或确认":snapshot.Complete?"游戏已进入主菜单":snapshot.ProcessId.HasValue?"游戏进程 PID "+snapshot.ProcessId.Value+"":"正在等待游戏进程与新日志";
    status.Visible=snapshot.Failed||snapshot.WaitingForInput;
    if(snapshot.Lines!=null&&snapshot.Lines.Length>0){int first=Math.Max(0,snapshot.Lines.Length-4);var lines=new string[snapshot.Lines.Length-first];for(int i=0;i<lines.Length;i++)lines[i]=Bound(snapshot.Lines[first+i],512).Replace("\r"," ").Replace("\n"," ");log.Text=String.Join(Environment.NewLine,lines);}
    messageTip.SetToolTip(log,log.Text);
@@ -135,16 +135,18 @@ namespace PZ3D {
    // Keep the current session evidence until close, including a terminal snapshot with no new issues.
    if(values!=null&&values.Length>0)observedIssues=values.Where(x=>x!=null).Take(24).Select(GameStartupReducer.DisplayIssue).ToArray();
    issueDetails.Enabled=observedIssues.Length>0;if(observedIssues.Length==0)return;
-   var first=observedIssues[0];issueHeader.Text="日志分析 · "+observedIssues.Length+" 类问题（仅观察）";
+   var first=observedIssues.FirstOrDefault(x=>String.IsNullOrEmpty(x.attention)||x.attention=="primary");
+   if(first==null){issueHeader.Text="日志分析 · "+observedIssues.Length+" 类辅助记录";issueTitle.Text="暂未识别到明确的功能故障";issueMeaning.Text="资源与待核对记录";issueFrame.Text="";issueEvidence.Text="";foreach(var label in new[]{issueTitle,issueFrame,issueMeaning,issueEvidence})messageTip.SetToolTip(label,label.Text);return;}
+   issueHeader.Text="日志分析 · "+observedIssues.Count(x=>String.IsNullOrEmpty(x.attention)||x.attention=="primary")+" 类需关注问题";
    issueTitle.Text="相关模组："+(first.mods.Length==0?"未定位到模组":String.Join("、",first.mods.Take(2).ToArray())+(first.mods.Length>2?" 等 "+first.mods.Length+" 个":""));
-   issueMeaning.Text=(!String.IsNullOrWhiteSpace(first.title)?first.title:"未分类日志问题")+" · "+(String.IsNullOrWhiteSpace(first.meaning)?"暂无法确定原因或是否影响启动":first.meaning);
+   issueMeaning.Text=(!String.IsNullOrWhiteSpace(first.title)?first.title:"日志记录")+" · "+(String.IsNullOrWhiteSpace(first.meaning)?"暂无解析结果":first.meaning);
    issueFrame.Text=first.frames.Length>0?String.Join(" · ",first.frames.Take(2).Select(x=>x.file+(x.line>0?":"+x.line:"")).ToArray()):"脚本位置：尚未定位";
    issueEvidence.Text=first.evidence.Length>0?first.evidence[0].text:"原始依据：等待完整日志";
-   messageTip.SetToolTip(issueTitle,"相关模组："+(first.mods.Length==0?"未定位到模组":String.Join("、",first.mods))+"（相关调用不代表已确认责任）");messageTip.SetToolTip(issueFrame,issueFrame.Text);messageTip.SetToolTip(issueMeaning,issueMeaning.Text);messageTip.SetToolTip(issueEvidence,issueEvidence.Text);
+   messageTip.SetToolTip(issueTitle,"相关模组："+(first.mods.Length==0?"未定位到模组":String.Join("、",first.mods))+"");messageTip.SetToolTip(issueFrame,issueFrame.Text);messageTip.SetToolTip(issueMeaning,issueMeaning.Text);messageTip.SetToolTip(issueEvidence,issueEvidence.Text);
   }
   Form CreateIssueDetails(){
    var detail=new Form{Name="startup-issue-dialog",Text="本次启动 · 问题与原始日志",BackColor=theme.Background,ForeColor=theme.Text,Font=Font,StartPosition=FormStartPosition.CenterParent,ShowInTaskbar=false,MinimizeBox=false,MaximizeBox=false,MinimumSize=new Size(640,420),Size=new Size(Math.Min(920,Screen.FromControl(this).WorkingArea.Width-60),Math.Min(680,Screen.FromControl(this).WorkingArea.Height-60))};
-   var content=new StringBuilder("仅分析本次启动新增的日志。错误级别不等于启动失败；相关模组不等于已确认责任。\r\n原始依据已隐藏凭据、个人路径与网络标识，可选择文字并按 Ctrl+C 复制。\r\n\r\n");
+   var content=new StringBuilder("本次启动日志\r\n\r\n");
    for(int i=0;i<observedIssues.Length;i++){var issue=observedIssues[i];content.AppendLine((i+1)+". "+issue.title+" · "+(issue.severity=="warning"?"提醒":"错误")+" · 片段内记录 "+issue.count+" 次");content.AppendLine("中文含义："+issue.meaning);content.AppendLine("相关模组："+(issue.mods.Length>0?String.Join("、",issue.mods):"未定位到模组"));if(!String.IsNullOrWhiteSpace(issue.advice))content.AppendLine("排查建议："+issue.advice);content.AppendLine("原始日志依据：");foreach(var evidence in issue.evidence){content.AppendLine("["+evidence.source+" · 片段第 "+evidence.line+" 行] "+evidence.text);}content.AppendLine();if(content.Length>60000)break;}
    var text=new TextBox{Name="startup-issue-detail-text",ReadOnly=true,Multiline=true,ScrollBars=ScrollBars.Vertical,WordWrap=true,BorderStyle=BorderStyle.None,BackColor=theme.Surface,ForeColor=theme.Text,Font=log.Font,Text=Bound(content.ToString(),65536),Dock=DockStyle.Fill,AccessibleName="问题中文含义、相关模组和原始日志依据"};
    var done=new Button{Name="startup-issue-detail-close",Text="关闭",Dock=DockStyle.Bottom,Height=42,FlatStyle=FlatStyle.Flat,BackColor=theme.Background,ForeColor=theme.Text};done.Click+=(sender,args)=>detail.Close();detail.Padding=new Padding(18);detail.Controls.Add(text);detail.Controls.Add(done);detail.CancelButton=done;detail.Shown+=(sender,args)=>text.Select(0,0);return detail;

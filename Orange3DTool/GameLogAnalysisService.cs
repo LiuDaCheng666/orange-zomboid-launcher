@@ -35,8 +35,8 @@ namespace PZ3D {
      try{
       token.ThrowIfCancellationRequested();string[] selected=paths??DiscoverLocal(user,game,token);
       var report=AnalyzePaths(selected,origin,token,(value,text)=>{lock(gate){if(disposed||snapshot.jobId!=id)return;snapshot=new GameLogAnalysisStatus{jobId=id,state="running",message=text,progress=Math.Max(0,Math.Min(99,value))};}});
-      token.ThrowIfCancellationRequested();lock(gate){if(!disposed&&snapshot.jobId==id)snapshot=new GameLogAnalysisStatus{jobId=id,state="completed",message=report.incomplete?"分析完成，部分来源存在读取限制；请查看提示。":"分析完成。",progress=100,report=report};}
-     }catch(OperationCanceledException){lock(gate){if(!disposed&&snapshot.jobId==id)snapshot=new GameLogAnalysisStatus{jobId=id,state="cancelled",message="已取消分析，原始日志未改动。",progress=0};}}
+      token.ThrowIfCancellationRequested();lock(gate){if(!disposed&&snapshot.jobId==id)snapshot=new GameLogAnalysisStatus{jobId=id,state="completed",message="分析完成。",progress=100,report=report};}
+     }catch(OperationCanceledException){lock(gate){if(!disposed&&snapshot.jobId==id)snapshot=new GameLogAnalysisStatus{jobId=id,state="cancelled",message="已取消分析。",progress=0};}}
      catch{lock(gate){if(!disposed&&snapshot.jobId==id)snapshot=new GameLogAnalysisStatus{jobId=id,state="failed",message="日志分析未完成。请确认文件仍可读取，或尝试单独导入日志。",progress=0};}}
     });return Copy(snapshot);
    }
@@ -55,11 +55,11 @@ namespace PZ3D {
     var roots=new List<string>{folder};int seen=0;
     foreach(string entry in Directory.EnumerateDirectories(folder).OrderByDescending(Directory.GetLastWriteTimeUtc).Take(16)){token.ThrowIfCancellationRequested();try{Safe(entry);if(Path.GetFileName(entry).StartsWith("logs_",StringComparison.OrdinalIgnoreCase))roots.Add(entry);}catch{}}
     foreach(string root in roots)foreach(string path in Directory.EnumerateFiles(root,"*_DebugLog.txt")){token.ThrowIfCancellationRequested();if(++seen>256)break;try{Safe(path);logs.Add(path);}catch{}}
-    string latest=logs.OrderByDescending(File.GetLastWriteTimeUtc).ThenBy(p=>p,StringComparer.Ordinal).FirstOrDefault();
-    if(latest!=null){found.Add(latest);string paired=latest.Substring(0,latest.Length-"_DebugLog.txt".Length)+"_connections.txt";Safe(paired);if(File.Exists(paired))found.Add(paired);}
+    string companion=null;foreach(string candidate in logs.OrderByDescending(File.GetLastWriteTimeUtc).ThenBy(p=>p,StringComparer.Ordinal)){token.ThrowIfCancellationRequested();if(found.Count==0||Batch.MatchingTail(console,candidate)){companion=candidate;break;}}
+    // DebugLog often mirrors console with timestamp prefixes. Read console once; use the
+    // positively matched DebugLog only to locate the same run's independent network events.
+    if(companion!=null){if(found.Count==0)found.Add(companion);string paired=companion.Substring(0,companion.Length-"_DebugLog.txt".Length)+"_connections.txt";Safe(paired);if(File.Exists(paired))found.Add(paired);}
    }
-   DateTime baseline=found.Where(File.Exists).Select(File.GetLastWriteTimeUtc).DefaultIfEmpty(DateTime.UtcNow).Max();
-   foreach(string root in new[]{user,game}){token.ThrowIfCancellationRequested();if(String.IsNullOrEmpty(root)||!Directory.Exists(root))continue;Safe(root);foreach(string crash in Directory.EnumerateFiles(root,"hs_err_pid*.log").Take(32)){Safe(crash);if(File.GetLastWriteTimeUtc(crash)>=baseline.AddHours(-24))found.Add(crash);if(found.Count>=8)break;}}
    return found.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
   }
 
@@ -82,7 +82,7 @@ namespace PZ3D {
    static string Label(string path){return GameDiagnostics.Sanitize(Path.GetFileName(path));}
    internal IEnumerable<GameLogInput> Inputs(string[] paths){
     if(paths.Length==0)Warn("未找到本次游戏日志。请先运行游戏，或手动导入日志。");
-    if(local){string console=paths.FirstOrDefault(p=>Path.GetFileName(p).Equals("console.txt",StringComparison.OrdinalIgnoreCase)),debug=paths.FirstOrDefault(p=>p.EndsWith("_DebugLog.txt",StringComparison.OrdinalIgnoreCase));if(console!=null&&debug!=null&&MatchingTail(console,debug))consoleSession=Session(Path.GetFileName(debug));}
+    if(local){string console=paths.FirstOrDefault(p=>Path.GetFileName(p).Equals("console.txt",StringComparison.OrdinalIgnoreCase)),debug=paths.FirstOrDefault(p=>p.EndsWith("_DebugLog.txt",StringComparison.OrdinalIgnoreCase)),connection=paths.FirstOrDefault(p=>p.EndsWith("_connections.txt",StringComparison.OrdinalIgnoreCase));if(debug==null&&connection!=null)debug=connection.Substring(0,connection.Length-"_connections.txt".Length)+"_DebugLog.txt";if(console!=null&&debug!=null&&MatchingTail(console,debug))consoleSession=Session(Path.GetFileName(debug));}
     foreach(string selected in paths){token.ThrowIfCancellationRequested();string full=null;try{full=Path.GetFullPath(selected);Safe(full);}catch{Warn("已跳过不安全、不可访问或含联接的来源。");}
      if(full==null)continue;
      if(Directory.Exists(full)){foreach(string file in Find(full,0))foreach(var input in FileInputs(file))yield return input;}
@@ -115,7 +115,7 @@ namespace PZ3D {
     if(value!=null)yield return value;
    }
    static FileStream OpenFile(string path){Safe(path);var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);try{GameDiagnostics.VerifyHandle(file,path);return file;}catch{file.Dispose();throw;}}
-   static bool MatchingTail(string console,string debug){try{var a=Tail(console);var b=Tail(debug);int count=Math.Min(16,Math.Min(a.Length,b.Length));return count>=3&&a.Skip(a.Length-count).SequenceEqual(b.Skip(b.Length-count),StringComparer.Ordinal);}catch{return false;}}
+   internal static bool MatchingTail(string console,string debug){try{var a=Tail(console);var b=Tail(debug);int count=Math.Min(16,Math.Min(a.Length,b.Length));return count>=3&&a.Skip(a.Length-count).SequenceEqual(b.Skip(b.Length-count),StringComparer.Ordinal);}catch{return false;}}
    static string[] Tail(string path){using(var file=OpenFile(path)){int size=(int)Math.Min(65536,file.Length);file.Position=file.Length-size;byte[] bytes=new byte[size];int offset=0,got;while(offset<size&&(got=file.Read(bytes,offset,size-offset))>0)offset+=got;string text=Encoding.UTF8.GetString(bytes,0,offset);var lines=text.Split('\n');return lines.Skip(size<file.Length?1:0).Select(l=>Regex.Replace(l.Trim(),@"^\[[^\]\r\n]{1,64}\]\s*","",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)).TrimEnd('.')).Where(l=>l.Length>0).ToArray();}}
    byte[] Read(Stream source,long length){if(length<0||length>FileLimit)throw new InvalidDataException();byte[] result=new byte[(int)length];int offset=0;while(offset<result.Length){token.ThrowIfCancellationRequested();int got=source.Read(result,offset,Math.Min(65536,result.Length-offset));if(got<=0)throw new EndOfStreamException();offset+=got;}return result;}
    List<GameLogInput> ReadZip(string path){

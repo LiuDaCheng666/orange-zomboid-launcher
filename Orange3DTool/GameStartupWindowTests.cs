@@ -22,7 +22,7 @@ namespace PZ3D {
   static T Find<T>(Form form,string name) where T:Control{var found=form.Controls.Find(name,true);if(found.Length==0)throw new Exception("FAIL: required native control missing: "+name);return (T)found[0];}
   static void Update(Form form,GameStartupSnapshot snapshot){form.GetType().GetMethod("UpdateSnapshot").Invoke(form,new object[]{snapshot});}
   static GameStartupSnapshot Loading(){return new GameStartupSnapshot{SessionId="native-fixture",Stage="loading",Message="正在载入脚本与模组",Lines=new[]{"[12:41:05] Loading: media/lua/shared/", "[12:41:06] Loading: media/maps/Muldraugh, KY/", "[12:41:07] 正在读取本次启动的游戏输出"},ElapsedSeconds=37,ProcessId=3210,WorkingSetBytes=1610612736L,TotalPhysicalBytes=17179869184L,HeapLimitBytes=8589934592L,Complete=false};}
-  static GameStartupSnapshot Problems(){var sample=Loading();sample.Lines=new[]{"LOG : General f:0> Loading Mods","LOG : General f:0> Loading Scripts","LOG : General f:0> Loading Lua","ERROR: Lua f:0> attempted index: health of non-table: null","Lua((MOD:Unseen Solar Observatory)).tick(SolarProbe.lua:73)","LOG : General f:0> Game booting"};sample.Issues=new[]{new GameLogIssue{id="fixture-1",title="Lua 脚本读取空值",meaning="脚本试图读取不存在对象的 health 字段；相关调用涉及下方模组，尚不能据此认定责任。",advice="保留原始日志并核对兼容版本。",severity="error",count=3,mods=new[]{"Unseen Solar Observatory"},frames=new[]{new GameLogFrame{mod="Unseen Solar Observatory",file="SolarProbe.lua",line=73}},evidence=new[]{new GameLogEvidence{source="本次启动",line=42,text="ERROR: Lua f:0> attempted index: health of non-table: null"},new GameLogEvidence{source="本次启动",line=43,text="Lua((MOD:Unseen Solar Observatory)).tick(SolarProbe.lua:73)"}}}};return sample;}
+  static GameStartupSnapshot Problems(){var sample=Loading();sample.Lines=new[]{"LOG : General f:0> Loading Mods","LOG : General f:0> Loading Scripts","LOG : General f:0> Loading Lua","ERROR: Lua f:0> attempted index: health of non-table: null","Lua((MOD:Unseen Solar Observatory)).tick(SolarProbe.lua:73)","LOG : General f:0> Game booting"};sample.Issues=new[]{new GameLogIssue{id="fixture-1",title="Lua 脚本读取空值",meaning="脚本试图读取不存在对象的 health 字段。",advice="保留原始日志并核对兼容版本。",severity="error",count=3,mods=new[]{"Unseen Solar Observatory"},frames=new[]{new GameLogFrame{mod="Unseen Solar Observatory",file="SolarProbe.lua",line=73}},evidence=new[]{new GameLogEvidence{source="本次启动",line=42,text="ERROR: Lua f:0> attempted index: health of non-table: null"},new GameLogEvidence{source="本次启动",line=43,text="Lua((MOD:Unseen Solar Observatory)).tick(SolarProbe.lua:73)"}}}};return sample;}
   static void ProblemPanel(){
    foreach(bool light in new[]{false,true})foreach(bool scaled in new[]{false,true})foreach(Size size in new[]{new Size(1280,720),new Size(1920,1080)})using(Form f=NewWindow(light)){
     f.ClientSize=size;if(scaled)ScaleFonts(f,1.5f);Update(f,Problems());IntPtr nativeHandle=f.Handle;f.PerformLayout();
@@ -58,7 +58,22 @@ namespace PZ3D {
    var ready=Loading();ready.Complete=true;Update(f,ready);Check(bar.VisualState=="complete"&&!bar.Indeterminate&&bar.AccessibilityObject.Value.Contains("就绪"),"verified completion gives the rail a completed state and accessible ready text");
   }}
 
-  [STAThread] public static int Main(string[] args){if(args.Length==1&&args[0]=="--sentinel"){Thread.Sleep(30000);return 0;}try{Application.EnableVisualStyles();ProgressDesign();ProblemPanel();Run();if(args.Length==2&&args[0]=="--capture")Capture(args[1]);Console.WriteLine("GAME STARTUP WINDOW: "+passed+" PASS");return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
+  static void AttentionPriority(){
+   using(Form form=NewWindow(false)){
+    var sample=Problems();var core=sample.Issues[0];core.attention="primary";
+    var background=new GameLogIssue{attention="background",type="asset-bone",severity="error",title="模型骨骼信息提示",meaning="background-only-bone-marker",evidence=new[]{new GameLogEvidence{text="Could not find bone index for node name: Body"}}};
+    sample.Issues=new[]{background};Update(form,sample);
+    Check(Find<Label>(form,"startup-issue-heading").Text.Contains("辅助")&&!Find<Label>(form,"startup-issue-meaning").Text.Contains("background-only-bone-marker"),"startup canvas folds background diagnostics instead of showing them as core faults");
+    var observed=(GameLogIssue[])form.GetType().GetField("observedIssues",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(form);
+    Check(observed.Length==1&&observed[0].attention=="background"&&Find<Button>(form,"startup-issue-details").Enabled,"startup details retain auxiliary evidence and copied attention metadata");
+    sample.Issues=new[]{background,core};Update(form,sample);
+    Check(Find<Label>(form,"startup-issue-title").Text.Contains("Unseen Solar Observatory")&&Find<Label>(form,"startup-issue-meaning").Text.Contains("health"),"actionable MOD fault wins the startup preview regardless of background array order");
+    using(var detail=(Form)form.GetType().GetMethod("CreateIssueDetails",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(form,null))Check(!Find<TextBox>(detail,"startup-issue-detail-text").Text.Contains("不等于")&&!Find<Label>(form,"startup-issue-heading").Text.Contains("仅观察"),"startup analysis displays result and evidence without disclaimer boilerplate");
+    sample.Issues=new[]{background};Update(form,sample);var tip=(ToolTip)form.GetType().GetField("messageTip",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(form);
+    Check(!tip.GetToolTip(Find<Label>(form,"startup-issue-title")).Contains("Unseen Solar Observatory"),"auxiliary-only snapshot clears previous core fault tooltip");
+   }
+  }
+  [STAThread] public static int Main(string[] args){if(args.Length==1&&args[0]=="--sentinel"){Thread.Sleep(30000);return 0;}try{Application.EnableVisualStyles();ProgressDesign();ProblemPanel();AttentionPriority();Run();if(args.Length==2&&args[0]=="--capture")Capture(args[1]);Console.WriteLine("GAME STARTUP WINDOW: "+passed+" PASS");return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
   public static void Run(){
    using(Form f=NewWindow(false)){
     Check(!f.TopMost&&f.FormBorderStyle==FormBorderStyle.None&&f.Bounds==Screen.FromPoint(Cursor.Position).Bounds,"observer fills its monitor without borders or topmost focus");
@@ -97,8 +112,8 @@ namespace PZ3D {
    foreach(bool light in new[]{false,true})foreach(int layout in new[]{0,1,2,3})using(Form f=NewWindow(light)){
     Update(f,Problems());f.ClientSize=layout==0||layout==3?new Size(1920,1080):new Size(1280,720);
     if(layout>=2)ScaleFonts(f,1.5f);
-    f.StartPosition=FormStartPosition.Manual;f.Location=new Point(-20000,-20000);f.ShowInTaskbar=false;IntPtr foreground=GetForegroundWindow();f.Show();f.PerformLayout();var timer=Stopwatch.StartNew();while(timer.ElapsedMilliseconds<240){Application.DoEvents();Thread.Sleep(10);}
-    Check(GetForegroundWindow()==foreground,"offscreen native show and periodic updates preserve the foreground window");
+    f.StartPosition=FormStartPosition.Manual;f.Location=new Point(-20000,-20000);f.ShowInTaskbar=false;f.Show();f.PerformLayout();var timer=Stopwatch.StartNew();while(timer.ElapsedMilliseconds<240){Application.DoEvents();Thread.Sleep(10);}
+    Check(GetForegroundWindow()!=f.Handle,"offscreen native show and periodic updates never activate the observer");
     using(var bitmap=new Bitmap(f.Width,f.Height)){using(var g=Graphics.FromImage(bitmap)){IntPtr dc=g.GetHdc();try{Check(PrintWindow(f.Handle,dc,0),"native window capture renders successfully");}finally{g.ReleaseHdc(dc);}}bitmap.Save(Path.Combine(directory,(light?"light":"dark")+(layout==0?"-default":layout==1?"-minimum":layout==2?"-minimum-scaled150":"-default-scaled150")+".png"));}
     if(!light&&layout==1){foreach(string state in new[]{"measured","waiting","failed","complete"}){var sample=Problems();sample.Stage="scripts";if(state=="measured"){sample.CompletedItems=3;sample.TotalItems=8;}if(state=="waiting")sample.WaitingForInput=true;if(state=="failed"){sample.Failed=true;sample.Message="游戏进程在就绪前退出";}if(state=="complete")sample.Complete=true;Update(f,sample);Application.DoEvents();using(var bitmap=new Bitmap(f.Width,f.Height)){using(var g=Graphics.FromImage(bitmap)){IntPtr dc=g.GetHdc();try{Check(PrintWindow(f.Handle,dc,0),"native loading rail "+state+" state capture renders successfully");}finally{g.ReleaseHdc(dc);}}bitmap.Save(Path.Combine(directory,"dark-progress-"+state+".png"));}}}
     if(layout==2){var many=Problems();many.Issues=new GameLogIssue[12];for(int i=0;i<many.Issues.Length;i++)many.Issues[i]=Problems().Issues[0];Update(f,many);using(var detail=(Form)f.GetType().GetMethod("CreateIssueDetails",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(f,null)){

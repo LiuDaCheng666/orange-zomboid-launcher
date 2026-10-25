@@ -1009,3 +1009,8 @@ main{padding:0 22px;min-width:0;min-height:0;overflow:auto;scrollbar-width:thin;
 .log-intake.has-report>div:first-child{display:none}
 .log-intake.has-report .actions{margin-top:0}
 .log-intake.has-report>p.small{margin:8px 0 0}
+
+/* Compact log attention groups; evidence stays reachable in native details. */
+.log-folded{min-width:0;padding:14px 18px}.log-folded>summary{font-size:14px;font-weight:600;cursor:pointer}.log-folded-list{display:grid;gap:10px;margin-top:12px}.log-folded .log-issue{padding:14px;box-shadow:none}.log-location{margin-top:8px;font-size:13px;overflow-wrap:anywhere}.log-console-source{padding:10px 12px;border-left:3px solid var(--accent);background:var(--bg);font-size:13px}.log-primary-summary{font-size:14px}.log-issue-group,.log-folded-list,.log-issue{min-width:0}
+
+.log-intake.has-report>p.small{display:none}.log-outcome h2{margin-top:10px}.log-outcome .log-metrics{margin-top:10px;padding-top:8px;gap:8px}.log-outcome .log-metrics strong{font-size:18px}.log-primary-titles{margin-top:8px}.log-console-source{margin-top:8px}

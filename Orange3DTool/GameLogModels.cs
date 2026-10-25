@@ -10,7 +10,7 @@ namespace PZ3D {
  sealed class GameLogEvidence {public string source,text;public int line;}
  sealed class GameLogFrame {public string mod,file,function;public int line;}
  sealed class GameLogIssue {
-  public string id,type,severity,impact,title,meaning,advice,phase,attemptId;
+  public string id,type,severity,attention,impact,title,meaning,advice,phase,attemptId;
   public int count;
   public string[] mods=new string[0];
   public GameLogFrame[] frames=new GameLogFrame[0];
