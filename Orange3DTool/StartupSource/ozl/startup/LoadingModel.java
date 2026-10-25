@@ -156,6 +156,7 @@ public final class LoadingModel {
         else if(value.length==5)issue=value.clone();
     }
     public synchronized void disable(){disabled=true;}
+    synchronized boolean presentationCurrent(long operation,long expectedEpoch){return route==Route.BEHIND_UI&&context==Context.SERVER&&!waiting&&!disabled&&!nativeInteraction&&generation==operation&&epoch==expectedEpoch&&downloadPage;}
     public synchronized Snapshot snapshot(){return new Snapshot(route!=Route.NONE&&!waiting&&!disabled&&!nativeInteraction,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9,context,route,epoch,scannedResources,name,mode,map,workshopProjects,requestedMods,queuePosition,downloaded,downloadTotal,generation,server,downloadPage,downloadID,downloadTitle,workshopReady,downloadRate,downloadPhase);}
     public static final class Snapshot {
         public final boolean active,world;

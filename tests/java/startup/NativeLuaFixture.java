@@ -33,6 +33,9 @@ public final class NativeLuaFixture {
     else if(method.equals("DrawTextureScaledColor"))e.DrawTextureScaledColor(t,x,y,num(f.get(4)),num(f.get(5)),num(f.get(6)),num(f.get(7)),num(f.get(8)),num(f.get(9)));
     else e.DrawTextureScaledAspect3(t,x,y,num(f.get(4)),num(f.get(5)),num(f.get(6)),num(f.get(7)),num(f.get(8)),num(f.get(9)));return 0;});
   }
+  methods.rawset("getScrollHeight",(JavaFunction)(f,n)->f.push(((UIElement)f.get(0)).getScrollHeight()));
+  methods.rawset("setScrollHeight",(JavaFunction)(f,n)->{((UIElement)f.get(0)).setScrollHeight(num(f.get(1)));return 0;});
+  function("fixtureStencil",(f,n)->{((UIElement)f.get(0)).stencil(num(f.get(1)),num(f.get(2)),num(f.get(3)),num(f.get(4)),Boolean.TRUE.equals(f.get(5)));return 0;});
   methods.rawset("setY",(JavaFunction)(f,n)->{((UIElement)f.get(0)).setY(num(f.get(1)));return 0;});
   methods.rawset("setHeight",(JavaFunction)(f,n)->{((UIElement)f.get(0)).setHeight(num(f.get(1)));return 0;});
   methods.rawset("DrawTextCentre",(JavaFunction)(f,n)->{((UIElement)f.get(0)).DrawTextCentre((UIFont)f.get(1),(String)f.get(2),num(f.get(3)),num(f.get(4)),1,1,1,1);return 0;});
@@ -43,7 +46,7 @@ public final class NativeLuaFixture {
   function("fixtureText",(f,n)->{if(UIElement.textDrawing!=null)UIElement.textDrawing.accept(new UIElement.Text((UIElement)f.get(0),(String)f.get(1),num(f.get(2)),num(f.get(3)),num(f.get(4))));return 0;});
   KahluaTable texMeta=platform.newTable(),texMethods=platform.newTable();texMeta.rawset("__index",texMethods);KahluaUtil.getClassMetatables(platform,env).rawset(Texture.class,texMeta);
   texMethods.rawset("getWidth",(JavaFunction)(f,n)->f.push((double)((Texture)f.get(0)).width));texMethods.rawset("getHeight",(JavaFunction)(f,n)->f.push((double)((Texture)f.get(0)).height));
-  function("getTexture",(f,n)->f.push(new Texture((String)f.get(0),15,15)));
+  function("getTexture",(f,n)->{String name=(String)f.get(0);return f.push(new Texture(name,name.startsWith("scroll-")?name.equals("scroll-up")||name.equals("scroll-down")?12:9:15,name.startsWith("scroll-")?name.equals("scroll-up")||name.equals("scroll-down")?20:name.equals("scroll-mid")?1:3:15));});
   env.rawset("screenW",(double)width);env.rawset("screenH",(double)height);
   run(BOOTSTRAP);
   Path ui=game.resolve("media/lua/client/ISUI/ISUIElement.lua");
@@ -90,7 +93,8 @@ public final class NativeLuaFixture {
   String functions=full.substring(full.indexOf("function WorkshopItemList:doDrawItem"),full.indexOf("local function OnServerWorkshopItems"));
   run("local WorkshopItemList=WorkshopItemListFixture; local FONT_HGT_SMALL=14;local FONT_HGT_MEDIUM=20\n"+functions);
   run("workshop=ServerWorkshopItemScreen:new(screenW*.05,screenH*.05,screenW*.9,screenH*.9);workshop:instantiate();workshop.background=true;workshop.backgroundColor={r=0,g=0,b=0,a=.8};workshop.borderColor={r=1,g=1,b=1,a=.5};workshop:create();workshop:setVisible(false);main.serverWorkshopItem=workshop;main:addChild(workshop);CoopOptionsScreen={instance={getIsVisible=function() return false end}};Events={OnServerWorkshopItems={Add=function(fn) workshopEvent=fn end}};function getSteamModeActive() return true end");
-  Path scrolling=game.resolve("media/lua/client/ISUI/ISScrollingListBox.lua");for(String name:new String[]{"rowAt","topOfItem","prevVisibleIndex","nextVisibleItem","onMouseWheel","onJoypadDirDown","onJoypadDirUp","ensureVisible"})load(scrolling,"ISScrollingListBox:"+name);run("ISScrollingListBox.nextVisibleIndex=ISScrollingListBox.nextVisibleItem");
+  Path scrolling=game.resolve("media/lua/client/ISUI/ISScrollingListBox.lua");for(String name:new String[]{"rowAt","topOfItem","prevVisibleIndex","nextVisibleItem","onMouseWheel","onJoypadDirDown","onJoypadDirUp","ensureVisible","parentsHaveScrollChildren","prerender","render","renderJoypadFocus"})load(scrolling,"ISScrollingListBox:"+name);run("ISScrollingListBox.nextVisibleIndex=ISScrollingListBox.nextVisibleItem");
+  load(game.resolve("media/lua/client/ISUI/ISScrollBar.lua"),"ISScrollBar:render");
   String text=Files.readString(source);run(text.substring(text.indexOf("local function OnServerWorkshopItems(")));
   zombie.Lua.LuaEventManager.original=(event,arguments)->{
    if(event.equals("OnServerWorkshopItems")){Object[] lua=arguments.clone();for(int i=0;i<lua.length;i++)if(lua[i] instanceof Number number)lua[i]=number.doubleValue();thread.call(env.rawget("workshopEvent"),lua);}
@@ -98,16 +102,27 @@ public final class NativeLuaFixture {
   };
  }
  static final String WORKSHOP_BOOTSTRAP="""
- ISScrollingListBox=ISUIElement:derive('ISScrollingListBox')
- function ISScrollingListBox:new(x,y,w,h) local o=ISUIElement.new(self,x,y,w,h);o.items={};o.selected=1;o.borderColor={r=1,g=1,b=1,a=.5};o.vscroll={getWidth=function() return 12 end};return o end
- function ISScrollingListBox:initialise() self:instantiate();self.vscroll=ISUIElement:new(self.width-12,0,12,self.height);self.vscroll.Type='ISScrollBar';self:addChild(self.vscroll) end
+ ISScrollBar=ISUIElement:derive('ISScrollBar');ISScrollingListBox=ISUIElement:derive('ISScrollingListBox')
+ function ISScrollingListBox:new(x,y,w,h) local o=ISUIElement.new(self,x,y,w,h);o.items={};o.selected=1;o.borderColor={r=1,g=1,b=1,a=.5};o.columns={};o.backgroundColor={r=0,g=0,b=0,a=0};return o end
+ function ISScrollingListBox:initialise() self:instantiate();self.vscroll=ISScrollBar:new(self.width-16,0,17,self.height);self.vscroll.Type='ISScrollBar';self.vscroll.vertical=true;self.vscroll.pos=0;self.vscroll.background=true;self.vscroll.backgroundColor={r=0,g=0,b=0,a=1};self.vscroll.borderColor={r=.4,g=.4,b=.4,a=1};self.vscroll.uptex=getTexture('scroll-up');self.vscroll.downtex=getTexture('scroll-down');self.vscroll.toptex=getTexture('scroll-top');self.vscroll.midtex=getTexture('scroll-mid');self.vscroll.bottex=getTexture('scroll-bottom');self:addChild(self.vscroll) end
  function ISScrollingListBox:invokeOnMouseDownFunction() end
  function ISScrollingListBox:setFont(f,p) end
  function ISScrollingListBox:clear() self.items={} end
- function ISScrollingListBox:addItem(id,data) self.items[#self.items+1]={item=data,text=id,index=#self.items+1,height=54} end
- function ISScrollingListBox:getScrollHeight() return #self.items*54 end
+ function ISScrollingListBox:addItem(id,data) self.items[#self.items+1]={item=data,text=id,index=#self.items+1,height=54};self:setScrollHeight(#self.items*54) end
+
  function ISScrollingListBox:isMouseOverScrollBar() return false end
- function ISScrollingListBox:render() local y=self:getYScroll();for i=1,#self.items do if y+self.items[i].height>0 and y<self.height then y=self:doDrawItem(y,self.items[i],false) else y=y+self.items[i].height end end end
+
+ function ISUIElement:getScrollHeight() return self.javaObject:getScrollHeight() end
+ function ISUIElement:setScrollHeight(v) self.javaObject:setScrollHeight(v) end
+ function ISUIElement:getScrollChildren() return false end
+ function ISUIElement:isVScrollBarVisible() return self.vscroll and self.vscroll.height<self:getScrollHeight() end
+ function ISUIElement:setStencilRect(x,y,w,h) fixtureStencil(self.javaObject,x,y,w,h,true) end
+ function ISUIElement:clearStencilRect() fixtureStencil(self.javaObject,0,0,0,0,false) end
+ function ISUIElement:getMouseX() return -1 end
+ function ISUIElement:getMouseY() return -1 end
+ function ISUIElement:isMouseOver() return false end
+ function ISScrollingListBox:updateSmoothScrolling() end
+ function ISScrollingListBox:updateTooltip() end
  function ISUIElement:insertNewLineOfButtons(b) self.joypadIndexY=1 end
  function ISButton:new(x,y,w,h,name,target,onclick) local o=ISUIElement.new(self,x,y,w,h);o.name=name;o.target=target;o.onclick=onclick;o.enable=true;return o end
  function ISButton:setEnable(v) self.enable=v;self.enabled=v end

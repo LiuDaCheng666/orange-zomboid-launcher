@@ -12,9 +12,16 @@ public class UIElement {
  }
  final KahluaTable table;public final ArrayList<UIElement> controls=new ArrayList<>();
  public static java.util.function.Consumer<Text> textDrawing;
+ public static java.util.function.Consumer<Stencil> stencilDrawing;
+ public record Stencil(UIElement element,double x,double y,double w,double h,boolean enabled){}
+ public double scrollHeight;
+ public Double getScrollHeight(){return scrollHeight;}
+ public void setScrollHeight(double value){scrollHeight=value;}
+ public void stencil(double x,double y,double w,double h,boolean enabled){if(stencilDrawing!=null)stencilDrawing.accept(new Stencil(this,x,y,w,h,enabled));}
+
  public record Text(UIElement element,String text,double x,double y,double size){}
  public double javaY=Double.NaN,javaHeight=Double.NaN;
- public void setY(double v){javaY=v;}public void setHeight(double v){javaHeight=v;}
+ public void setY(double v){javaY=v;}public void setHeight(double v){javaHeight=v;for(UIElement child:controls)if("ISScrollBar".equals(child.table.rawget("Type"))){child.javaHeight=v;child.table.rawset("height",v);}}
  public Double getY(){return Double.isNaN(javaY)?((Number)table.rawget("y")).doubleValue():javaY;}
  public Double getHeight(){return Double.isNaN(javaHeight)?((Number)table.rawget("height")).doubleValue():javaHeight;}
  public void DrawTextCentre(UIFont font,String text,double x,double y,double r,double g,double b,double a){if(textDrawing!=null)textDrawing.accept(new Text(this,text,x,y,font.size));}

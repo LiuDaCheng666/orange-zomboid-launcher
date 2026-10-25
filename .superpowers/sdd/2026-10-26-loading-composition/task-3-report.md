@@ -79,3 +79,37 @@ The three `current/` accepted fixture copies have that same hash. No later paylo
 Unchanged source PNG SHA-256: `602D843B5D7FBDAB9B37695B2D2FDABD5B0ADC1E4B26ECB1FD6DB69E75CCBF3D`; working tree and HEAD blob both `ba8f7f50a7595924279a4eee1f308e9ea7310214`. Unchanged ICO SHA-256: `78D9EB39880C023E9C37E367CCED77FB401B03CF67BB61B0720CC9CFB1A1E180`; working tree and HEAD blob both `5cda8b3552236d016b46a430bae265fd042d07d6`.
 
 Only Task3 production helpers/integration, isolated fixtures, focused test runner and this report are owned by this task. Root's quality document, candidate builder, earlier candidates/public directories and foreign website/deploy/http-guard changes were preserved. No version/release/web/server operation, actual game/Steam/UI launch, process attach, real-path Controller/Prepare/Stage/Recover, game configuration mutation or performance measurement occurred. This is offline fixture/hidden-GL verification, not interactive game acceptance, and it makes no game-startup speedup claim.
+
+
+## Fix round 1 — scale and real scrollbar boundary (review 7636bf3)
+
+Both Important findings in `task-3-review.md` are addressed. No layout redesign or wider suite was added.
+
+**P1:** the RED scale fixture executes the installed ISScrollingListBox prerender, including every offscreen row, and counts reads of the owner's native-item collection. At N=8 the prior component made **1,408 item reads per frame** (`artifacts/workshop-download-fix1-scale-red.txt`). `WorkshopDownload.observe` now makes one bounded observation at native update/progress or CPU-frame acceptance. Presentation validity uses cached observations plus constant-size owner/epoch/environment/widget checks; it creates no new lease/identity sets and never scans workshop items per primitive. The current scale test observes exactly **8/24/64 item reads for N=8/24/64**, on each of two frames, while all N original row state callbacks still execute. This is an operation-count regression, not a game-startup timing claim.
+
+**P2:** the RED boundary test preserved the actual list/scrollbar geometry and found a badge ending at x440 instead of the required x423 with a visible scrollbar (`artifacts/workshop-download-fix1-scrollbar-red.txt`). Adapted badges now retain their original native right edge; status/name/metadata lanes reserve the native scrollbar width using the existing pure getScrollHeight getter. Font/color identifies native metadata/status roles even when a very long original status starts at x<=16. The fixture runs installed list prerender/render and scrollbar render with verified x=width-16/width17 geometry. Original set-stencil → all rows → clear-stencil → scrollbar-child order is retained in the GL command queue. Visible clipping ends at width-13; hidden clipping ends at width-1. Both a near-full-width localized status and its ellipsis remain inside the original right padding. Root inspected and accepted the corrected 640/1280 images in `artifacts/workshop-download/fix1/gl-green/`.
+
+Focused final commands (no complete Java/native889 rerun):
+
+```powershell
+./Build-StartupComponent.ps1 -GameDirectory E:/Steam/steamapps/common/ProjectZomboid
+./tests/Run-NativeCompositionFixture.ps1 -Probe WorkshopScaleTest -Output artifacts/workshop-download/fix1/current-scale
+./tests/Run-NativeCompositionFixture.ps1 -Probe WorkshopDownloadTest -Output artifacts/workshop-download/fix1/current-sequence
+./tests/Run-NativeCompositionFixture.ps1 -Probe WorkshopScrollbarTest -Output artifacts/workshop-download/fix1/scrollbar-green2
+./tests/Run-NativeCompositionFixture.ps1 -Probe WorkshopDownloadGlProbe -Output artifacts/workshop-download/fix1/gl-green
+```
+
+Current-payload results:
+
+- Scale: six N/frame cases PASS, exact N reads; `artifacts/workshop-download-fix1-current-scale.txt`.
+- Existing Workshop sequence/layout/identity: **109 PASS**; `artifacts/workshop-download-fix1-current-sequence.txt`.
+- Scrollbar: hidden content/stencil edge **440/447**, visible **423/435**, both PASS with native callback/stencil ordering; `artifacts/workshop-download-fix1-scrollbar-green2.txt`.
+- Hidden GL: PASS at 640/720/1080, including actual all-row stencil/scrollbar, light/scrolled views and existing stale/GPU/FBO/failure containment; `artifacts/workshop-download-fix1-gl-green.txt`. No GL errors.
+- Actual noninitializing GameClassProbe: **18 PASS**, now also verifying UIElement.getScrollHeight returns Double; `artifacts/workshop-download/fix1/actual-api.txt`. Compiled alone with javac21 --release17 and run from the generated accepted fixture using the installed JRE25/actual game Jars. Original hook target signatures are unchanged.
+- Package audit: PASS; all **four** covering accepted fixture copies match the final Jar; `artifacts/workshop-download/fix1/package-audit.txt`. Whitespace check PASS. Persistent JVM25 Unsafe warnings and the deliberate renderer-failure message remain the same acknowledged dependency/containment noise.
+
+Final ignored Jar SHA-256 after fix1:
+
+`5D4A1C3E9045C553F6AB4AFD9F3E9A322F3E30E910DFF94AD73241A83C1DA9BB`
+
+This supersedes the earlier C641 payload for packaging. Source PNG/ICO and production rendering geometry are unchanged. No actual game/Steam/UI initialization, server action, native889/full Java suite, or foreign-file edit occurred. No native candidate embedded-resource verification is claimed by this fix round.

@@ -136,6 +136,7 @@ public final class StartupRuntime {
     public static boolean skipElement(Object element){return presentation.skipElement(element);}
     static void rejectWorkshopRows(){rejectWorkshop();presentation.clear();}
     static boolean workshopList(Object element){return presentation.workshopList(element);}
+    static boolean workshopPresentationCurrent(long generation,long epoch){LoadingModel m=model;return m!=null&&m.presentationCurrent(generation,epoch);}
     static boolean ownsWorkshop(ClassLoader loader,long generation){WorkshopDownload d=download;return d!=null&&d.owner==connectionOwner&&d.generation==generation&&d.owner.getClass().getClassLoader()==loader&&d.present();}
     public static boolean skipWorkshopTitle(Object element,String text,double x,double y){return presentation.skipWorkshopTitle(element,text,x,y);}
     public static boolean skipQueue(Object element){return presentation.skipQueue(element);}
@@ -144,10 +145,12 @@ public final class StartupRuntime {
     public static void endFrameUI(Object core){if("QUEUE".equals(frame.get()))background(core);}
     public static void background(Object state){
         LoadingModel.Snapshot s=snapshot();String scope=frame.get();if(s==null||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||scope==null||scope.isEmpty()||state==null)return;
+        long[] cpu=cpuFrame.get();if(cpu==null||cpu[1]!=0)return;
+        WorkshopDownload observed=download;if(s.downloadPage&&observed!=null&&observed.owner==connectionOwner&&observed.generation==s.generation){observed.publish(model,System.nanoTime());s=snapshot();}
         WorkshopInteraction interaction=workshopInteraction;
         if(interaction!=null&&interaction.success&&interaction.owner==connectionOwner&&interaction.generation==s.generation&&scope.equals("MENU")&&presentation.resolve(state.getClass().getClassLoader(),s,0,false)!=null){model.nativeInteraction(false);workshopInteraction=null;s=snapshot();}
         if(!s.active)return;
-        try{long[] cpu=cpuFrame.get();if(cpu==null||cpu[1]!=0)return;ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use)){rejectWorkshop();return;}
+        try{ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use)){rejectWorkshop();return;}
             NativeConnectionPresentation.Lease lease=presentation.resolve(loader,s,cpu[0],scope.equals("QUEUE"));
             if(s.downloadPage&&lease==null){rejectWorkshop();return;}
             if(QueuedBackdrop.enqueue(loader,new QueuedBackdrop.Ticket(s,scope,lease))){cpu[1]=1;presentation.accept(lease);}else rejectWorkshop();

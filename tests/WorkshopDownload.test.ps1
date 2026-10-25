@@ -6,7 +6,7 @@ New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 & (Join-Path $repo 'Build-StartupComponent.ps1') -GameDirectory $GameDirectory
 if($LASTEXITCODE -ne 0){throw 'Workshop component build failed'}
 # Impact-selected only: changed transfer/model/layout and shared native primitive/lifetime hooks.
-$probes=@('WorkshopLayoutContractTest','WorkshopDownloadTest','WorkshopDownloadGlProbe','NativeCompositionTest','NativeLifecycleTest','NativeStatusTest','QueueCompositionTest','RefinementTransformerTest','NativeLuaGlProbe')
+$probes=@('WorkshopLayoutContractTest','WorkshopDownloadTest','WorkshopScaleTest','WorkshopScrollbarTest','WorkshopDownloadGlProbe','NativeCompositionTest','NativeLifecycleTest','NativeStatusTest','QueueCompositionTest','RefinementTransformerTest','NativeLuaGlProbe')
 foreach($probe in $probes){
  & (Join-Path $PSScriptRoot 'Run-NativeCompositionFixture.ps1') -GameDirectory $GameDirectory -Probe $probe -Output ($Output+'/'+$probe) *> (Join-Path $outputPath ($probe+'.txt'))
  if($LASTEXITCODE -ne 0){throw "Workshop impact check failed: $probe"}

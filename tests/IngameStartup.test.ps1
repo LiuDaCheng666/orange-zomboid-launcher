@@ -45,7 +45,7 @@ Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.RefinementTransformerTest;if($LASTEXITCODE -ne 0){throw 'Refinement agent behavior failed'}}finally{Pop-Location}
 Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.ServerInformationTransformerTest;if($LASTEXITCODE -ne 0){throw 'Server information agent behavior failed'}}finally{Pop-Location}
-foreach($probe in @('NativeCompositionTest','NativeLifecycleTest','NativeStatusTest','QueueCompositionTest','NativeLuaGlProbe','WorkshopDownloadTest','WorkshopDownloadGlProbe')){
+foreach($probe in @('NativeCompositionTest','NativeLifecycleTest','NativeStatusTest','QueueCompositionTest','NativeLuaGlProbe','WorkshopDownloadTest','WorkshopScaleTest','WorkshopScrollbarTest','WorkshopDownloadGlProbe')){
  Push-Location $fixture
  try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.IsolatedLuaProbe $probe $GameDirectory (Join-Path $output 'native-composition');if($LASTEXITCODE -ne 0){throw "Native Lua composition fixture failed: $probe"}}finally{Pop-Location}
 }

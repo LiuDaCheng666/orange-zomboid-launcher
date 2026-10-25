@@ -16,9 +16,9 @@ public final class NativeConnectionPresentation {
         public final double statusBottom,cancelTop;
         final ClassLoader loader;final Object environment,mainTable,connectTable,main,connect,logo,background,arrowBG,arrowFG,queue;
         final Set<Object> decoration,allowedMain,allowedConnection,hiddenPages;
-        final long generation,epoch,frame;final boolean queueScope;
+        final long generation,epoch,frame;final boolean queueScope,workshopScope;
         Lease(ClassLoader loader,Object environment,Object mainTable,Object connectTable,Object main,Object connect,Object logo,Object background,Object bg,Object fg,Object queue,Set<Object> decoration,Set<Object> allowedMain,Set<Object> allowedConnection,Set<Object> hiddenPages,LoadingModel.Snapshot state,long frame,boolean queueScope,double statusBottom,double cancelTop){
-            this.loader=loader;this.environment=environment;this.mainTable=mainTable;this.connectTable=connectTable;this.main=main;this.connect=connect;this.logo=logo;this.background=background;arrowBG=bg;arrowFG=fg;this.queue=queue;this.decoration=decoration;this.allowedMain=allowedMain;this.allowedConnection=allowedConnection;this.hiddenPages=hiddenPages;generation=state.generation;epoch=state.epoch;this.frame=frame;this.queueScope=queueScope;this.statusBottom=statusBottom;this.cancelTop=cancelTop;
+            this.loader=loader;this.environment=environment;this.mainTable=mainTable;this.connectTable=connectTable;this.main=main;this.connect=connect;this.logo=logo;this.background=background;arrowBG=bg;arrowFG=fg;this.queue=queue;this.decoration=decoration;this.allowedMain=allowedMain;this.allowedConnection=allowedConnection;this.hiddenPages=hiddenPages;generation=state.generation;epoch=state.epoch;this.frame=frame;this.queueScope=queueScope;workshopScope=state.downloadPage;this.statusBottom=statusBottom;this.cancelTop=cancelTop;
         }
     }
     private static Class<?> type(String name,ClassLoader loader)throws Exception{return Class.forName(name,false,loader);}
@@ -80,10 +80,11 @@ public final class NativeConnectionPresentation {
     public void clear(){current.remove();}
     private Lease valid(){
         Lease lease=current.get();if(lease==null)return null;
+        if(lease.workshopScope)return validWorkshop(lease);
         try{
             LoadingModel.Snapshot state=StartupRuntime.snapshot();
             if(state==null||!state.active||state.generation!=lease.generation||state.epoch!=lease.epoch||!StartupRuntime.acceptedFrame(lease.frame)||!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",lease.loader),"useUiFbo"))||field(type("zombie.Lua.LuaManager",lease.loader),"env")!=lease.environment)return null;
-            if(state.downloadPage){Lease check=resolveWorkshop(lease.loader,state,lease.frame,false);if(check==null||check.environment!=lease.environment||check.main!=lease.main||check.connect!=lease.connect||check.logo!=lease.logo||check.allowedConnection.size()!=lease.allowedConnection.size()||!lease.allowedConnection.containsAll(check.allowedConnection)){restoreWorkshop();return null;}return lease;}
+
             if(raw(raw(lease.environment,"MainScreen"),"instance")!=lease.mainTable||element(raw(lease.mainTable,"connectToServer"))!=lease.connect||!visible(lease.main)||visible(lease.connect)==lease.queueScope)return null;
             if(raw(lease.mainTable,"logoTexture")!=lease.logo||raw(lease.connectTable,"failMessage")!=null)return null;
             if(visible(element(raw(lease.connectTable,"googleAuthPopup"))))return null;
@@ -93,7 +94,20 @@ public final class NativeConnectionPresentation {
             return lease;
         }catch(Throwable unavailable){return null;}
     }
-    public boolean skipWorkshopTitle(Object element,String text,double x,double y){Lease lease=valid();try{return lease!=null&&StartupRuntime.snapshot().downloadPage&&element==lease.connect&&text!=null&&y==10&&x==number(lease.connectTable,"width")/2;}catch(Exception unavailable){return false;}}
+    /** Constant-sized identity checks only; no item scans, new leases or identity-set allocation. */
+    private Lease validWorkshop(Lease lease){try{
+        if(!StartupRuntime.workshopPresentationCurrent(lease.generation,lease.epoch)||!StartupRuntime.acceptedFrame(lease.frame)||!StartupRuntime.ownsWorkshop(lease.loader,lease.generation))return declineWorkshop();
+        if(!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",lease.loader),"useUiFbo"))||field(type("zombie.Lua.LuaManager",lease.loader),"env")!=lease.environment)return declineWorkshop();
+        if(raw(raw(lease.environment,"MainScreen"),"instance")!=lease.mainTable||raw(lease.mainTable,"serverWorkshopItem")!=lease.connectTable||raw(raw(lease.environment,"ServerWorkshopItemScreen"),"instance")!=lease.connectTable||raw(lease.mainTable,"logoTexture")!=lease.logo||!visible(lease.main)||!visible(lease.connect))return declineWorkshop();
+        if(workshopGeometry==null||workshopGeometry.environment!=lease.environment||workshopGeometry.page!=lease.connectTable||!workshopGeometry.matches()||!Boolean.FALSE.equals(raw(workshopGeometry.install,"enable"))){restoreWorkshop();return declineWorkshop();}
+        exactChildren(lease.main,lease.allowedMain,false);exactChildren(lease.connect,lease.allowedConnection,false);for(Object page:lease.hiddenPages)if(visible(page))return declineWorkshop();
+        if(!children(element(workshopGeometry.label)).isEmpty()||!children(element(workshopGeometry.install)).isEmpty()||!children(element(workshopGeometry.disconnect)).isEmpty()||!children(element(workshopGeometry.scroll)).isEmpty())return declineWorkshop();
+        List<?> listChildren=children(element(workshopGeometry.list));if(listChildren.size()!=1||listChildren.get(0)!=element(workshopGeometry.scroll))return declineWorkshop();
+        Object roots=type("zombie.ui.UIManager",lease.loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(lease.main))return declineWorkshop();for(Object root:list)if(root!=lease.main&&visible(root))return declineWorkshop();
+        return lease;
+    }catch(Throwable unavailable){return declineWorkshop();}}
+    private Lease declineWorkshop(){restoreWorkshop();clear();return null;}
+    public boolean skipWorkshopTitle(Object element,String text,double x,double y){Lease lease=valid();try{return lease!=null&&lease.workshopScope&&element==lease.connect&&text!=null&&y==10&&x==number(lease.connectTable,"width")/2;}catch(Exception unavailable){return false;}}
     private Lease resolveWorkshop(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean reflow){try{
         if(!StartupRuntime.ownsWorkshop(loader,state.generation))return null;Class<?> font=type("zombie.ui.UIFont",loader),text=type("zombie.ui.TextManager",loader);text.getMethod("MeasureStringX",font,String.class);if(text.getField("instance").get(null)==null)return null;
         if(!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",loader),"useUiFbo")))return null;
@@ -130,14 +144,14 @@ public final class NativeConnectionPresentation {
         boolean apply(double screen)throws Exception{if(number(list,"y")!=appliedY||number(label,"y")!=appliedLabelY)return false;double bottom=number(list,"y")+number(list,"height"),button=number(raw(page,"installButton"),"y");if(Math.abs(bottom+20-button)>.01)return false;double y=Math.max(originalY,screen*.56-number(page,"y"));if(bottom-y<90||screen<480)return false;double beforeY=appliedY,beforeLabel=appliedLabelY,beforeHeight=number(list,"height");appliedY=y;appliedLabelY=y-number(label,"height")-8;try{set(list,"setY",y);set(list,"setHeight",bottom-y);set(label,"setY",appliedLabelY);return true;}catch(Exception error){try{set(list,"setY",beforeY);set(list,"setHeight",beforeHeight);set(label,"setY",beforeLabel);}finally{appliedY=beforeY;appliedLabelY=beforeLabel;}throw error;}}
         void restore(){try{if(number(list,"y")==appliedY&&Math.abs(number(list,"y")+number(list,"height")+20-number(raw(page,"installButton"),"y"))<.01){double bottom=number(list,"y")+number(list,"height");set(list,"setY",originalY);set(list,"setHeight",bottom-originalY);}if(number(label,"y")==appliedLabelY)set(label,"setY",originalLabelY);}catch(Throwable unavailable){/* Native page remains authoritative if a mod replaced the setter. */}}
     }
-    public boolean workshopList(Object element){Lease lease=valid();try{return lease!=null&&StartupRuntime.snapshot().downloadPage&&element==element(raw(lease.connectTable,"listbox"));}catch(Throwable unavailable){return false;}}
+    public boolean workshopList(Object element){Lease lease=valid();try{return lease!=null&&lease.workshopScope&&element==element(raw(lease.connectTable,"listbox"));}catch(Throwable unavailable){return false;}}
     public boolean skipElement(Object element){Lease lease=valid();return lease!=null&&lease.decoration.contains(element);}
     public boolean skipQueue(Object element){Lease lease=valid();return lease!=null&&lease.queueScope&&element==lease.queue;}
     public boolean skipTexture(Object element,Object texture,Kind kind){
         Lease lease=valid();if(lease==null)return false;
         if(element==lease.main)return kind==Kind.SCALED&&texture==lease.logo;
         if(element!=lease.connect||lease.queueScope)return false;
-        if(StartupRuntime.snapshot().downloadPage)return kind==Kind.SCALED&&texture==null;
+        if(lease.workshopScope)return kind==Kind.SCALED&&texture==null;
         return switch(kind){case SCALED -> texture==null;case COLOR -> texture!=null&&(texture==lease.arrowBG||texture==lease.arrowFG);case ASPECT -> texture!=null&&texture==lease.background;};
     }
 }

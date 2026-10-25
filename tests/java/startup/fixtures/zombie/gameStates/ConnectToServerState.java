@@ -3,7 +3,12 @@ import java.util.ArrayList;
 public final class ConnectToServerState extends GameState {
     private enum State {Start,TestTCP,WorkshopInit,WorkshopQuery,WorkshopConfirm,ServerWorkshopItemScreen,WorkshopUpdate,CheckMods,Finish,Exit}
     private State state=State.Start;
-    private final ArrayList<Object> workshopItems=new ArrayList<>(),confirmItems=new ArrayList<>();
+    private final ArrayList<Object> workshopItems=new ObservedItems(),confirmItems=new ArrayList<>();
+    public static long itemReads;
+    public static final class ObservedItems extends ArrayList<Object> {
+        @Override public Object get(int index){itemReads++;return super.get(index);}
+        @Override public java.util.Iterator<Object> iterator(){java.util.Iterator<Object> original=super.iterator();return new java.util.Iterator<>(){public boolean hasNext(){return original.hasNext();}public Object next(){itemReads++;return original.next();}};}
+    }
     public int calls;public boolean throwUpdate;public Runnable duringUpdate;
     public void enter(){calls++;state=State.Start;}
     public GameStateMachine.StateAction update(){calls++;if(throwUpdate)throw new IllegalStateException("original update");state=State.WorkshopUpdate;if(duringUpdate!=null)duringUpdate.run();return GameStateMachine.StateAction.Remain;}

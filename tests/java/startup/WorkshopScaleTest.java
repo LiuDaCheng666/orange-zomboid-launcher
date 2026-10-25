@@ -1,0 +1,10 @@
+package ozl.startup.tests;
+import java.nio.file.*;import java.util.*;import zombie.gameStates.*;import zombie.core.*;import ozl.startup.*;
+public final class WorkshopScaleTest {
+ static ConnectToServerState prepare(NativeLuaFixture f,Path game,int count)throws Exception{
+  StartupRuntime.serverBegin("Scaling fixture");ConnectToServerState owner=new ConnectToServerState();owner.enter();ConnectToServerState.WorkshopItem[] items=new ConnectToServerState.WorkshopItem[count];ArrayList<String> ids=new ArrayList<>();ArrayList<NativeLuaFixture.Details> details=new ArrayList<>();
+  for(int i=0;i<count;i++){String id=""+(10000+i);ids.add(id);items[i]=new ConnectToServerState.WorkshopItem(10000+i,i==0?ConnectToServerState.WorkshopItemState.DownloadPending:ConnectToServerState.WorkshopItemState.Ready);details.add(new NativeLuaFixture.Details(id,"Native item "+id,i==0?"Downloading":"Installed"));}
+  owner.items(items);f.workshop(game,owner);f.metadata(details.get(0));WorkshopDownloadTest.event(owner,"Required",ids);WorkshopDownloadTest.event(owner,"Details",details);f.run("workshop:onButtonInstall()");owner.update();return owner;
+ }
+ public static void main(String[] args)throws Exception{Path game=Path.of(args[0]);for(int count:new int[]{8,24,64}){NativeLuaFixture f=new NativeLuaFixture(game,640,480);prepare(f,game,count);for(int frame=0;frame<2;frame++){ConnectToServerState.itemReads=0;int stateReads=NativeLuaFixture.stateReads;MainScreenState.instance.render();long reads=ConnectToServerState.itemReads;if(NativeLuaFixture.stateReads-stateReads!=count)throw new AssertionError("installed list prerender must execute every row, including offscreen");if(!StartupRuntime.snapshot().active)throw new AssertionError("scaling must retain owned scene");if(reads>count*3L)throw new AssertionError("full native item reads per frame must be linear/bounded: N="+count+", reads="+reads);System.out.println("PASS all-row N="+count+" frame="+frame+" native-item reads="+reads);SpriteRenderer.instance.recycle();}}}
+}
