@@ -97,6 +97,20 @@ public final class StartupRuntime {
     public static Object enterConnection(Object state,String method){Object prior=connectionDispatch.get();if(method.equals("enter")){if(connectionOwner!=null&&connectionOwner!=state){rejectWorkshop();download=null;workshopInteraction=null;}connectionOwner=state;}connectionDispatch.set(state);return prior;}
     public static void exitConnection(Object state,Object prior,Throwable error){try{if(error==null)connectionState(state);else if(state==connectionOwner)handoff(false);}finally{if(prior==null)connectionDispatch.remove();else connectionDispatch.set(prior);}}
     public static void sync(){LoadingModel m=model;if(m!=null)m.serverStage("Loading",-1,-1);}
+    private record LuaReload(LoadingModel model,long generation,long epoch) {}
+    public static Object luaReloadBegin(String reason){
+        // This reset is issued synchronously by the current connection's Finish.
+        // Options/auth/menu resets must not take over a different native page.
+        LoadingModel m=model;Object owner=connectionOwner;
+        if(m==null||owner==null||connectionDispatch.get()!=owner||!"ConnectedToServer".equals(reason))return null;
+        long generation=m.snapshot().generation,epoch=m.serverLuaReloadBegin();if(epoch==0)return null;
+        presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;
+        return new LuaReload(m,generation,epoch);
+    }
+    public static void luaReloadEnd(Object value,Throwable error){
+        if(!(value instanceof LuaReload reload)||model!=reload.model)return;
+        reload.model.serverLuaReloadEnd(reload.generation,reload.epoch,error==null);
+    }
     public static void queueUpdate(Object state){if(state!=null&&flag(state.getClass(),"cancel"))handoff(false);}
     public static void queueRedirect(Object next){handoff(next!=null&&next.getClass().getName().equals("zombie.gameStates.GameLoadingState"));}
     public static void connectionEvent(String state){switch(state){case "Failed","Disconnected","Disconnecting","ClientVersionMismatch" -> handoff(false);default -> {}}}

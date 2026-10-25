@@ -8,7 +8,7 @@ import java.io.File;
 public final class LoadingModel {
     public enum Context { BOOT, SAVE, SERVER, NONE }
     public enum Route { FULL, BEHIND_UI, NONE }
-    private boolean boot=true, world, waiting, disabled,nativeInteraction;
+    private boolean boot=true, world, waiting, disabled,nativeInteraction,reloadingLua;
     private Context context=Context.BOOT;
     private Route route=Route.FULL;
     private long epoch=1,scannedResources,lastResourceLabel;
@@ -85,7 +85,7 @@ public final class LoadingModel {
         while(translatedPhases.size()>64)translatedPhases.remove(translatedPhases.keySet().iterator().next());
     }
     public synchronized void phase(String text) {
-        if(disabled||(!boot&&!world))return;
+        if(disabled||(!boot&&!world&&!reloadingLua))return;
         String value=safe(text,160),lower=value.toLowerCase(Locale.ROOT);
         if(lower.contains("waiting for java mods approval")){waiting=true;return;}
         String next=null;int index=stageIndex;
@@ -100,13 +100,13 @@ public final class LoadingModel {
         if(next!=null){waiting=false;stage=next;if(boot)stageIndex=index;title="正在加载"+next;detail="";append(title);}
     }
     public synchronized void mod(String id) {
-        if(disabled||(!boot&&!world))return;
+        if(disabled||(!boot&&!world&&!reloadingLua))return;
         String name=safe(id,120);if(name.isEmpty())return;
         if(mods.size()<16384)mods.add(name);
         detail=name;append("模组  ·  "+name);
     }
     public synchronized void script(String path) {
-        if(disabled||waiting||(!boot&&!world))return;
+        if(disabled||waiting||(!boot&&!world&&!reloadingLua))return;
         String normalized=(path==null?"":path).replace('\\','/');
         if(!normalized.toLowerCase(Locale.ROOT).endsWith(".lua"))return;
         String name=normalized.substring(normalized.lastIndexOf('/')+1),owner="";
@@ -116,7 +116,18 @@ public final class LoadingModel {
         detail=safe((owner.isEmpty()?"":owner+" / ")+name,120);
         append("脚本  ·  "+detail);
     }
-    private void reset(Context next,Route target){lastNativeStatus="";downloadPage=false;downloadID=downloadTitle="";workshopReady=-1;downloadRate=-1;epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
+    private void reset(Context next,Route target){lastNativeStatus="";downloadPage=false;downloadID=downloadTitle="";workshopReady=-1;downloadRate=-1;epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;reloadingLua=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
+    /** ResetLua stops CPU sprite production while replacing the native Lua UI. */
+    synchronized long serverLuaReloadBegin(){
+        if(disabled||!serverOperation||context!=Context.SERVER||route!=Route.BEHIND_UI)return 0;
+        reloadingLua=true;route=Route.FULL;waiting=false;nativeInteraction=false;downloadPage=false;epoch++;
+        title="正在重新加载 Lua";stage="界面";detail="";append(title);return epoch;
+    }
+    synchronized void serverLuaReloadEnd(long operation,long expectedEpoch,boolean success){
+        if(!reloadingLua||generation!=operation||epoch!=expectedEpoch)return;
+        if(!success){handoff(false);return;}
+        reloadingLua=false;route=Route.BEHIND_UI;epoch++;title="正在接收连接信息";stage="同步";detail="";append(title);
+    }
     public synchronized void nativeInteraction(boolean value){if(serverOperation&&context==Context.SERVER&&route==Route.BEHIND_UI&&nativeInteraction!=value){nativeInteraction=value;epoch++;}}
     public synchronized void menuReady(){reset(Context.NONE,Route.NONE);clearServer();}
     public synchronized void serverBegin(String friendly){serverBegin(friendly,"",0);}

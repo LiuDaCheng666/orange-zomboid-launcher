@@ -72,7 +72,9 @@ public final class Hooks {
             .type(named("zombie.ui.LoadingQueueUI"))
             .transform((b,t,l,m,d)->b.visit(Advice.to(QueueDraw.class).on(named("render").and(takesArguments(0)).and(returns(void.class)))))
             .type(named("zombie.core.Core"))
-            .transform((b,t,l,m,d)->b.visit(Advice.to(EndUI.class).on(named("EndFrameUI").and(takesArguments(0)).and(returns(void.class)))))
+            .transform((b,t,l,m,d)->b
+                .visit(Advice.to(LuaReload.class).on(named("ResetLua").and(takesArguments(String.class,String.class)).and(returns(void.class))))
+                .visit(Advice.to(EndUI.class).on(named("EndFrameUI").and(takesArguments(0)).and(returns(void.class)))))
             .type(named("org.lwjglx.opengl.Display"))
             .transform((b,t,l,m,d)->b.visit(Advice.to(Swap.class).on(named("swapBuffers").and(takesArguments(0)))))
             .type(named("zombie.core.opengl.RenderThread"))
@@ -141,6 +143,10 @@ public final class Hooks {
     public static final class AspectDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"ASPECT");}}
     public static final class TitleDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(1)String text,@Advice.Argument(2)double x,@Advice.Argument(3)double y){return StartupRuntime.skipWorkshopTitle(element,text,x,y);}}
     public static final class EndUI {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.This Object core){StartupRuntime.endFrameUI(core);}}
+    public static final class LuaReload {
+        @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.Argument(1)String reason){return StartupRuntime.luaReloadBegin(reason);}
+        @Advice.OnMethodExit(onThrowable=Throwable.class,suppress=Throwable.class)public static void exit(@Advice.Enter Object reload,@Advice.Thrown Throwable error){StartupRuntime.luaReloadEnd(reload,error);}
+    }
     public static final class Event {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.Origin Class<?> eventType,@Advice.Argument(0)String event,@Advice.Argument(value=1,optional=true)Object a,@Advice.Argument(value=2,optional=true)Object b,@Advice.Argument(value=3,optional=true)Object c,@Advice.Argument(value=4,optional=true)Object d){
             // Branch before touching payloads; failure/auth text never enters public progress.
