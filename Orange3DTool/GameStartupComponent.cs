@@ -114,7 +114,7 @@ namespace PZ3D {
    if(process.HasExited||process.StartTime.ToUniversalTime().Ticks!=snapshot.ProcessBirth)return false;string name=process.ProcessName,image=process.MainModule.FileName;bool java=name=="java"||name=="javaw";if(java&&GameProcessGuard.ReadJavaRole(launch.GamePath,name,image,process)!=JavaProcessRole.Client)return false;return GameStartupMonitor.MatchesClientIdentity(launch.GamePath,launch.StartedUtc,name,image,new DateTime(snapshot.ProcessBirth,DateTimeKind.Utc),java);
   }}catch{return false;}}
   static byte[] IssueBytes(string session,GameLogIssue issue,long? timestamp=null){return new UTF8Encoding(false).GetBytes(string.Join("\n",new[]{"OZL1",session,(timestamp??DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).ToString(CultureInfo.InvariantCulture),Encode(issue==null?"":Safe(issue.title,160)),Encode(issue==null?"":Safe(issue.meaning,768)),Encode(issue==null?"":string.Join("、",(issue.mods??new string[0]).Take(8).Select(m=>Safe(m,96)))),Encode(issue==null?"":string.Join("\n",(issue.evidence??new GameLogEvidence[0]).Where(v=>v!=null).Take(3).Select(v=>Safe(v.text,384)))),Encode(issue==null?"":Safe(issue.advice,768))})+"\n");}
-  static bool Eligible(GameStartupSnapshot snapshot,GameLogIssue issue){
+  internal static bool Eligible(GameStartupSnapshot snapshot,GameLogIssue issue){
    if(issue==null||issue.attention!="primary"||string.IsNullOrWhiteSpace(issue.title)||string.IsNullOrWhiteSpace(issue.meaning))return false;
    // History is diagnostic only after the verified menu handoff or the packet TTL.
    // These bounds use original occurrence data, never the most recent reparse.

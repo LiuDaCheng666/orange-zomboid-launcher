@@ -151,6 +151,17 @@ namespace PZ3D {
     }
    }
   }
+  static void SaturatedEligibility(){
+   for(int mode=0;mode<7;mode++)using(var f=new Fixture()){
+    Call("Prepare",f.E,Nonce);var launch=Launch(f,Nonce);var reducer=new GameStartupReducer(launch,false);var fake=new FakeMonitor();Action<GameStartupSnapshot> publish=null;using(var observer=new GameStartupObserver((request,changed)=>{publish=changed;return fake;})){
+     observer.Handle(launch);for(int i=0;i<(mode<3?24:80);i++)reducer.ObservedLine("java.lang.OutOfMemoryError: Java heap space historical "+i,launch.StartedUtc);var original=reducer.Snapshot(launch.StartedUtc);Check(original.Issues.Length==24&&original.Issues.All(i=>i.type=="java-heap"),"saturation fixture fills bounded history from distinct original heap issues, mode "+mode);publish(original);
+     DateTime next=launch.StartedUtc.AddSeconds(mode<6&&mode%3==0?31:1);if(mode%3==1)reducer.ObservedLine("LOG : Lua f:0> [OZL-STARTUP] menu-ready "+Nonce,next);reducer.ObservedLine(mode==6?"java.lang.OutOfMemoryError: Java heap space fresh saturated world failure":"java.lang.IllegalStateException: fresh saturated world failure",next);var current=reducer.Snapshot(next);publish(current);
+     if(mode<6&&mode%3<2){Check(current.Issues.Length==24&&current.Issues.Any(i=>i.type=="java-exception"&&i.meaning.Contains("fresh saturated")),(mode%3==0?"expired":"menu-ineligible")+" saturated heap history cannot evict a fresh core exception");Check(Exported(f,4).Contains("fresh saturated"),(mode%3==0?"expired":"menu-ineligible")+" saturation exports the fresh core exception");}
+     else if(mode==6)Check(current.Issues.Length==24&&Exported(f,6).Contains("fresh saturated"),"80-group native analysis retains genuinely newer equal-priority occurrence");
+     else Check(current.Issues.Length==24&&current.Issues.All(i=>i.type=="java-heap")&&Exported(f,3).Contains("堆内存"),"24 active higher-priority issues retain precedence over a fresh lower-priority issue");
+    }
+   }
+  }
   static void Headless(){
    var field=typeof(ModernForm).GetField("gameStartupObserver",BindingFlags.Instance|BindingFlags.NonPublic);Check(field!=null&&field.FieldType==typeof(GameStartupObserver)&&typeof(ModernForm).GetField("gameStartupPresenter",BindingFlags.Instance|BindingFlags.NonPublic)==null,"production host no longer owns external startup presenter");
    var launch=new GameStartupLaunch{SessionId=Nonce,StartedUtc=DateTime.UtcNow.AddMinutes(-3),TargetKind="normal"};
@@ -164,7 +175,7 @@ namespace PZ3D {
     }Check(fake.Disposed==1,"observer disposal is idempotent");
    }
   }
-  public static void Run(){Check(Component!=null,"owned startup component exists");IssueSelection();IssueEligibility();Deployment();CrashRecovery();Conflicts();Upgrade();Boundaries();Exchange();Headless();ContinuedObservation();}
+  public static void Run(){Check(Component!=null,"owned startup component exists");IssueSelection();IssueEligibility();SaturatedEligibility();Deployment();CrashRecovery();Conflicts();Upgrade();Boundaries();Exchange();Headless();ContinuedObservation();}
   [STAThread] public static int Main(){try{Run();Console.WriteLine("ALL OWNED STARTUP COMPONENT TESTS PASSED");return 0;}catch(Exception error){Console.WriteLine(error);return 1;}}
  }
 }

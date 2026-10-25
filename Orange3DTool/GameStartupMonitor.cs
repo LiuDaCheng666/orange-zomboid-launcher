@@ -27,7 +27,7 @@ namespace PZ3D {
    // A poll may contain 256 KiB: collect a full chunk before eviction, then keep
    // a small overlap for exception frames across chunks. Reparse only at the
    // chunk boundary, never for every appended line; input remains bounded.
-   if(rawLines.Count>=160||rawBytes+size>65536){CollectProblems();while(rawLines.Count>16||rawBytes>8192){string removed=rawLines.Dequeue();rawObserved.Dequeue();rawBytes-=Encoding.UTF8.GetByteCount(removed)+1;}}
+   if(rawLines.Count>=160||rawBytes+size>65536){CollectProblems(observedUtc);while(rawLines.Count>16||rawBytes>8192){string removed=rawLines.Dequeue();rawObserved.Dequeue();rawBytes-=Encoding.UTF8.GetByteCount(removed)+1;}}
    rawLines.Enqueue(raw);rawObserved.Enqueue(observedUtc);rawBytes+=size;rawVersion++;
    if(observationFloor==0&&IsMenuReady(line,session))observationFloor=rawVersion;
    string clean=GameDiagnostics.Sanitize(raw);if(clean.Length>4096)clean=clean.Substring(0,4096);lines.Enqueue(clean);while(lines.Count>80)lines.Dequeue();
@@ -64,16 +64,16 @@ namespace PZ3D {
   void AnalyzeProblems(DateTime now){
    bool terminal=Complete||Failed;if(rawVersion==analyzedVersion)return;
    if(analyzedUtc!=DateTime.MinValue&&(now-analyzedUtc).TotalMilliseconds<500&&!(terminal&&!analyzedTerminal))return;
-   analyzedUtc=now;analyzedTerminal=terminal;CollectProblems();
+   analyzedUtc=now;analyzedTerminal=terminal;CollectProblems(now);
   }
-  void CollectProblems(){
+  void CollectProblems(DateTime now){
    if(rawVersion==analyzedVersion)return;analyzedVersion=rawVersion;
-   try{var observed=rawObserved.ToArray();var report=GameLogAnalyzer.AnalyzeText(String.Join("\n",rawLines.ToArray()),"本次启动");foreach(var item in report.issues??new GameLogIssue[0]){
-    var safe=DisplayIssue(item);if(safe==null)continue;
-    // Translate the actual block start into a monotonic input-line ordinal.
-    // Window shifts and poll times must never make an old observation fresh.
-    safe.ObservationLine=rawVersion-rawLines.Count+item.ObservationLine;
-    safe.ObservationUtc=observed[(int)item.ObservationLine-1];
+   try{var eligibility=new GameStartupSnapshot{ObservationUtc=now,ObservationFloor=observationFloor};var observed=rawObserved.ToArray();
+    // Bind original occurrence data before both analyzer and reducer retention caps.
+    // Keep the complete parser context, including older exception/frame boundaries.
+    Func<GameLogIssue,GameLogIssue> observe=item=>{var safe=DisplayIssue(item);if(safe==null)return null;safe.ObservationLine=rawVersion-rawLines.Count+item.ObservationLine;safe.ObservationUtc=observed[(int)item.ObservationLine-1];return safe;};
+    var report=GameLogAnalyzer.AnalyzeStartupText(String.Join("\n",rawLines.ToArray()),"本次启动",item=>GameStartupComponent.Eligible(eligibility,observe(item)));foreach(var item in report.issues??new GameLogIssue[0]){
+    var safe=observe(item);if(safe==null)continue;
     string key=IssueKey(safe);int index=issues.FindIndex(x=>IssueKey(x)==key||x.ObservationLine==safe.ObservationLine&&x.type==safe.type);
     if(index>=0){var previous=issues[index];safe.count=Math.Max(safe.count,previous.count);
      // A shortened overlap can lose context. Retain the known occurrence unless
@@ -81,7 +81,10 @@ namespace PZ3D {
      if(safe.ObservationLine<=previous.ObservationLine&&IssuePriority(safe)<=IssuePriority(previous)&&safe.mods.All(m=>previous.mods.Contains(m))&&safe.frames.All(f=>previous.frames.Any(p=>p.mod==f.mod&&p.file==f.file&&p.line==f.line&&p.function==f.function)))continue;
      issues.RemoveAt(index);
     }
-    issues.Add(safe);while(issues.Count>24)issues.Remove(issues.OrderBy(IssuePriority).ThenBy(x=>x.ObservationLine).First());
+    issues.Add(safe);
+    // Preserve eligible actionable candidates before applying the history budget.
+    // Expired/pre-menu history must not crowd out the issue IPC can actually use.
+    while(issues.Count>24)issues.Remove(issues.OrderBy(x=>GameStartupComponent.Eligible(eligibility,x)?1:0).ThenBy(IssuePriority).ThenBy(x=>x.ObservationLine).First());
    }}catch{ /* Log analysis never interrupts startup or removes prior observations. */ }
   }
   internal GameStartupSnapshot Snapshot(DateTime now){if(legacyTimeout&&!Complete&&!Failed&&Stage!="manual"&&(now-started).TotalSeconds>=(ProcessId.HasValue?90:180))Manual("尚未确认游戏就绪，请在游戏窗口继续检查；自动加载画面已结束");AnalyzeProblems(now);return new GameStartupSnapshot{ObservationUtc=now,ObservationFloor=observationFloor,SessionId=session,Stage=Stage,Message=Message,Lines=lines.ToArray(),Issues=issues.OrderByDescending(IssuePriority).ThenByDescending(x=>x.ObservationLine).Select(DisplayIssue).ToArray(),ElapsedSeconds=Math.Max(0,(now-started).TotalSeconds),ProcessId=ProcessId,ProcessBirth=ProcessBirth,WorkingSetBytes=WorkingSetBytes,TotalPhysicalBytes=TotalPhysicalBytes,HeapLimitBytes=HeapLimitBytes,Complete=Complete,Failed=Failed,WaitingForInput=WaitingForInput,CompletedItems=null,TotalItems=null};}
