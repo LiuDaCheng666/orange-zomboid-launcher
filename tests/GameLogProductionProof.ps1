@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$AppDirectory,[Parameter(Mandatory=$true)][string]$OutputDirectory,[Parameter(Mandatory=$true)][string]$DownloadsDirectory)
+﻿param([Parameter(Mandatory=$true)][string]$AppDirectory,[Parameter(Mandatory=$true)][string]$OutputDirectory,[Parameter(Mandatory=$true)][string]$DownloadsDirectory)
 $ErrorActionPreference='Stop'
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $taskExe=Join-Path $AppDirectory '橙子启动器.exe'

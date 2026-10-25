@@ -50,3 +50,7 @@
 ## Final startup presentation verification
 
 The final player-requested presentation uses 12px corner text, four left-aligned startup lines and a right-aligned analysis area with an explicit related-MOD label and script position. The loading rail is a 10px rounded gradient track with indeterminate motion or actual measured counts; the separate 6px memory rail shows the actual working-set/system-memory ratio. Reduced motion, authorization wait, failure and ready states are covered. Final window verification: 197 passing assertions plus the complete startup/presenter/launch and Lua suites. Evidence: `artifacts/log-analysis/startup-memory-rail-*`.
+
+## 1.2.17 发布记录
+
+已发布至 orangezl.com，随后于 2026-10-25 15:52:06（Asia/Shanghai）公开 GitHub v1.2.17。GitHub 十个附件在草稿阶段全部下载核对哈希。正式 1.2.16 客户端使用生产网络传输，在隔离定位器中实际检查并下载 1.2.17，达到 Ready；未对用户安装执行更新。主服务器保护快照发布前后完全一致，网站 current、网页、Web 防护及 SSH 配置未更改。证据：`artifacts/publication-1.2.17/primary-receipt.json`、`production-client-proof.json`。后续 1.2.18 另修复任务栏关联，记录见同日任务栏验证文档。

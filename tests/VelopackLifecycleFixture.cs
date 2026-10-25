@@ -18,7 +18,7 @@ namespace PZ3D {
    try{
     DistributionPaths.Bootstrap(args); // actual SDK handles install/obsolete/updated hooks and exits
     using(NativeApplyGuard.Instance(root)){
-     if(AppVersion.Current=="1.0.1"){Directory.CreateDirectory(state);File.WriteAllText(Path.Combine(state,"restarted.txt"),AppVersion.Current);return 0;}
+     if(AppVersion.Current=="1.0.1"){Directory.CreateDirectory(state);File.WriteAllText(Path.Combine(state,"restarted.txt"),AppVersion.Current);File.WriteAllText(Path.Combine(state,"restarted-aumid.txt"),Velopack.Locators.VelopackLocator.Current.AppUserModelId);return 0;}
      if(args.Length<3||args[0]!="--fixture-update")throw new Exception("Unexpected fixture activation");
      string feed=args[1],game=args[2];bool reject=args.Length>3&&args[3]=="reject";
      var source=new AuthenticatedVelopackSource(CoreUpdateTrust.PublicKeyXml,AppVersion.Current,(url,t)=>File.OpenRead(Path.Combine(feed,url.EndsWith(".sig")?"velopack-manifest.sig":url.EndsWith(".json")?"velopack-manifest.json":VelopackFeed.AppId+"-1.0.1-full.nupkg")),DistributionPaths.Child("accepted-release.bin"));

@@ -12,7 +12,7 @@ New-Item -ItemType Directory $fixture|Out-Null
 $appId='OzlInstaller'+$id;$title='橙子启动器安装测试-'+$id
 $app=Join-Path $evidence 'app';Copy-Item -LiteralPath $Template -Destination $app -Recurse
 $release=Join-Path $evidence 'release'
-& $deps.VpkExecutable @($deps.VpkArguments) pack --packId $appId --packTitle $title --packVersion 1.0.0 --packDir $app --outputDir $release --channel win --runtime win-x64 --mainExe '橙子启动器.exe' --framework net48 --delta None --shortcuts Desktop,StartMenuRoot --skip-updates --legacyConsole --yes *> "$evidence/pack.log"
+& $deps.VpkExecutable @($deps.VpkArguments) pack --packId $appId --packTitle $title --packVersion 1.0.0 --packDir $app --outputDir $release --channel win --runtime win-x64 --mainExe '橙子启动器.exe' --icon "$repo/Orange3DTool/Assets/orange-app.ico" --aumid ($appId+'.Launcher') --framework net48 --delta None --shortcuts Desktop,StartMenuRoot --skip-updates --legacyConsole --yes *> "$evidence/pack.log"
 if($LASTEXITCODE){throw 'Fixture vpk failed'}
 & "$repo/build/Build-VelopackSetup.ps1" -OfficialSetup "$release/$appId-win-Setup.exe" -OutputPath "$evidence/chooser.exe" -VersionFile "$app/VERSION" -PublicKey "$app/release-public-key.xml" -PackageId $appId -Title $title
 $reg='HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\'+$appId
@@ -23,6 +23,14 @@ try{
   if($mode -eq 'unchecked'){$args+='-NoDesktop'}
   & "$env:WINDIR/System32/WindowsPowerShell/v1.0/powershell.exe" @args | Tee-Object -FilePath "$evidence/results.log" -Append
   if($LASTEXITCODE){throw "Actual chooser fixture failed: $mode"}
+  if($mode -eq 'checked'){
+   $shell=New-Object -ComObject Shell.Application
+   foreach($folderPath in @([Environment]::GetFolderPath('DesktopDirectory'),[Environment]::GetFolderPath('Programs'))){
+    $folder=$shell.Namespace($folderPath);$link=$folder.ParseName($title+'.lnk')
+    if($null -eq $link -or $link.ExtendedProperty('System.AppUserModel.ID') -cne ($appId+'.Launcher')){throw 'Official installer shortcut does not match the new taskbar identity'}
+   }
+   [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)|Out-Null
+  }
   # The exact unique fixture is the only uninstall target. Never use production ID.
   $record=Get-ItemProperty -LiteralPath $reg
   if([IO.Path]::GetFullPath($record.InstallLocation).TrimEnd('\') -ne [IO.Path]::GetFullPath($root).TrimEnd('\')){throw 'Refuse uninstall of unexpected location'}

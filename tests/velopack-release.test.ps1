@@ -16,6 +16,13 @@ try {
  $rejected=$false
  try{Test-OzlVelopackArchives -ReleaseDirectory $fixture -PublicKey "$taskRoot/release-public-key.xml" -Version $version}catch{if($_.Exception.Message -notlike 'Unexpected packaged file*'){throw};$rejected=$true}
  if(-not $rejected){throw 'RED: unknown packaged file was accepted'}
+ if([Version]$version -ge [Version]'1.2.18'){
+  $archive=[IO.Compression.ZipFile]::Open((Join-Path $fixture $names[0]),[IO.Compression.ZipArchiveMode]::Update)
+  try{$archive.GetEntry('setup.ico').Delete();$entry=$archive.CreateEntry('setup.ico');$stream=$entry.Open();try{$stream.WriteByte(1)}finally{$stream.Dispose()}}finally{$archive.Dispose()}
+  $rejected=$false
+  try{Test-OzlVelopackArchives -ReleaseDirectory $fixture -PublicKey "$taskRoot/release-public-key.xml" -Version $version}catch{if($_.Exception.Message -notlike 'Framework setup icon differs*'){throw};$rejected=$true}
+  if(-not $rejected){throw 'RED: modified framework setup icon was accepted'}
+ }
 } finally {
  foreach($name in $names){Remove-Item -LiteralPath (Join-Path $fixture $name)}
  Remove-Item -LiteralPath $fixture

@@ -14,12 +14,24 @@
     if(-not $rsa.VerifyData($raw,[Security.Cryptography.CryptoConfig]::MapNameToOID('SHA256'),$sig)){throw 'Packaged bootstrap signature failed'}
     $manifest=[Text.Encoding]::UTF8.GetString($raw)|ConvertFrom-Json
     if($manifest.schema -ne 1 -or $manifest.version -ne $Version -or @($manifest.files).Count -ne 20){throw 'Packaged bootstrap identity failed'}
+    if([Version]$Version -ge [Version]'1.2.18'){
+     $settings=[Xml.XmlReaderSettings]::new();$settings.DtdProcessing=[Xml.DtdProcessing]::Prohibit;$settings.XmlResolver=$null
+     $metadataStream=[IO.MemoryStream]::new([byte[]](& $read ($item[1]+'sq.version')))
+     $reader=[Xml.XmlReader]::Create($metadataStream,$settings);$metadata=[Xml.XmlDocument]::new();$metadata.XmlResolver=$null
+     try{$metadata.Load($reader)}finally{$reader.Dispose();$metadataStream.Dispose()}
+     $identity=$metadata.SelectSingleNode("//*[local-name()='metadata']/*[local-name()='shortcutAumid']")
+     if($null -eq $identity -or $identity.InnerText -cne 'OrangeZomboidLauncher.Launcher'){throw 'Packaged taskbar identity still uses the legacy installation association'}
+    }
     $allowed=@{}; foreach($file in $manifest.files){$allowed[$item[1]+$file.path]=$true}
     foreach($name in @('velopack-bootstrap.json','velopack-bootstrap.sig','sq.version')){$allowed[$item[1]+$name]=$true}
     if($item[1] -eq 'current/'){
      foreach($name in @('.portable','Update.exe',($stubTitle+'.exe'))){$allowed[$name]=$true}
     } else {
      foreach($name in @('[Content_Types].xml','OrangeZomboidLauncher.nuspec','_rels/.rels','lib/app/Squirrel.exe',('lib/app/'+$stubTitle+'_ExecutionStub.exe'))){$allowed[$name]=$true}
+     if([Version]$Version -ge [Version]'1.2.18'){
+      $allowed['setup.ico']=$true
+      if([Convert]::ToBase64String((& $read 'setup.ico')) -cne [Convert]::ToBase64String((& $read 'lib/app/Web/orange-app.ico'))){throw 'Framework setup icon differs from the signed application icon'}
+     }
     }
     foreach($name in $entries.Keys){if(-not $allowed.ContainsKey($name)){throw "Unexpected packaged file: $name"}}
     foreach($file in $manifest.files){
