@@ -87,5 +87,3 @@ public final class NativeConnectionPresentation {
         return switch(kind){case SCALED -> texture==null;case COLOR -> texture!=null&&(texture==lease.arrowBG||texture==lease.arrowFG);case ASPECT -> texture!=null&&texture==lease.background;};
     }
 }
-
-

@@ -38,4 +38,3 @@ public final class NativeCompositionTest {
   SpriteRenderer.instance.recycle();System.out.println("PASS "+checks+" actual native Lua composition contracts");
  }
 }
-

@@ -45,8 +45,8 @@ Pre-change hidden GL reproduction:
 git diff --check -- Orange3DTool/StartupSource tests/IngameStartup.test.ps1 tests/java tests/Run-NativeCompositionFixture.ps1
 ```
 
-- Full Java suite: PASS. Counts printed: model/session 28; refinement model 23; server information 11; A2S 92; scene contract PASS; viewport/frame 63; agent transformer 51; refinement premain 32; server-info premain 16; actual native Lua composition 17; extracted workshop/auth/character lifecycle 13; queue 11; hidden native-Lua GL 14; real GL/state PASS; queued GL 17; actual game no-initialization probe 18 class targets plus the added exact UI/environment/queue APIs; package audit PASS. Log artifacts/native-composition/full-suite.txt.
-- The final additional saved-player → queue → world → SendDone → Done assertions were then verified by the fresh focused NativeLifecycleTest: **17 checks PASS**. No production changes followed the full suite.
+- Full Java suite: PASS. Counts printed: model/session 28; refinement model 23; server information 11; A2S 92; scene contract PASS; viewport/frame 63; agent transformer 51; refinement premain 32; server-info premain 16; actual native Lua composition 17; extracted workshop/auth/character lifecycle 17; queue 11; hidden native-Lua GL 14; real GL/state PASS; queued GL 17; actual game no-initialization probe 18 class targets plus the added exact UI/environment/queue APIs; package audit PASS. Log artifacts/native-composition/full-suite.txt.
+- The final saved-player → queue → world → SendDone → Done assertions passed in both the focused NativeLifecycleTest and the refreshed full Java suite: **17 checks PASS**.
 - Native headless suite: **889 PASS lines**, final ALL GAME STARTUP AND RELATED REGRESSIONS PASSED; fresh short fixture directory E:/AppCaches/Temp/ozl-t1-69880c5d. Log artifacts/native-composition/native-suite.txt.
 - Owned diff whitespace check passed. Whole-tree diff check reports existing foreign deploy/README.md CRLF whitespace; those files were not edited or staged.
 - Known Byte Buddy/JVM25 sun.misc.Unsafe deprecation warnings remain. The two `presentation disabled: NullPointerException` lines are intentional renderer-failure containment cases (null fixture receipt), asserted to preserve native controls and restore following-frame decoration.
@@ -69,8 +69,10 @@ The fresh full-suite copies are under artifacts/ingame-startup/tests/native-comp
 
 Built ignored local artifact Orange3DTool/Assets/OrangeStartup.jar SHA-256:
 
-`8431F4E5B287842C3270477973CEFF438E74F384B37A7F08C8E2248233FCEF0F`
+`0927A42311D7682E19A96D9CBD4F72403E8887455AAA32F1C623FED3F29C0329`
 
 The repository already ignores generated startup JAR/build-stamp outputs; rebuilt locally for downstream candidate packaging, without force-tracking binaries. The package audit excludes zombie/, se/krka/, org/lwjgl and Buddy runtime classes. No source from game classes is packaged.
 
 Task 3 read-only native workshop pointers: media/lua/client/OptionScreens/ServerWorkshopItemScreen.lua has installButton/disconnectButton/label/listbox; onButtonInstall around 143, onButtonDisconnect 148, setRequiredItems 154, updateItemDetails 174, progress 190, local OnServerWorkshopItems dispatch 216. Native list/Install/Disconnect remain untouched in Task 1. A distinct custom download scene remains separate authorized work.
+
+After removing trailing blank lines in three new files, the full Java suite was rerun and passed. The rebuilt final JAR has identical decompressed entry bytes to the JAR embedded in the headless-tested suite (verified across every ZIP entry); only ZIP metadata and the container hash changed. The 889 native headless checks therefore cover the same payload bytes. Staged owned whitespace check then passed.

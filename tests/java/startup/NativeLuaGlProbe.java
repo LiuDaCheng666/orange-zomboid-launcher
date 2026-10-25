@@ -48,4 +48,3 @@ public final class NativeLuaGlProbe {
   }finally{Display.created=false;GLFW.glfwDestroyWindow(window);GLFW.glfwTerminate();}
  }
 }
-
