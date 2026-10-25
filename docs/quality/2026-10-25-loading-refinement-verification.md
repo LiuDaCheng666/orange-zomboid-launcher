@@ -48,7 +48,17 @@
 
 公开查询默认使用当前游戏端口，不扫描其他端口；服务器不回应或独立公开查询端口不同则隐藏未取得的值。UDP 的 2,500 ms deadline 包含 DNS 前后检查，但 JVM/OS DNS 本身不可中断，可能占用该单独 worker 更久，游戏/绘制线程不会等待。入服人数是本次实际查询/排队响应的观测值，非持续轮询。未知/FBO/交互路线保留原生画面。
 
-本轮新候选尚未构建/发布。候选3的成功记录不代替本轮改动后的实际游戏验收。
+最终组合复审发现最后约 750 ms 读取集验证位于旧 Commit 边界之后，绑定 startupCancel 会被忽略。`3d75d23` 将两条路径的提交推迟到完整最终验证末尾、Stage 首次 journal 写入之前，仍由原 startupGate 原子核对 attempt。真实 normal/save/server Dispatch 的回调暂停取消先 RED 后 GREEN；完整 Evidence/Prepare/Stage 配合假 transport 同时验证取消、成功、提交后的既有契约，最终原生 suite 823 PASS。整合修正的独立定向复审通过，无未解决发现。证据为 `final-fix-{report,review-result}.md` 及 `artifacts/loading-refinement/final-fix-native-green.log`。
+
+已从生产输入构建并交付 candidate4，未启动、未发布：
+
+- `E:/Projects/OrangeLauncher/dist/loading-refinement-20261025-candidate4/橙子启动器.exe`，内部开发版本 1.2.20.0；构建源提交 `3d75d23`。
+- EXE SHA256 `8A51FFDDD5A7A1743EC49BA58E70368E94F7794BE56598096531FCD8DD7C6094`。
+- 内嵌已测试 JAR SHA256 `97F3811414D0FFA2FE19DAC318F06F927BCEFA7A6AD663FB471A586D56656745`，与磁盘组件一致。
+- 重新生成当前前端资源 ZIP，核对内嵌 ZIP 及其中 app.js 与本次源文件一致；JS SHA256 `EA4BBC24528B5BC421ECD798336EC165A834D5EA1B0D26E02AE74280E90A84E2`。
+- `橙子启动器-加载场景与服务器信息测试版.zip` 17,128,467 字节，仅含 EXE，解包流哈希一致；ZIP SHA256 `BFAEEBCCDF5A9A41E6D81DE10C1C9184201532E9282CC05CE74AA02C70A834D5`。
+
+构建及核对日志位于 `artifacts/loading-refinement/candidate4-build.log`、`candidate4-archive-verification.json`。正式发布、实际新入服/读档/授权交互仍待用户自行运行验收；候选3的成功记录不代替本轮新路线。用户已收到测试包链接。服务器、网站及版本均未修改。
 
 ## 后续任务顺序
 

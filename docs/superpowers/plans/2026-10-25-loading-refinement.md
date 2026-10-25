@@ -41,6 +41,6 @@ Files: `StartupSource/ozl/startup/{LoadingModel,LoadingScene,StartupRuntime,Hook
 
 ## Task 3 — review and user candidate
 
-- [ ] Review each task and scoped fixes, then the combined change for launch regressions and real-state presentation.
-- [ ] Build a new candidate from production inputs, verify exact embedded JAR and ZIP payload hashes, inspect scene captures and record evidence/limits.
-- [ ] Deliver the new candidate for the user's own foreground test. Keep real boot/server/save interaction acceptance and publication pending until observed.
+- [x] Review each task and scoped fixes, then the combined change for launch regressions and real-state presentation.
+- [x] Build a new candidate from production inputs, verify exact embedded JAR and ZIP payload hashes, inspect scene captures and record evidence/limits.
+- [x] Deliver the new candidate for the user's own foreground test. Keep real boot/server/save interaction acceptance and publication pending until observed.
