@@ -16,7 +16,7 @@ test('Fluent compact navigation and keyboard utilities remain reachable after re
  for(const [width,height] of [[1440,900],[1280,900],[768,900],[1100,650],[733,507],[500,760]]){
   await page.setViewportSize({width,height});
   const bounds=await page.locator('nav [data-page]').evaluateAll(es=>es.map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};}));
-  assert.equal(bounds.length,7);for(const r of bounds)assert.ok(r.left>=0&&r.right<=width&&r.top>=0&&r.bottom<=height,'all seven routes in bounds');
+  assert.equal(bounds.length,8);for(const r of bounds)assert.ok(r.left>=0&&r.right<=width&&r.top>=0&&r.bottom<=height,'all eight routes in bounds');
   for(const name of ['memory','settings','help']){const b=page.locator('nav [data-page="'+name+'"]');await b.focus();await page.keyboard.press('Enter');await page.waitForFunction(n=>document.querySelector('#page').dataset.route===n,name);}
   const summary=page.locator('.header-menu>summary');if(await summary.isVisible()&&!await page.locator('.header-menu').evaluate(e=>e.open)){await summary.focus();await page.keyboard.press('Enter');}
   const wasLight=await page.evaluate(()=>document.documentElement.classList.contains('light'));

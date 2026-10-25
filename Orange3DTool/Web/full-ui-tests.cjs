@@ -3,7 +3,7 @@ let playwright;
 try { playwright = require('playwright'); } catch { playwright = require('./playwright-runtime.cjs'); }
 const assert = require('node:assert/strict'), path = require('node:path'), fs = require('node:fs');
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZyAAAAAASUVORK5CYII=';
-const routes = ['home','components','mods','workshop','saves','servers','shaders','settings','memory','maintenance','help'];
+const routes = ['home','components','mods','workshop','saves','servers','shaders','settings','memory','maintenance','help','diagnostics'];
 const url = 'file:///' + path.resolve(__dirname, 'index.html').replaceAll('\\','/');
 async function setup(browser, theme='dark',options={}) {
   const page = await browser.newPage({viewport:{width:1100,height:760}});
@@ -17,7 +17,7 @@ async function setup(browser, theme='dark',options={}) {
       sent.push(m);
       if(window.failure===m.action){queueMicrotask(()=>reply({data:{id:m.id,ok:false,error:'Snapshot changed externally'}}));return;}
       let data;
-      switch(m.action){
+      switch(m.action){case 'logAnalysisStatus':data={jobId:'',state:'idle',message:'',progress:0,report:null};break;
         case 'status':data={validGame:true,running:false,theme,configStamp:'one',components:[],task:{active:false}};break;
         case 'modCatalog':data={mods,warnings:[]};break;
         case 'modCover':data={token:m.payload.token,cover:pixel};break;
@@ -65,7 +65,7 @@ async function sent(page,action){await page.waitForFunction(a=>window.sent.some(
 const tests=[];function test(name,fn){tests.push({name,fn});}
 test('eleven navigable routes remain visible in both themes and narrow windows',async browser=>{
   const shots=path.resolve(__dirname,'../../artifacts/full-ui-shots');fs.mkdirSync(shots,{recursive:true});
-  for(const theme of ['dark','light']){const {page,errors}=await setup(browser,theme);assert.equal(await page.locator('nav [data-page]').count(),7);
+  for(const theme of ['dark','light']){const {page,errors}=await setup(browser,theme);assert.equal(await page.locator('nav [data-page]').count(),8);
     for(const viewport of [{width:1100,height:760},{width:733,height:507},{width:500,height:760}]){await page.setViewportSize(viewport);
       for(const name of routes){await route(page,name);await page.waitForTimeout(30);assert.equal(await page.locator('#page').getAttribute('data-route'),name);assert.equal(await page.locator('main').evaluate(e=>e.scrollWidth<=e.clientWidth),true,name+' overflow');assert.equal(await page.locator('nav [data-page="help"]').evaluate(e=>e.getBoundingClientRect().bottom<=innerHeight),true,'navigation visible');if(viewport.width===1100)await page.screenshot({path:path.join(shots,`${theme}-${name}.png`)});}
     }assert.deepEqual(errors,[]);await page.close();}

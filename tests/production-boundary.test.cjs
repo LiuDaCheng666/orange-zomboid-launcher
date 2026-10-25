@@ -8,7 +8,9 @@ const baseline=execFileSync('git',['show','a1b47c3:Orange3DTool/Program.cs'],{cw
 const originalNames=execFileSync('git',['ls-tree','--name-only','a1b47c3:Orange3DTool'],{cwd:root,encoding:'utf8'}).trim().split(/\r?\n/).filter(n=>n.endsWith('.cs'));
 const originalTests=originalNames.filter(n=>n.endsWith('Tests.cs'));
 const repairTests=['MemoryFileWriteTests.cs','LauncherMultiplayerCacheTests.cs','LauncherMultiplayerDataTests.cs'];
-const productionNames=originalNames.filter(n=>!n.endsWith('Tests.cs')&&!['LauncherTestPaths.cs','CoreReleaseTool.cs'].includes(n));
+const featureSources=['GameStartupHost.cs','GameStartupModels.cs','GameStartupMonitor.cs','GameStartupPresentation.cs','GameStartupPresenter.cs','GameStartupWindow.cs','GameLogModels.cs','GameLogAnalyzer.cs','GameLogAnalysisService.cs','GameLogAnalysisController.cs','GameLogAnalysisHost.cs'];
+const featureTests=['GameStartupBridgeTests.cs','GameStartupMonitorTests.cs','GameStartupPresentationTests.cs','GameStartupPresenterTests.cs','GameStartupSuiteTests.cs','GameStartupWindowTests.cs','GameLogAnalyzerTests.cs','GameLogAnalysisServiceTests.cs','GameLogCorpusTests.cs'];
+const productionNames=originalNames.filter(n=>!n.endsWith('Tests.cs')&&!['LauncherTestPaths.cs','CoreReleaseTool.cs'].includes(n)).concat(featureSources);
 const q=s=>"'"+s.replaceAll("'","''")+"'";
 function ps(command){return spawnSync('pwsh.exe',['-NoProfile','-NonInteractive','-Command',"$ErrorActionPreference='Stop'; "+command],{encoding:'utf8'});}
 function sources(dir=project,diagnostics=false){
@@ -22,9 +24,9 @@ test('baseline captures 84 original test files and 56 distinct invoked test suit
  assert.equal(originalTests.length,84);
  assert.equal(new Set([...suiteLine(baseline).matchAll(/\b(\w+Tests)\.\w+\(/g)].map(m=>m[1])).size,56);
 });
-test('actual production input excludes tests and is exactly the explicit 92 original files',()=>{
+test('actual production input excludes tests and is the explicit original and approved feature files',()=>{
  const actual=sources();assert.equal(actual.filter(p=>p.endsWith('Tests.cs')).length,0,'production glob includes original 84 test files');
- assert.deepEqual(actual.map(p=>path.basename(p)).sort(),productionNames.sort());assert.equal(actual.length,92);
+ assert.deepEqual(actual.map(p=>path.basename(p)).sort(),productionNames.sort());assert.equal(actual.length,103);
  assert.equal(new Set(actual.map(p=>p.toLowerCase())).size,actual.length);assert.ok(actual.every(path.isAbsolute));
 });
 test('production entry does not dispatch diagnostic suites',()=>{
@@ -33,7 +35,7 @@ test('production entry does not dispatch diagnostic suites',()=>{
 test('resolver excludes unknown source and fails closed for missing listed source',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ozl-sources-'));
  try{
- for(const n of originalNames)fs.writeFileSync(path.join(dir,n),'');
+ for(const n of [...originalNames,...featureSources])fs.writeFileSync(path.join(dir,n),'');
  fs.writeFileSync(path.join(dir,'UnknownProduction.cs'),'');
  assert.deepEqual(sources(dir).map(p=>path.basename(p)).sort(),productionNames.sort());
  fs.unlinkSync(path.join(dir,'Program.cs'));
@@ -43,8 +45,8 @@ test('resolver excludes unknown source and fails closed for missing listed sourc
 });
 test('diagnostic membership adds original tests, fixture paths and two diagnostic files exactly once',()=>{
  const actual=sources(project,true).map(p=>path.basename(p));
- const expected=[...productionNames,...originalTests,...repairTests,'LauncherTestPaths.cs','DiagnosticProgram.cs','DiagnosticSelfTests.cs'];
- assert.equal(actual.length,expected.length);assert.equal(actual.length,182);assert.equal(new Set(actual).size,actual.length);
+ const expected=[...productionNames,...originalTests,...repairTests,...featureTests,'LauncherTestPaths.cs','DiagnosticProgram.cs','DiagnosticSelfTests.cs'];
+ assert.equal(actual.length,expected.length);assert.equal(actual.length,202);assert.equal(new Set(actual).size,actual.length);
  assert.deepEqual(actual.sort(),expected.sort());
 });
 test('dispatcher order, embedded Test class, workers and ordinary UI remain intact',()=>{
@@ -100,7 +102,7 @@ test('existing CoreReleaseTool selector adds exactly one source only for that en
  const r=ps('. '+q(path.join(root,'build/ProductionSources.ps1'))+'; $project='+q(project)+';$Entry='+q(entry)+';'+statements.concat(selectors).join(';')+'; $sources | ConvertTo-Json -Compress');
  assert.equal(r.status,0,r.stderr);const names=JSON.parse(r.stdout).map(p=>path.basename(p));
  assert.equal(names.filter(n=>n==='CoreReleaseTool.cs').length,entry==='PZ3D.CoreReleaseTool'?1:0);
- assert.equal(names.length,entry==='PZ3D.CoreReleaseTool'?183:182);assert.equal(new Set(names).size,names.length);
+ assert.equal(names.length,entry==='PZ3D.CoreReleaseTool'?203:202);assert.equal(new Set(names).size,names.length);
  }
 });
 test('direct package and native fixture compilers use diagnostic resolver and symbol',()=>{

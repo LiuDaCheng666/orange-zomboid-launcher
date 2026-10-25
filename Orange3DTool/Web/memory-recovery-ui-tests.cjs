@@ -55,7 +55,7 @@ const tests=[{name:'rejected memory save unlocks draft, retry and reread before 
   const {page,errors}=await setup(browser,theme);
   try {
    const nav=page.locator('nav[aria-label="主导航"]');
-   assert.deepEqual(await nav.locator('>button').evaluateAll(es=>es.map(e=>e.textContent)),['启动','模组与组件','存档','服务器','内存','设置','帮助']);
+   assert.deepEqual(await nav.locator('>button').evaluateAll(es=>es.map(e=>e.textContent)),['启动','模组与组件','存档','服务器','内存','设置','日志分析','帮助']);
    await nav.locator('[data-page="memory"]').click();await page.waitForSelector('#memory-number');
    assert.equal(await nav.locator('[data-page="memory"]').getAttribute('aria-current'),'page');
    assert.equal(await page.locator('#secondary-navigation [data-page="memory"]').count(),0);

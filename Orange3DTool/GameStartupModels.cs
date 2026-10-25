@@ -14,6 +14,7 @@ namespace PZ3D {
  sealed class GameStartupSnapshot {
   public string SessionId, Stage, Message;
   public string[] Lines;
+  public GameLogIssue[] Issues=new GameLogIssue[0];
   public double ElapsedSeconds;
   public int? ProcessId, CompletedItems, TotalItems;
   public long? WorkingSetBytes, TotalPhysicalBytes, HeapLimitBytes;

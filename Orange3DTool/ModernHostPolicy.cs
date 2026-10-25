@@ -25,11 +25,12 @@ namespace PZ3D {
    if(((string)action=="chooseGame"||(string)action=="importShader")&&((Dictionary<string,object>)payload).Count>0)throw new Exception("文件与目录必须由本机选择窗口确认，界面不能提供路径。");
    if((string)action=="launchPreflight")ValidatePreflightPayload((Dictionary<string,object>)payload);if((string)action=="modAutoSort")ValidateAutoSortPayload((Dictionary<string,object>)payload);
    if((string)action=="gameDiagnostics")GameDiagnostics.ValidatePayload((Dictionary<string,object>)payload);
+   if(ModernController.LogAnalysisAction((string)action))ModernController.ValidateLogAnalysisPayload((Dictionary<string,object>)payload);
    if(BuddyAction((string)action))ValidateBuddyPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="saveDeletePreview"||(string)action=="saveDelete")ValidateSaveDeletionPayload((string)action,(Dictionary<string,object>)payload);
    return request;
   }
-  static ModernHostPolicy(){Actions.Add("openContact");Actions.Add("gameDiagnostics");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");foreach(string action in new[]{"serverWorkshopGet","serverWorkshopImport","serverWorkshopPrepare","serverWorkshopStatus","serverWorkshopCancel"})Actions.Add(action);}
+  static ModernHostPolicy(){foreach(string action in new[]{"logAnalysisStatus","logAnalysisLocal","logAnalysisImport","logAnalysisFolder","logAnalysisCancel","logAnalysisExport"})Actions.Add(action);Actions.Add("openContact");Actions.Add("gameDiagnostics");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");foreach(string action in new[]{"serverWorkshopGet","serverWorkshopImport","serverWorkshopPrepare","serverWorkshopStatus","serverWorkshopCancel"})Actions.Add(action);}
   internal static void ValidateWorkshopPayload(string action,Dictionary<string,object> p){
    if(p==null)throw new Exception("缺少清单参数。");string[] fields=action=="serverWorkshopStatus"?new string[0]:action=="serverWorkshopCancel"?new[]{"jobId"}:action=="serverWorkshopGet"?new[]{"id"}:action=="serverWorkshopImport"?new[]{"id","stamp","text","confirmed"}:new[]{"id","stamp","confirmed"};if(p.Count!=fields.Length||fields.Any(k=>!p.ContainsKey(k)))throw new Exception("清单操作参数无效。");foreach(string field in fields){if(field=="confirmed"){if(!(p[field] is bool)||!(bool)p[field])throw new Exception("操作需要明确确认。");}else if(!(p[field] is string)||((string)p[field]).Length>(field=="text"?65536:field=="stamp"?64:32))throw new Exception("清单操作参数无效。");}
   }

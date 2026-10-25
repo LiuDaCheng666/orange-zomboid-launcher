@@ -13,6 +13,7 @@ namespace PZ3D {
  // Reduces observed evidence only. Phase changes never invent a percentage.
  sealed class GameStartupReducer {
   readonly string session;readonly DateTime started;readonly Queue<string> lines=new Queue<string>();
+  readonly Queue<string> rawLines=new Queue<string>();readonly List<GameLogIssue> issues=new List<GameLogIssue>();int rawBytes,rawVersion,analyzedVersion;DateTime analyzedUtc=DateTime.MinValue;bool analyzedTerminal;
   internal string Stage,Message;internal bool Complete,Failed,WaitingForInput;
   internal int? ProcessId;internal long? WorkingSetBytes,TotalPhysicalBytes,HeapLimitBytes;
   static readonly Regex Record=new Regex(@"^(?<severity>LOG\s*:|DEBUG:)\s*(?<category>[A-Za-z]+)\s+f:[0-9]+(?:\s+(?:t|st):[0-9.]+)*(?:\s+at\s+(?<caller>[A-Za-z0-9_.$]+)(?:\([^\r\n)]{1,100}\))?)?\s*>\s?(?<body>.*)$",RegexOptions.CultureInvariant);
@@ -20,7 +21,13 @@ namespace PZ3D {
   internal void Submitted(){if(Failed||Complete)return;Stage="submitted";Message="启动请求已提交，等待本次游戏进程与加载日志";}
   internal void Fail(string message){if(Complete||Failed)return;Failed=true;WaitingForInput=false;Stage="failed";Message=GameDiagnostics.Sanitize(message??"游戏启动失败");}
   internal void Line(string line){
-   string clean=GameDiagnostics.Sanitize(line??"");if(clean.Length>4096)clean=clean.Substring(0,4096);lines.Enqueue(clean);while(lines.Count>80)lines.Dequeue();
+   string raw=line??"";if(raw.Length>4096)raw=raw.Substring(0,4096);int size=Encoding.UTF8.GetByteCount(raw)+1;
+   // A poll may contain 256 KiB: collect a full chunk before eviction, then keep
+   // a small overlap for exception frames across chunks. Reparse only at the
+   // chunk boundary, never for every appended line; input remains bounded.
+   if(rawLines.Count>=160||rawBytes+size>65536){CollectProblems();while(rawLines.Count>16||rawBytes>8192){string removed=rawLines.Dequeue();rawBytes-=Encoding.UTF8.GetByteCount(removed)+1;}}
+   rawLines.Enqueue(raw);rawBytes+=size;rawVersion++;
+   string clean=GameDiagnostics.Sanitize(raw);if(clean.Length>4096)clean=clean.Substring(0,4096);lines.Enqueue(clean);while(lines.Count>80)lines.Dequeue();
    if(Complete||Failed)return;
    Match record=Record.Match(line??"");if(!record.Success)return;string body=record.Groups["body"].Value,category=record.Groups["category"].Value;
    // The existing one-shot Lua bridge prints only after verifying its ORANGE1
@@ -41,7 +48,21 @@ namespace PZ3D {
    if(phase!=null){Stage=phase;Message=message;WaitingForInput=false;}
   }
   internal static bool IsMenuReady(string line,string session){if(session==null||!Regex.IsMatch(session,@"\A[a-f0-9]{32}\z",RegexOptions.CultureInvariant))return false;Match record=Record.Match(line??"");return record.Success&&record.Groups["severity"].Value!="DEBUG:"&&record.Groups["category"].Value=="Lua"&&!record.Groups["caller"].Success&&record.Groups["body"].Value=="[OZL-STARTUP] menu-ready "+session;}
-  internal GameStartupSnapshot Snapshot(DateTime now){return new GameStartupSnapshot{SessionId=session,Stage=Stage,Message=Message,Lines=lines.ToArray(),ElapsedSeconds=Math.Max(0,(now-started).TotalSeconds),ProcessId=ProcessId,WorkingSetBytes=WorkingSetBytes,TotalPhysicalBytes=TotalPhysicalBytes,HeapLimitBytes=HeapLimitBytes,Complete=Complete,Failed=Failed,WaitingForInput=WaitingForInput,CompletedItems=null,TotalItems=null};}
+  // Analysis is observational: even a fatal-looking log cannot complete or fail the launch.
+  // The UI receives copies; retained observations survive the rolling input and terminal snapshot.
+  static string Safe(string value,int limit){string text=GameDiagnostics.Sanitize(value??"");return text.Length>limit?text.Substring(0,limit):text;}
+  internal static GameLogIssue DisplayIssue(GameLogIssue value){if(value==null)return null;return new GameLogIssue{id=Safe(value.id,128),type=Safe(value.type,128),severity=Safe(value.severity,24),impact=Safe(value.impact,256),title=Safe(value.title,160),meaning=Safe(value.meaning,768),advice=Safe(value.advice,768),phase=Safe(value.phase,64),attemptId=Safe(value.attemptId,64),count=Math.Max(1,value.count),mods=(value.mods??new string[0]).Take(8).Select(x=>Safe(x,160)).ToArray(),frames=(value.frames??new GameLogFrame[0]).Where(x=>x!=null).Take(8).Select(x=>new GameLogFrame{mod=Safe(x.mod,160),file=Safe(x.file,160),function=Safe(x.function,160),line=Math.Max(0,x.line)}).ToArray(),evidence=(value.evidence??new GameLogEvidence[0]).Where(x=>x!=null).Take(6).Select(x=>new GameLogEvidence{source=Safe(x.source,96),line=Math.Max(0,x.line),text=Safe(x.text,512)}).ToArray()};}
+  static string IssueKey(GameLogIssue value){return value.type+"|"+value.title+"|"+String.Join("|",value.mods)+"|"+(value.evidence.Length==0?"":value.evidence[0].text);}
+  void AnalyzeProblems(DateTime now){
+   bool terminal=Complete||Failed;if(rawVersion==analyzedVersion)return;
+   if(analyzedUtc!=DateTime.MinValue&&(now-analyzedUtc).TotalMilliseconds<500&&!(terminal&&!analyzedTerminal))return;
+   analyzedUtc=now;analyzedTerminal=terminal;CollectProblems();
+  }
+  void CollectProblems(){
+   if(rawVersion==analyzedVersion)return;analyzedVersion=rawVersion;
+   try{var report=GameLogAnalyzer.AnalyzeText(String.Join("\n",rawLines.ToArray()),"本次启动");foreach(var item in report.issues??new GameLogIssue[0]){var safe=DisplayIssue(item);if(safe==null)continue;string key=IssueKey(safe);int index=issues.FindIndex(x=>IssueKey(x)==key);if(index>=0){safe.count=Math.Max(safe.count,issues[index].count);issues.RemoveAt(index);}issues.Add(safe);while(issues.Count>24)issues.RemoveAt(0);}}catch{ /* Log analysis never interrupts startup or removes prior observations. */ }
+  }
+  internal GameStartupSnapshot Snapshot(DateTime now){AnalyzeProblems(now);return new GameStartupSnapshot{SessionId=session,Stage=Stage,Message=Message,Lines=lines.ToArray(),Issues=issues.AsEnumerable().Reverse().OrderBy(x=>x.severity=="warning"?1:0).Select(DisplayIssue).ToArray(),ElapsedSeconds=Math.Max(0,(now-started).TotalSeconds),ProcessId=ProcessId,WorkingSetBytes=WorkingSetBytes,TotalPhysicalBytes=TotalPhysicalBytes,HeapLimitBytes=HeapLimitBytes,Complete=Complete,Failed=Failed,WaitingForInput=WaitingForInput,CompletedItems=null,TotalItems=null};}
  }
 
  // A byte boundary captured before launch excludes old logs and old half-lines.
