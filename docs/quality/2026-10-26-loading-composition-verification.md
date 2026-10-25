@@ -94,3 +94,6 @@ Task3 主实现 `7636bf3` 后，评审发现两处实质问题：绘制每个原
 沿用版本号 1.2.21.0，尚未新增正式发行版本；`candidate-info.json` 明确记录 DevelopmentCandidate=true、Opened=false、Published=false。既有 candidate5 和公开 1.2.21 发行目录未覆盖；未修改网站、版本元数据、更新清单或 Web/SSH 配置。正式联网体验仍需候选程序的实际游戏验收，本记录只声明上述隔离功能验证与资源校验。
 
 最终组合审查覆盖 `3337d10..e5dd6e5`，Critical/Important 均为 0；三次任务审查及对应局部修正复审已完成。已知 JVM 依赖提示与故障注入输出作为非阻塞记录保留；Growth 导出计数歧义已在本记录拆分。最终审查之后无生产代码变更，无需再次跑功能套件。实现与评审报告保留在 `.superpowers/sdd/2026-10-26-loading-composition/`，Git 历史保留三份实现报告。工具策略阻止了删除临时记录目录的清理操作，因此保留该目录，不影响候选包内容。当前分支 `codex/velopack-updates` 保留，未合并、创建 PR 或发布新版本。
+
+
+后续用户明确要求发布与集中移动临时记录：1.2.22 已同步自有服务器与 GitHub，详见 [正式发布验证](../releases/1.2.22-publication.md)。临时工作目录已完整移至 `E:/Projects/OrangeLauncher/待清理/20261026-loading-composition`，25 个文件哈希验证一致，供用户手动清理；原路径不再保留。上文未发布及保留原目录的状态对应候选包交付阶段。
