@@ -65,6 +65,9 @@ namespace PZ3D {
    }catch{return JavaProcessRole.Unknown;}
   }
   public static bool IsClientRunning(string game,Func<string,Process[]> inventory=null){return Running(game,true,inventory??Process.GetProcessesByName);}
+  // Recovery mutates a client's temporary mod list. Unknown Java roles must keep
+  // that session intact, while a verified dedicated server remains independent.
+  internal static bool IsSessionRunning(string game,Func<string,Process[]> inventory){return Observe(game,false,inventory,true).Count>0;}
   public static bool IsRunning(string game,Func<string,Process[]> inventory=null){
    return Running(game,false,inventory??Process.GetProcessesByName);
   }
@@ -75,12 +78,12 @@ namespace PZ3D {
   internal static string Image(Process process){try{using(var handle=ClientProcessHandle.Open(process.Id,false))return handle.Image;}catch{return null;}}
   internal static List<ClientIdentity> Clients(string game,Func<string,Process[]> inventory=null){return Observe(game,true,inventory??Process.GetProcessesByName);}
   static bool Running(string game,bool clientOnly,Func<string,Process[]> inventory){return Observe(game,clientOnly,inventory).Count>0;}
-  static List<ClientIdentity> Observe(string game,bool clientOnly,Func<string,Process[]> inventory){
+  static List<ClientIdentity> Observe(string game,bool clientOnly,Func<string,Process[]> inventory,bool session=false){
    var found=new List<ClientIdentity>();
    foreach(string name in new[]{"ProjectZomboid64","ProjectZomboid32","java","javaw"}){
     Process[] processes=inventory(name);try{foreach(var process in processes){try{
      if(process.HasExited)continue;string image=Image(process);bool native=MatchesNative(game,image),java=MatchesJava(game,name,image);
-     if(!native&&!java)continue;if(java&&clientOnly&&ReadJavaRole(game,name,image,process)!=JavaProcessRole.Client)continue;
+     if(!native&&!java)continue;if(java&&(clientOnly&&ReadJavaRole(game,name,image,process)!=JavaProcessRole.Client||session&&ReadJavaRole(game,name,image,process)==JavaProcessRole.Server))continue;
      long birth=process.StartTime.ToUniversalTime().Ticks;if(process.HasExited)continue;
      if(!found.Any(x=>x.Pid==process.Id))found.Add(new ClientIdentity{Pid=process.Id,Birth=birth,Image=image,Java=java});
     }catch{}}}finally{foreach(var process in processes)process.Dispose();}
@@ -113,14 +116,14 @@ namespace PZ3D {
   internal Func<int,IClientProcessHandle> Open=pid=>ClientProcessHandle.Open(pid,true);
   internal void Invalidate(){stamp=null;identities=null;}
   internal object Preview(string selected){game=Path.GetFullPath(selected);identities=Discover(game);stamp=identities.Count==0?"":Guid.NewGuid().ToString("N");expires=Now().AddSeconds(60);return new{clients=identities.Select(x=>new{pid=x.Pid,executable=Path.GetFileName(x.Image)}).ToArray(),stamp=stamp,message=identities.Count==0?"未找到当前游戏客户端进程":"请确认关闭这些游戏客户端；未保存进度会丢失。"};}
-  internal object Close(string selected,Dictionary<string,object> payload,CancellationToken token){
+  internal object Close(string selected,Dictionary<string,object> payload,CancellationToken token,Action<ClientIdentity> stopped=null){
    object consent,raw;if(payload==null||payload.Count!=2||!payload.TryGetValue("confirmed",out consent)||!(consent is bool)||!(bool)consent||!payload.TryGetValue("stamp",out raw)||!(raw is string))throw new InvalidOperationException("强制关闭需要预览和明确确认。");
    if(string.IsNullOrEmpty(stamp)||(string)raw!=stamp||Now()>expires||!string.Equals(Path.GetFullPath(selected),game,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("游戏进程预览已变化或过期，请重新确认。");
    stamp=null;var results=new List<object>();int closed=0,failed=0;
    foreach(var identity in identities){token.ThrowIfCancellationRequested();try{using(var handle=Open(identity.Pid)){
     if(handle.Exited){results.Add(new{pid=identity.Pid,status="alreadyExited",message="进程已退出"});continue;}
     if(handle.Birth!=identity.Birth||!string.Equals(handle.Image,identity.Image,StringComparison.OrdinalIgnoreCase)||!handle.ClientRole(game,identity))throw new InvalidOperationException("进程身份已变化，未关闭。");
-    token.ThrowIfCancellationRequested();if(!handle.TerminateAndWait())throw new InvalidOperationException("进程未在等待时间内退出。");closed++;results.Add(new{pid=identity.Pid,status="closed",message="已关闭"});
+    token.ThrowIfCancellationRequested();if(!handle.TerminateAndWait())throw new InvalidOperationException("进程未在等待时间内退出。");closed++;if(stopped!=null)stopped(identity);results.Add(new{pid=identity.Pid,status="closed",message="已关闭"});
    }}catch(OperationCanceledException){throw;}catch(Exception ex){failed++;results.Add(new{pid=identity.Pid,status="failed",message=ex.Message});}}
    return new{results=results.ToArray(),closed=closed,failed=failed,message="已关闭 "+closed+" 个游戏进程"+(failed>0?"；"+failed+" 个未能关闭，请查看结果。":"。")};
   }

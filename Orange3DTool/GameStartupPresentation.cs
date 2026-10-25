@@ -13,7 +13,7 @@ namespace PZ3D {
   internal object StartupControlRequest(string action,Dictionary<string,object> payload){
    ModernHostPolicy.ValidateStartupPayload(action,payload);StartupAttempt selected;
    if(action=="startupBegin"){
-    lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");if(localMutationBusy)throw new InvalidOperationException("正在执行任务，请稍后启动。");}
+    lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");if(localMutationBusy)throw new InvalidOperationException("正在执行任务，请稍后启动。");RecoverStartup();}
     lock(startupGate){
      if(startupAttempt!=null&&startupAttempt.Phase!="cancelled"&&startupAttempt.Phase!="submitted")throw new InvalidOperationException("已有启动准备正在进行。");
      selected=new StartupAttempt{Engine=engine,TargetId=Text(payload,"targetId"),Phase="preflight",Deadline=DateTime.UtcNow.AddSeconds(30),Launch=new GameStartupLaunch{SessionId=Guid.NewGuid().ToString("N"),GamePath=engine.Game,UserPath=user,DataPath=data,TargetKind=Text(payload,"targetKind"),StartedUtc=DateTime.UtcNow}};startupAttempt=selected;

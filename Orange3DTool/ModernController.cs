@@ -100,6 +100,7 @@ namespace PZ3D {
   }
   LaunchPreflightReport RequireLaunchPreflight(string targetKind="normal",string targetId=null){
    cancel.Token.ThrowIfCancellationRequested();Report(-1,"正在启动游戏…");
+   RecoverStartup();cancel.Token.ThrowIfCancellationRequested();
    var watch=Stopwatch.StartNew();var report=LaunchPreflight.CheckLaunch(engine,false,ClientRunning(),targetKind,targetId,true);
    journal.Diagnostic("启动预检耗时 "+watch.ElapsedMilliseconds+" ms");cancel.Token.ThrowIfCancellationRequested();
    lock(startupGate){RequireAttempt(startupSessionId);}
@@ -130,7 +131,7 @@ namespace PZ3D {
    case "playProfileRecover":return playProfiles.Recover(Text(p,"stamp"),Flag(p,"confirmed"));
    case "status":return Status();
    case "gameProcesses":if(p.Count!=0)throw new Exception("进程预览不接受目标参数。");return clientClose.Preview(engine.Game);
-   case "forceCloseGame":return clientClose.Close(engine.Game,p,cancel.Token);
+   case "forceCloseGame":return ForceCloseGame(p);
    case "buddyPreview":return BuddyTakeover.Preview(engine,buddyEnvironment);
    case "buddyTakeover":return BuddyTakeover.Apply(engine,Text(p,"stamp"),Flag(p,"confirmed"),Flag(p,"steamExitConfirmed"),Report,cancel.Token,buddyEnvironment);
    case "buddyRecover":return BuddyTakeover.Recover(engine,Text(p,"stamp"),Flag(p,"confirmed"),Flag(p,"steamExitConfirmed"),Report,cancel.Token,buddyEnvironment);
@@ -224,5 +225,11 @@ namespace PZ3D {
   void FinishTask(object result,string action,Dictionary<string,object> payload){string message=SafeResultMessage(result,TaskTitle(action,payload));lock(gate){log.Add(DateTime.Now.ToString("HH:mm:ss")+" "+message);if(log.Count>100)log.RemoveAt(0);}var buddy=result as BuddyTakeoverResult;var profile=result as PlayProfileResult;string raw=buddy!=null?buddy.status:profile!=null?profile.status:null;if(raw!=null){bool completed=raw=="completed"||raw=="recovered"||raw=="unchanged";string status=completed?"completed":raw=="partial"||raw=="recoveryRequired"?"partial":raw=="cancelled"?"cancelled":"failed";journal.Finish(status,"["+raw+"] "+message);Report(completed?100:-1,message);return;}bool partial=message.Contains("[失败]")||message.Contains("[待清理]");journal.Finish(partial?"partial":"completed",message);Report(partial?-1:100,partial?"部分完成；请核对各组件失败原因、待清理文件和当前配置。":action=="launch"?"启动请求已发送。":action=="profileLaunch"?"所选启动目标已提交。":"操作完成");}
   static string TaskTitle(string action,Dictionary<string,object> p){if(action=="maintenance"){object kind;if(p!=null&&p.TryGetValue("kind",out kind))return Convert.ToString(kind)=="cache"?"清除多人缓存":Convert.ToString(kind)=="cacheAll"?"彻底清除多人本地数据":"重新下载创意工坊模组";}var titles=new Dictionary<string,string>{{"playProfileCapture","捕获当前游玩配置"},{"playProfileSave","保存游玩配置"},{"playProfileDelete","删除游玩配置"},{"playProfileSelect","选择游玩配置"},{"playProfileImport","导入游玩配置"},{"playProfileApply","应用已预览的游玩配置"},{"playProfileRecover","恢复游玩配置应用"},{"buddyTakeover","接管旧 Buddy 启动参数"},{"buddyRecover","恢复旧启动参数接管"},{"componentsAction","处理模组组件"},{"memorySave","保存游戏内存"},{"settingsSave","保存 Viewpoint 画面设置"},{"profileLaunch","启动指定存档或服务器"},{"launch","启动游戏"},{"steamDownload","订阅并下载工坊模组"},{"modAutoSort","自动排序默认模组"},{"modProfileActivate","启用模组配置"},{"modProfileSave","保存模组配置"},{"saveSave","保存存档模组清单"},{"playtimeSettings","设置游玩提醒"},{"favoriteImport","导入原版服务器收藏"}};string title;return titles.TryGetValue(action,out title)?title:action;}
   public void Dispose(){DisposeStartup();DisposeLogAnalysis();SaveProfiles.InvalidateDisplay(engine);lock(gate){disposed=true;cancel.Cancel();foreach(var request in networkRequests)request.Cancel();if(!busy)cancel.Dispose();}if(workshopPreparation!=null)workshopPreparation.Dispose();}
+  object ForceCloseGame(Dictionary<string,object> payload){
+   string nonce=null;try{nonce=LaunchProfiles.RecoveryNonce(engine);}catch(Exception ex){journal.Diagnostic("关闭前启动会话无法核实："+ex.Message);}
+   var stopped=new List<ClientIdentity>();object result=clientClose.Close(engine.Game,payload,cancel.Token,stopped.Add);
+   if(stopped.Count>0&&nonce!=null)try{string recovered=LaunchProfiles.RecoverStopped(engine,nonce,stopped);if(recovered!=""){lock(gate)log.Add(recovered);journal.Diagnostic(recovered);}}catch(Exception ex){journal.Diagnostic("关闭后启动恢复未完成："+ex.Message);}
+   return result;
+  }
  }
 }
