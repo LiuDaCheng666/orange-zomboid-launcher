@@ -68,7 +68,7 @@ namespace PZ3D {
   static void Controller(){var f=new Fixture();ModernHostPolicy.Validate("https://orange.local/index.html","{\"id\":\"preflight\",\"action\":\"launchPreflight\",\"payload\":{}}");bool rejected=false;try{ModernHostPolicy.Validate("https://orange.local/index.html","{\"id\":\"preflight\",\"action\":\"launchPreflight\",\"payload\":{\"path\":\"secret\"}}");}catch{rejected=true;}Assert(rejected,"preflight native action rejects page-supplied paths");using(var controller=new ModernController(f.E.Game,f.E.User,f.E.Data,true)){var original=f.Files();var directories=f.Directories();Assert((bool)D(controller.Execute("launchPreflight",new Dictionary<string,object>()))["canLaunch"],"controller returns serializable preflight");Assert(original.SequenceEqual(f.Files())&&directories.SequenceEqual(f.Directories()),"controller preflight creates no journal or preferences");f.Mod("Child","require=Parent\n");f.Mods("Child");foreach(string action in new[]{"launch","profileLaunch"}){string failure="";var progress=new List<string>();controller.Progress=(v,t)=>progress.Add(t);try{controller.Execute(action,GameStartupPresentationTests.Begin(controller,action=="launch"?"normal":"save","fixture"));}catch(Exception ex){failure=ex.Message;}Assert(failure.Contains("模组")&&!failure.Contains("测试模式"),action+" reruns stale preflight at controller boundary");Assert(progress.Any(t=>t=="正在启动游戏…")&&!progress.Any(t=>t.Contains("游戏已就绪")||t.Contains("连接成功")),action+" emits an honest preflight stage");}f.Mods();foreach(string action in new[]{"launch","profileLaunch"}){string failure="";try{controller.Execute(action,GameStartupPresentationTests.Begin(controller,action=="launch"?"normal":"server","fixture"));}catch(Exception ex){failure=ex.Message;}Assert(failure.Contains("测试模式"),action+" test fixtures cannot start external processes");}}}
   // Break caught: preflight/launch bypass the existing asynchronous network release guard.
   static void NetworkDrain(){var f=new Fixture();var entered=new ManualResetEvent(false);var released=new ManualResetEvent(false);Exception networkFailure=null;using(var controller=new ModernController(f.E.Game,f.E.User,f.E.Data,true,null,(e,a,p,progress,token,batch)=>{entered.Set();token.WaitHandle.WaitOne(5000);released.Set();token.ThrowIfCancellationRequested();return new{};})){var worker=new Thread(()=>{try{controller.Execute("steamConnection",new Dictionary<string,object>());}catch(Exception ex){networkFailure=ex;}});worker.Start();Assert(entered.WaitOne(5000),"fixture network operation is active");Assert(!(bool)D(controller.Execute("launchPreflight",new Dictionary<string,object>()))["canLaunch"],"active network reports busy without cancellation");f.Mod("Child","require=Parent\n");f.Mods("Child");string failure="";try{controller.Execute("launch",GameStartupPresentationTests.Begin(controller));}catch(Exception ex){failure=ex.Message;}Assert(released.WaitOne(0)&&worker.Join(5000)&&networkFailure is OperationCanceledException&&failure.Contains("模组"),"launch drains network before rechecking current configuration");}entered.Dispose();released.Dispose();}
-  public static int Main(string[] args){try{if(args.Contains("--strict-save")){StrictSaveSelection();return 0;}if(args.Contains("--cancel-before-prepare")){CancelledPreflight();return 0;}if(args.Contains("--save-selection")){NativeSaveSelection();return 0;}if(args.Contains("--evidence")){FinalEvidence();return 0;}if(args.Contains("--focused-sources")){FocusedSources();return 0;}if(args.Contains("--authoritative")){AuthoritativeRefusal();return 0;}if(args.Contains("--focused")){FocusedMetadata();return 0;}if(args.Contains("-XshowSettings:properties")){File.WriteAllText(Path.Combine(Environment.CurrentDirectory,"preflight-java-probe.marker"),"unexpected-synthetic-probe");return 1;}if(args.Contains("--review-zero")){ExhaustedCacheAdapter();return 0;}if(args.Contains("--review-handoff")){RetentionCollectorHandoff();return 0;}if(args.Contains("--review-cache")){MalformedCacheStillBlocks();return 0;}if(args.Contains("--review-1")){OptionalVersionBudget();OptionalMetadataBudget();return 0;}if(args.Contains("--review-cumulative")){OptionalMetadataBudget();return 0;}if(args.Contains("--review-2")){OriginalIdentities();return 0;}Run();return 0;}catch(Exception ex){Console.WriteLine(ex);return 1;}}
+  public static int Main(string[] args){try{if(args.Contains("--final-cancel")){DispatchFinalCancellation(args.Contains("--save")?"save":args.Contains("--server")?"server":null);return 0;}if(args.Contains("--final-commit")){FinalCommitBoundary(args.Contains("--save")?"save":args.Contains("--server")?"server":null);return 0;}if(args.Contains("--strict-save")){StrictSaveSelection();return 0;}if(args.Contains("--cancel-before-prepare")){CancelledPreflight();return 0;}if(args.Contains("--save-selection")){NativeSaveSelection();return 0;}if(args.Contains("--evidence")){FinalEvidence();return 0;}if(args.Contains("--focused-sources")){FocusedSources();return 0;}if(args.Contains("--authoritative")){AuthoritativeRefusal();return 0;}if(args.Contains("--focused")){FocusedMetadata();return 0;}if(args.Contains("-XshowSettings:properties")){File.WriteAllText(Path.Combine(Environment.CurrentDirectory,"preflight-java-probe.marker"),"unexpected-synthetic-probe");return 1;}if(args.Contains("--review-zero")){ExhaustedCacheAdapter();return 0;}if(args.Contains("--review-handoff")){RetentionCollectorHandoff();return 0;}if(args.Contains("--review-cache")){MalformedCacheStillBlocks();return 0;}if(args.Contains("--review-1")){OptionalVersionBudget();OptionalMetadataBudget();return 0;}if(args.Contains("--review-cumulative")){OptionalMetadataBudget();return 0;}if(args.Contains("--review-2")){OriginalIdentities();return 0;}Run();return 0;}catch(Exception ex){Console.WriteLine(ex);return 1;}}
   static bool Refused(Action action){try{action();return false;}catch{return true;}}
   static void LaunchEvidenceScope(){
    var f=new Fixture();var unknown=new Engine(f.E.Game,f.E.User,f.E.Data,true,()=>new SteamLaunchOptionsSnapshot(null,0,null,SteamLaunchOptionsState.UnknownIdentity));Assert(!Refused(unknown.GuardLaunch)&&(bool)Check(unknown)["canLaunch"],"unknown optional Steam identity does not block launch");Assert(Refused(unknown.Guard)&&Refused(unknown.GuardPlayProfile),"unknown Steam identity still blocks configuration mutation");
@@ -155,6 +155,69 @@ namespace PZ3D {
     Assert(config.SequenceEqual(File.ReadAllBytes(f.E.Config))&&!Directory.Exists(Path.Combine(f.E.Game,"OrangeLauncherRuntime")),"cancellation during preflight precedes component preparation");
    }
   }
-  public static void Run(){AuthoritativeRefusal();NativeSaveSelection();StrictSaveSelection();CancelledPreflight();FocusedMetadata();FocusedSources();FinalEvidence();LaunchEvidenceScope();CatalogWarnings();Clean();Configuration();State();Dependencies();KnownSources();MetadataBudget();Guards();Approvals();NoJavaProbe();ServerTarget();OptionalVersionBudget();OptionalMetadataBudget();OriginalIdentities();ValidOriginalIdentities();ExhaustedCacheAdapter();RetentionCollectorHandoff();MalformedCacheStillBlocks();Controller();NetworkDrain();Console.WriteLine("LAUNCH PREFLIGHT TESTS PASSED");}
+  static object NativeCall(ModernController controller,string method,params object[] args){try{return typeof(ModernController).GetMethod(method,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(controller,args);}catch(TargetInvocationException ex){throw ex.InnerException;}}
+  static void BindEngine(ModernController controller,Engine engine){typeof(ModernController).GetField("engine",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(controller,engine);}
+  static string Target(Fixture f,string kind){
+   if(kind=="normal")return "";
+   if(kind=="save"){string save=Path.Combine(f.E.User,"Saves","Sandbox","Chosen");Directory.CreateDirectory(save);File.WriteAllBytes(Path.Combine(save,"mods.txt"),SaveProfiles.ReplaceDefaultMods(null,new string[0]));return "Sandbox/Chosen";}
+   string id=Guid.NewGuid().ToString("N");Directory.CreateDirectory(f.E.Data);File.WriteAllText(Path.Combine(f.E.Data,"server-profiles.json"),Json.Serialize(new ServerProfiles.Store{servers=new List<ServerProfiles.Record>{new ServerProfiles.Record{id=id,name="Fixture",host="127.0.0.1",port=1,username="fixture",userCipher="",serverCipher="",description=""}}}));return id;
+  }
+  static bool NoStagedFiles(Engine e){return !LaunchProfiles.Pending(e)&&!Directory.Exists(Path.Combine(e.User,"mods","OrangeLauncherSession"))&&!File.Exists(Path.Combine(e.User,"Lua","OrangeLauncherSession.request.txt"))&&!File.Exists(Path.Combine(e.User,"Lua","OrangeLauncherSession.status.txt"));}
+  // Exercise both real dispatch routes. The existing Steam-options reader holds the
+  // final callback, and a fail-closed sentinel prevents any real transport on RED.
+  static void DispatchFinalCancellation(string only=null){
+   foreach(string kind in new[]{"normal","save","server"}.Where(k=>only==null||k==only)){
+    var f=new Fixture(true);string target=Target(f,kind);
+    try{using(var controller=new ModernController(f.E.Game,f.E.User,f.E.Data,false))using(var entered=new ManualResetEventSlim())using(var release=new ManualResetEventSlim()){
+     bool observed=false;int checks=0,finalChecks=0;Exception error=null;string id=null;
+     var selected=new Engine(f.E.Game,f.E.User,f.E.Data,false,()=>{
+      if(new StackTrace().GetFrames().Any(frame=>frame.GetMethod().Name=="ValidateLaunchEvidence")){
+       Interlocked.Increment(ref finalChecks);entered.Set();if(!release.Wait(10000))throw new TimeoutException("final validation test was not released");
+       try{NativeCall(controller,"RequireAttempt",id);}catch(OperationCanceledException){observed=true;}
+       if(!observed)throw new InvalidOperationException("Fixture safety barrier: final cancellation was ignored; no transport permitted.");
+      }
+      return SteamLaunchOptions.Unavailable();
+     },name=>new Process[0]);
+     BindEngine(controller,selected);var payload=GameStartupPresentationTests.Begin(controller,kind,target);id=(string)payload["startupId"];
+     controller.Progress=(v,text)=>{if(text=="正在启动游戏…")Interlocked.Increment(ref checks);};
+     var worker=new Thread(()=>{try{controller.Execute(kind=="normal"?"launch":"profileLaunch",payload);}catch(Exception ex){error=ex;}});worker.IsBackground=true;worker.Start();
+     bool held=entered.Wait(10000);byte[] prepared=held?File.ReadAllBytes(selected.Config):null,defaults=File.ReadAllBytes(selected.Mods);
+     if(held)controller.Execute("startupCancel",new Dictionary<string,object>{{"startupId",id}});release.Set();bool ended=worker.Join(10000);
+     Assert(held&&ended&&finalChecks==1&&checks==1,"one native "+kind+" preflight reaches the held final validation");
+     Assert(observed&&error is OperationCanceledException,"bound "+kind+" cancellation remains effective during final validation");
+     Assert(NoStagedFiles(selected)&&prepared.SequenceEqual(File.ReadAllBytes(selected.Config))&&defaults.SequenceEqual(File.ReadAllBytes(selected.Mods)),"cancelled "+kind+" final validation writes no Stage journal, request, status or default/config bytes");
+    }}finally{Directory.Delete(f.Root,true);}
+   }
+  }
+  // Real evidence + Prepare + Stage, with an in-memory transport only. Cancellation
+  // inside the read set and after commit cover both sides of the same native cutoff.
+  static void FinalCommitBoundary(string only=null){
+   foreach(string kind in new[]{"normal","save","server"}.Where(k=>only==null||k==only))foreach(bool cancelEvidence in new[]{false,true}){
+    var f=new Fixture(true);string target=Target(f,kind);
+    try{using(var controller=new ModernController(f.E.Game,f.E.User,f.E.Data,true)){
+     BindEngine(controller,f.E);var stages=new List<string>();var payload=GameStartupPresentationTests.Begin(controller,kind,target);string id=(string)payload["startupId"];
+     int checks=0,validations=0,transports=0;bool commitBeforeWrite=false;byte[] prepared=null,defaults=File.ReadAllBytes(f.E.Mods);Exception error=null;
+     controller.Progress=(v,text)=>{if(text=="正在启动游戏…")checks++;};
+     controller.StartupPresentation=value=>{stages.Add(value.Stage);if(value.Stage=="preparing"){commitBeforeWrite=NoStagedFiles(f.E);controller.Execute("startupCancel",new Dictionary<string,object>{{"startupId",id}});}};
+     try{controller.RunStartupPresentation(kind=="normal"?"launch":"profileLaunch",payload,()=>{
+      var report=(LaunchPreflightReport)NativeCall(controller,"RequireLaunchPreflight",kind,target);Assert(report.canLaunch,"final-boundary "+kind+" fixture has valid evidence");
+      report.Evidence.Expect(()=>{validations++;if(cancelEvidence)controller.Execute("startupCancel",new Dictionary<string,object>{{"startupId",id}});});
+      GameStartupComponent.Prepare(f.E,id);prepared=File.ReadAllBytes(f.E.Config);
+      var request=new ProfileLaunchRequest{Kind=kind,Id=target,Mode="Sandbox",Save="Chosen",Host="127.0.0.1",Port=1,Username="fixture",StartupSessionId=id,ValidateBeforeStage=()=>NativeCall(controller,"ValidateLaunchEvidence",report)};
+      LaunchProfiles.Stage(f.E,request);transports++;return new GameLaunchOutcome{message="fixture transport"};
+     });}catch(Exception ex){error=ex;}
+     Assert(checks==1&&validations==1,"single "+kind+" preflight and exact read-set validation at commit boundary");
+     if(cancelEvidence){
+      Assert(error is OperationCanceledException&&transports==0&&!stages.Contains("preparing")&&!stages.Contains("submitted"),"cancellation inside "+kind+" evidence prevents commit and fake transport");
+      Assert(NoStagedFiles(f.E)&&prepared.SequenceEqual(File.ReadAllBytes(f.E.Config))&&defaults.SequenceEqual(File.ReadAllBytes(f.E.Mods)),"evidence cancellation preserves prepared "+kind+" config and all Stage outputs");
+     }else{
+      Assert(error==null&&commitBeforeWrite&&transports==1&&stages.SequenceEqual(new[]{"preparing","submitted"}),"validated "+kind+" commits before first Stage write and preserves postcommit cancellation contract");
+      string[] receipt=File.ReadAllLines(Path.Combine(f.E.User,"Lua","OrangeLauncherSession.request.txt"));Assert(receipt[1]==id&&receipt[3]==kind&&(kind!="server"||receipt[6]=="127.0.0.1")&&(kind!="save"||receipt[5]=="Chosen"),"fake transport receives only the bound "+kind+" target");
+      LaunchProfiles.Recover(f.E,true);Assert(defaults.SequenceEqual(File.ReadAllBytes(f.E.Mods))&&!LaunchProfiles.Pending(f.E),"successful "+kind+" fixture remains recoverable");
+     }
+    }}finally{Directory.Delete(f.Root,true);}
+   }
+  }
+  public static void Run(){AuthoritativeRefusal();NativeSaveSelection();StrictSaveSelection();CancelledPreflight();DispatchFinalCancellation();FinalCommitBoundary();FocusedMetadata();FocusedSources();FinalEvidence();LaunchEvidenceScope();CatalogWarnings();Clean();Configuration();State();Dependencies();KnownSources();MetadataBudget();Guards();Approvals();NoJavaProbe();ServerTarget();OptionalVersionBudget();OptionalMetadataBudget();OriginalIdentities();ValidOriginalIdentities();ExhaustedCacheAdapter();RetentionCollectorHandoff();MalformedCacheStillBlocks();Controller();NetworkDrain();Console.WriteLine("LAUNCH PREFLIGHT TESTS PASSED");}
  }
 }
