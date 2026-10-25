@@ -110,7 +110,7 @@ namespace PZ3D {
   }
   public static string FindSteam(){using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){return k==null?null:(k.GetValue("SteamPath") as string);}}
   public static string DetectGame(){
-   return GameDiscovery.Find(GameDiscovery.SteamRoots());
+   return GameDiscovery.Detect();
   }
   internal void ValidateSwitchJson(){if(!BuddyLaunchArguments.CleanJson(File.ReadAllText(Config)).Safe)throw new Exception("启动 JSON 含不明确的 Buddy 参数，未作修改，请人工检查。");}
   public string Switch(bool on,bool models){using(PlayProfileTransaction.Lock(this)){return SwitchUnlocked(on,models);}}
@@ -182,7 +182,7 @@ namespace PZ3D {
    root.RowStyles.Add(new RowStyle(SizeType.Absolute,68));root.RowStyles.Add(new RowStyle(SizeType.Absolute,56));root.RowStyles.Add(new RowStyle(SizeType.Absolute,90));root.RowStyles.Add(new RowStyle(SizeType.Absolute,94));root.RowStyles.Add(new RowStyle(SizeType.Absolute,110));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,95));
    var heading=new Label{Text="PZ 3D MANAGER\nViewpoint + ZombieBuddy · 随时切换",Dock=DockStyle.Fill,Font=new Font(Font.FontFamily,17,FontStyle.Bold)};root.Controls.Add(heading);
    var row=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=2};row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,130));
-   path=new TextBox{Dock=DockStyle.Top,Text=Engine.DetectGame(),BackColor=card,ForeColor=fg,BorderStyle=BorderStyle.FixedSingle};string saved=Path.Combine(data,"game-path.txt");if(File.Exists(saved)&&GameDiscovery.IsGameFolder(File.ReadAllText(saved).Trim()))path.Text=File.ReadAllText(saved).Trim();row.Controls.Add(path,0,0);row.Controls.Add(Button("选择游戏目录",ChooseGameDirectory),1,0);root.Controls.Add(row);
+   path=new TextBox{Dock=DockStyle.Top,Text=GameDiscovery.InitialGame(Path.Combine(data,"game-path.txt")),BackColor=card,ForeColor=fg,BorderStyle=BorderStyle.FixedSingle};row.Controls.Add(path,0,0);row.Controls.Add(Button("选择游戏目录",ChooseGameDirectory),1,0);root.Controls.Add(row);
    var hw=new Panel{Dock=DockStyle.Fill,BackColor=card,Padding=new Padding(12)};gpu=new Label{Dock=DockStyle.Top,Height=30,Text="正在检测显卡和显存…"};advice=new Label{Dock=DockStyle.Fill,Text="建议仅供参考，最终取决于场景、模组和光影兼容性。"};hw.Controls.Add(advice);hw.Controls.Add(gpu);root.Controls.Add(hw);
    root.Controls.Add(CreateDashboard());
    var operationPanel=new TableLayoutPanel{Dock=DockStyle.Fill,RowCount=3,ColumnCount=1};operationPanel.RowStyles.Add(new RowStyle(SizeType.Absolute,48));operationPanel.RowStyles.Add(new RowStyle(SizeType.Absolute,28));operationPanel.RowStyles.Add(new RowStyle(SizeType.Absolute,24));
