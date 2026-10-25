@@ -76,11 +76,11 @@ namespace PZ3D {
    if(safe){pending=LaunchProfiles.Pending(e)||BuddyTakeover.Pending(e)||PlayProfileTransaction.Pending(e);items.Add(Item("recovery",pending?"error":"ok","启动会话与参数恢复",pending?"有尚未恢复的启动会话、游玩配置或旧 Buddy 参数接管，请先完成恢复。":"未发现待恢复的启动会话或参数接管。","maintenance"));bool workshop=File.Exists(Path.Combine(e.Data,"workshop-rebuild.pending"));items.Add(Item("workshop",workshop?"error":"ok","工坊维护",workshop?"工坊重新下载尚未完成，请先完成维护。":"未发现未完成的工坊重新下载。","maintenance"));}
    else{items.Add(Item("recovery","error","路径安全","已知检查路径含联接或重解析点，未继续读取。请核对所选目录。","maintenance"));items.Add(Item("workshop","warning","工坊维护","检查路径不安全，未读取工坊维护状态。","maintenance"));}
    string reason="";
-   if(safe){try{if(File.Exists(e.Config)&&new FileInfo(e.Config).Length<=2097152){string text=File.ReadAllText(e.Config);var cleanup=BuddyLaunchArguments.CleanJson(text);if(!cleanup.Safe||cleanup.Changed)reason="启动 JSON 存在不明确或重复的 Buddy 参数，请在组件或维护页核对。";else reason=LauncherLaunch.PreparationReason(e,false,false);}else reason="游戏启动配置缺失或超出安全读取上限，请核对游戏目录。";config=reason=="";}catch{reason="游戏启动配置无法安全读取，请核对游戏目录与 JSON。";}}
+   if(safe){try{if(File.Exists(e.Config)&&new FileInfo(e.Config).Length<=2097152)reason=LauncherLaunch.PreparationReason(e,false,false);else reason="游戏启动配置缺失或超出安全读取上限，请核对游戏目录。";config=reason=="";}catch{reason="游戏启动配置无法安全读取，请核对游戏目录与 JSON。";}}
    else reason="检查路径不安全，未读取启动配置。";
    items.Add(Item("launch-config",config?"ok":"error","游戏与启动配置",config?"游戏启动文件和参数正常。":reason,"components"));
    bool guarded=false;string guardReason="启动参数无法核实，请检查当前游戏配置。";if(safe&&config&&!pending){try{e.GuardLaunch();guarded=true;}catch(Exception ex){guardReason=LauncherJournal.Sanitize(ex.Message);if(guardReason.Length>512)guardReason=guardReason.Substring(0,512);}}
-   items.Add(Item("launch-guard",guarded?"ok":safe&&config&&pending?"warning":"error","旧启动参数与 Steam 检查",guarded?"当前启动配置检查通过。":pending?"请完成待恢复会话后重新检查启动参数。":guardReason,"maintenance"));
+   items.Add(Item("launch-guard",guarded?"ok":safe&&(!config||pending)?"warning":"error","旧启动参数与 Steam 检查",guarded?"当前启动配置检查通过。":pending?"请完成待恢复会话后重新检查启动参数。":safe&&!config?"请先修复游戏启动配置，再检查启动参数。":guardReason,"maintenance"));
    bool modsChecked=false;
    if(safe){try{
     byte[] bytes=budget.Read(e.Mods,1048576);string[] mods=ModConfigurations.ValidatePreflightMods(SaveProfiles.DefaultMods(bytes)),defaultMods=mods;byte[] parsed=SaveProfiles.ReplaceDefaultMods(bytes,mods);
