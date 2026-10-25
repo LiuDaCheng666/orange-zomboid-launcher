@@ -7,14 +7,18 @@ import java.nio.file.*;
 import javax.imageio.ImageIO;
 
 public final class SceneProbe implements LoadingScene.Canvas {
-    final Graphics2D g;final BufferedImage logo;final int width,height;
+    final Graphics2D g;final BufferedImage logo;final LogoGrowth.Parts parts;final int width,height;
+    private static BufferedImage lastLogo;private static LogoGrowth.Parts lastParts;
+    private static synchronized LogoGrowth.Parts parts(BufferedImage logo){if(lastLogo!=logo){lastLogo=logo;lastParts=LogoGrowth.split(logo);}return lastParts;}
     int labels;final Font font=new Font("Microsoft YaHei",Font.PLAIN,16);
-    SceneProbe(BufferedImage image,BufferedImage logo){this.g=image.createGraphics();this.logo=logo;width=image.getWidth();height=image.getHeight();g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);}
+    SceneProbe(BufferedImage image,BufferedImage logo){this.g=image.createGraphics();this.logo=logo;this.parts=parts(logo);width=image.getWidth();height=image.getHeight();g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);}
     public void gradient(double x,double y,double w,double h,int top,int bottom){g.setPaint(new GradientPaint((float)x,(float)y,new Color(top,true),(float)x,(float)(y+h),new Color(bottom,true)));g.fill(new Rectangle2D.Double(x,y,w,h));}
     public void glow(double x,double y,double radius,int center,int edge){g.setPaint(new RadialGradientPaint(new Point2D.Double(x,y),(float)radius,new float[]{0,1},new Color[]{new Color(center,true),new Color(edge,true)}));g.fill(new Ellipse2D.Double(x-radius,y-radius,radius*2,radius*2));}
     public void arc(double x,double y,double r,double thickness,double start,double length,int color){g.setColor(new Color(color,true));g.setStroke(new BasicStroke((float)thickness));g.draw(new Arc2D.Double(x-r,y-r,r*2,r*2,-Math.toDegrees(start),-Math.toDegrees(length),Arc2D.OPEN));}
     public void line(double x1,double y1,double x2,double y2,double thickness,int color){g.setColor(new Color(color,true));g.setStroke(new BasicStroke((float)thickness));g.draw(new Line2D.Double(x1,y1,x2,y2));}
-    public void logo(double x,double y,double size,double alpha,double angle){AffineTransform saved=g.getTransform();try{g.translate(x,y);g.rotate(angle);g.drawImage(logo,(int)(-size/2),(int)(-size/2),(int)size,(int)size,null);}finally{g.setTransform(saved);}}
+    private void part(BufferedImage source,AffineTransform transform,double alpha){Composite saved=g.getComposite();try{g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER,(float)Math.max(0,Math.min(1,alpha))));transform.scale(1d/source.getWidth(),1d/source.getHeight());g.drawImage(source,transform,null);}finally{g.setComposite(saved);}}
+    public void logo(double x,double y,double size,double alpha,double angle){part(logo,LogoGrowth.transform(x,y,size,angle,1,0,false),alpha);}
+    public void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle){part(parts.body(),LogoGrowth.transform(x,y,size,angle,leafScale,leafAngle,false),alpha);part(parts.leaf(),LogoGrowth.transform(x,y,size,angle,leafScale,leafAngle,true),alpha);}
     public double measure(String text,double size){return g.getFontMetrics(font.deriveFont((float)LoadingScene.font(size))).stringWidth(text);}
     public void text(String value,double x,double y,double size,int color,boolean right){
         g.setFont(font.deriveFont((float)LoadingScene.font(size)));g.setColor(new Color(color,true));FontMetrics metrics=g.getFontMetrics();double xx=right?x-metrics.stringWidth(value):x;

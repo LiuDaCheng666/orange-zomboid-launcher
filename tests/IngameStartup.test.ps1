@@ -28,6 +28,8 @@ if($LASTEXITCODE -ne 0){throw 'Owned server public query behavior failed'}
 if($LASTEXITCODE -ne 0){throw 'Loading scene animation/context behavior failed'}
 & java '-Djava.awt.headless=true' -cp ($classes+';'+$asset) ozl.startup.tests.SceneProbe (Join-Path $output 'scenes') (Join-Path $repo 'Orange3DTool\Assets\orange-app.png')
 if($LASTEXITCODE -ne 0){throw 'Loading scene viewport checks failed'}
+& java '-Djava.awt.headless=true' -cp ($classes+';'+$asset) ozl.startup.tests.GrowthRasterTest (Join-Path $output 'growth') (Join-Path $repo 'Orange3DTool\Assets\orange-app.png')
+if($LASTEXITCODE -ne 0){throw 'Sustained growth raster contracts failed'}
 $fixture=Join-Path $output ('game-'+[guid]::NewGuid().ToString('N'))
 $owned=Join-Path $fixture 'OrangeLauncherRuntime\startup'
 New-Item -ItemType Directory -Path $owned -Force | Out-Null
@@ -43,7 +45,7 @@ Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.RefinementTransformerTest;if($LASTEXITCODE -ne 0){throw 'Refinement agent behavior failed'}}finally{Pop-Location}
 Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.ServerInformationTransformerTest;if($LASTEXITCODE -ne 0){throw 'Server information agent behavior failed'}}finally{Pop-Location}
-foreach($probe in @('NativeCompositionTest','NativeLifecycleTest','QueueCompositionTest','NativeLuaGlProbe')){
+foreach($probe in @('NativeCompositionTest','NativeLifecycleTest','NativeStatusTest','QueueCompositionTest','NativeLuaGlProbe')){
  Push-Location $fixture
  try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.IsolatedLuaProbe $probe $GameDirectory (Join-Path $output 'native-composition');if($LASTEXITCODE -ne 0){throw "Native Lua composition fixture failed: $probe"}}finally{Pop-Location}
 }

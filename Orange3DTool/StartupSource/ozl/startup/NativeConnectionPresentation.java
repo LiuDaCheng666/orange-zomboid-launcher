@@ -36,8 +36,12 @@ public final class NativeConnectionPresentation {
     }
     /** Resolve on the game CPU thread, before enqueue. Missing/modified contracts simply decline. */
     public Lease resolve(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean queueScope){
+        return resolve(loader,state,frame,queueScope,true);
+    }
+    public Lease statusPage(ClassLoader loader,LoadingModel.Snapshot state){return resolve(loader,state,0,false,false);}
+    private Lease resolve(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean queueScope,boolean drawing){
         try{
-            if(!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",loader),"useUiFbo")))return null;
+            if(drawing&&!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",loader),"useUiFbo")))return null;
             Object env=field(type("zombie.Lua.LuaManager",loader),"env");if(env==null)return null;
             Object mainTable=raw(raw(env,"MainScreen"),"instance"),main=element(mainTable);if(main==null||!visible(main)||Boolean.TRUE.equals(raw(mainTable,"inGame")))return null;
             namedType(loader,mainTable,"MainScreen");
@@ -63,6 +67,14 @@ public final class NativeConnectionPresentation {
         }catch(Throwable unavailable){return null;}
     }
     public void accept(Lease lease){if(lease!=null)current.set(lease);}
+    /** A separate read observation; never arms or extends a rendering lease. */
+    public Object statusIdentity(Lease lease){try{return lease==null?null:raw(lease.connectTable,"connectLabel");}catch(Throwable unavailable){return null;}}
+    public String statusAfter(Lease before,LoadingModel.Snapshot state,Object label){
+        if(before==null||state==null||!state.active||state.generation!=before.generation||state.epoch!=before.epoch)return "";
+        Lease after=statusPage(before.loader,state);
+        if(after==null||before.environment!=after.environment||before.mainTable!=after.mainTable||before.connectTable!=after.connectTable||label!=statusIdentity(after))return "";
+        try{Object value=raw(label,"name");return value instanceof String s&&s.length()<=256?LoadingModel.safe(s,256):"";}catch(Throwable unavailable){return "";}
+    }
     public void clear(){current.remove();}
     private Lease valid(){
         Lease lease=current.get();if(lease==null)return null;

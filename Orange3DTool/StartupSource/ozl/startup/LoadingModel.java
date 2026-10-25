@@ -114,12 +114,14 @@ public final class LoadingModel {
         detail=safe((owner.isEmpty()?"":owner+" / ")+name,120);
         append("脚本  ·  "+detail);
     }
-    private void reset(Context next,Route target){epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
+    private void reset(Context next,Route target){lastNativeStatus="";epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
     public synchronized void nativeInteraction(boolean value){if(serverOperation&&context==Context.SERVER&&route==Route.BEHIND_UI&&nativeInteraction!=value){nativeInteraction=value;epoch++;}}
     public synchronized void menuReady(){reset(Context.NONE,Route.NONE);clearServer();}
     public synchronized void serverBegin(String friendly){serverBegin(friendly,"",0);}
     public synchronized void serverBegin(String friendly,String host,int port){if(disabled)return;clearServer();serverOperation=true;reset(Context.SERVER,Route.BEHIND_UI);name=safe(friendly,96);server.name=name;endpoint(generation,host,port);title="正在连接服务器";stage="连接";append(title);}
     public synchronized void serverResume(){if(disabled)return;if(context==Context.SERVER&&route==Route.BEHIND_UI)return;if(!serverOperation){clearServer();serverOperation=true;}reset(Context.SERVER,Route.BEHIND_UI);name=server.name;map=server.map;requestedMods=server.mods;workshopProjects=server.projects;title="正在连接服务器";stage="连接";append(title);}
+    private String lastNativeStatus="";
+    public synchronized void nativeStatus(long operation,String label){if(operation!=generation||disabled||nativeInteraction||context!=Context.SERVER||route!=Route.BEHIND_UI||label.isEmpty()||label.equals(lastNativeStatus))return;lastNativeStatus=label;detail=label;append(label);}
     public synchronized void serverStage(String actual,int projects,int modsCount){
         if(disabled||context!=Context.SERVER||route!=Route.BEHIND_UI)return;
         String label=switch(actual==null?"":actual){case "Start","TestTCP" -> "正在连接服务器";case "WorkshopInit","WorkshopQuery" -> "正在检查创意工坊项目";case "WorkshopConfirm","ServerWorkshopItemScreen" -> "创意工坊项目确认";case "WorkshopUpdate" -> "正在同步创意工坊项目";case "CheckMods" -> "正在检查服务器模组";case "Finish" -> "正在接收连接信息";case "Loading" -> "正在同步服务器数据";default -> "";};

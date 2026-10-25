@@ -25,13 +25,17 @@ public final class NativeLuaGlProbe {
   try{GLFW.glfwMakeContextCurrent(window);GL.createCapabilities();Display.created=true;GameRenderer nativeCanvas=new GameRenderer();SpriteRenderer sprites=SpriteRenderer.instance;
    for(int[] size:new int[][]{{1280,720},{1920,1080}}){int w=size[0],h=size[1];Display.width=w;Display.height=h;GL11.glViewport(0,0,w,h);GL11.glMatrixMode(GL11.GL_PROJECTION);GL11.glLoadIdentity();GL11.glOrtho(0,w,h,0,-1,1);GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glLoadIdentity();GL11.glEnable(GL11.GL_BLEND);GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
     NativeLuaFixture f=new NativeLuaFixture(Path.of(args[0]),w,h);StartupRuntime.serverBegin("Native composition fixture");
+    new zombie.gameStates.ConnectToServerState().enter();
+    f.function("getText",(call,n)->call.push("UI_servers_SteamConnecting".equals(call.get(0))?"Trying Steam connection…":call.get(0)));
+    zombie.Lua.LuaEventManager.original=(event,values)->{if(event.equals("OnConnectionStateChanged"))f.thread.call(f.thread.tableget(f.connect.getTable(),"OnConnectionStateChanged"),new Object[]{f.connect.getTable(),values[0]});};
+    zombie.Lua.LuaEventManager.triggerEvent("OnConnectionStateChanged","SteamConnecting");
     sprites.background=()->{GL11.glClearColor(.08f,.11f,.14f,1);GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);};
     UIElement.drawing=d->{f.draws.add(d);sprites.queue.add((Runnable)()->{double ox=d.element==f.connect?number(f.connect,"x"):0,oy=d.element==f.connect?number(f.connect,"y"):0;
       if(d.texture!=null&&d.texture==f.main.getTable().rawget("logoTexture")){nativeCanvas.text("PROJECT",d.x,d.y+30,32,0xffe4e4e4,false);nativeCanvas.text("ZOMBOID",d.x,d.y+70,48,0xffe4e4e4,false);}
       else rect(ox+d.x,oy+d.y,d.w,d.h,d.r,d.g,d.b,d.a);
     });};
     String[] names={"title","serverName1","serverName","userName1","userName","richText","connectLabel","backBtn"};
-    for(String name:names){UIElement child=f.child(name);child.nativeRender=()->sprites.queue.add((Runnable)()->{double x=number(f.connect,"x")+number(child,"x"),y=number(f.connect,"y")+number(child,"y"),height=number(child,"height");String text=name.equals("connectLabel")?"Contacting server…":name.equals("backBtn")?"Abort":name.equals("richText")?"Native connection reminder":name.equals("title")?"Connect to server":"Fixture identity";
+    for(String name:names){UIElement child=f.child(name);child.nativeRender=()->sprites.queue.add((Runnable)()->{double x=number(f.connect,"x")+number(child,"x"),y=number(f.connect,"y")+number(child,"y"),height=number(child,"height");String text=name.equals("connectLabel")?(String)child.getTable().rawget("name"):name.equals("backBtn")?"Abort":name.equals("richText")?"Native connection reminder":name.equals("title")?"Connect to server":"Fixture identity";
      if(name.equals("backBtn")){rect(x,y,100,height,.1,.1,.1,.9);rect(x,y,100,1,1,1,1,1);rect(x,y+height-1,100,1,1,1,1,1);nativeCanvas.text(text,x+29,y+height-6,14,0xffffffff,false);}
      else nativeCanvas.text(text,x-nativeCanvas.measure(text,name.equals("title")?20:16)/2,y+Math.min(height,20),name.equals("title")?20:16,0xffffffff,false);
     });}
@@ -41,6 +45,16 @@ public final class NativeLuaGlProbe {
     boolean coherent=f.draws.isEmpty();sprites.recycle();
     if(before){check(!coherent,"pre-fix image reproduces native Lua logo and modal over owned scene");continue;}
     check(coherent,"actual native Lua logo/fill/border/arrows removed");check(f.child("title").renders==0&&f.child("connectLabel").renders==1&&f.child("backBtn").renders==1,"exact decorative child filter retains status and Abort");
+    java.lang.reflect.Field rendererField=StartupRuntime.class.getDeclaredField("renderer");rendererField.setAccessible(true);Object renderer=rendererField.get(null);java.lang.reflect.Field clockField=GameRenderer.class.getDeclaredField("animation");clockField.setAccessible(true);Object clock=clockField.get(renderer);java.lang.reflect.Field origin=AnimationClock.class.getDeclaredField("origin");origin.setAccessible(true);
+    for(double seconds:new double[]{4,7,8.399,8.401,11,16}){
+     origin.setLong(clock,System.nanoTime()-(long)(seconds*1e9));MainScreenState.instance.render();sprites.drain();BufferedImage late=capture(w,h,output.resolve("native-lua-growth-"+w+"-t"+seconds+".png"));
+     check(white(late,w/2-120,statusY,240,28)>150&&white(late,w/2-50,buttonY,100,25)>100,"native status/Abort survive late growth at "+seconds);sprites.recycle();
+    }
+    Path receipt=Path.of("OrangeLauncherRuntime/startup/session.properties");String receiptText=Files.readString(receipt);Session light;
+    try{Files.writeString(receipt,receiptText.replace("theme=dark","theme=light"));light=Session.read(Path.of("OrangeLauncherRuntime/startup/OrangeStartup.jar"),Path.of(System.getProperty("user.dir")),System.currentTimeMillis()/1000);}finally{Files.writeString(receipt,receiptText);}
+    check(light!=null&&light.theme.equals("light"),"actual temporary fixture light receipt accepted");StartupRuntime.begin(light);StartupRuntime.serverBegin("Light preference fixture");new zombie.gameStates.ConnectToServerState().enter();zombie.Lua.LuaEventManager.triggerEvent("OnConnectionStateChanged","SteamConnecting");origin.setLong(clock,System.nanoTime()-4_000_000_000L);
+    MainScreenState.instance.render();sprites.drain();BufferedImage lightFrame=capture(w,h,output.resolve("native-lua-light-"+w+".png"));
+    check(white(lightFrame,w/2-120,statusY,240,28)>150&&white(lightFrame,w/2-50,buttonY,100,25)>100,"white native status/Abort remain readable with light preference");check(((lightFrame.getRGB(20,statusY)>>16)&255)<64,"light native route keeps dark backing without changing native controls");sprites.recycle();
     // A deferred owned failure cannot remove essential native commands, and next frame fails open.
     if(w==1920){StartupRuntime.begin(null);StartupRuntime.serverBegin("Renderer failure fixture");MainScreenState.instance.render();sprites.drain();BufferedImage failed=capture(w,h,output.resolve("native-lua-renderer-failure.png"));check(!StartupRuntime.snapshot().active&&white(failed,w/2-50,buttonY,100,25)>100,"owned draw failure preserves same-frame native Abort");sprites.recycle();f.draws.clear();MainScreenState.instance.render();sprites.drain();capture(w,h,output.resolve("native-lua-failure-next-native.png"));check(!f.draws.isEmpty(),"renderer failure restores full native decoration on following frame");sprites.recycle();}
    }

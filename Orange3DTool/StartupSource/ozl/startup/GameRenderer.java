@@ -12,7 +12,7 @@ import org.lwjgl.opengl.*;
 public final class GameRenderer implements LoadingScene.Canvas {
     private record Texture(int id,int width,int height) {}
     private final LinkedHashMap<String,Texture> words=new LinkedHashMap<>(96,.75f,true);
-    private Texture logo;
+    private Texture logo,body,leaf;
     private final Font font=new Font("Microsoft YaHei",Font.PLAIN,16);
     private final BufferedImage measureImage=new BufferedImage(1,1,BufferedImage.TYPE_INT_ARGB);
     private final Graphics2D measure=measureImage.createGraphics();
@@ -35,7 +35,7 @@ public final class GameRenderer implements LoadingScene.Canvas {
             GL11.glEnable(GL11.GL_BLEND);GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);GL14.glBlendEquation(GL14.GL_FUNC_ADD);GL11.glColorMask(true,true,true,true);GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK,GL11.GL_FILL);
             GL11.glMatrixMode(GL11.GL_PROJECTION);GL11.glPushMatrix();projection=true;GL11.glLoadIdentity();GL11.glOrtho(0,width,height,0,-1,1);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPushMatrix();modelview=true;GL11.glLoadIdentity();
-            if(logo==null){try(InputStream input=GameRenderer.class.getResourceAsStream("/ozl/startup/orange.png")){if(input==null)throw new IOException("Missing OZL mark");logo=upload(ImageIO.read(input));}}
+            if(logo==null){try(InputStream input=GameRenderer.class.getResourceAsStream("/ozl/startup/orange.png")){if(input==null)throw new IOException("Missing OZL mark");BufferedImage source=ImageIO.read(input);logo=upload(source);LogoGrowth.Parts parts=LogoGrowth.split(source);body=upload(parts.body());leaf=upload(parts.leaf());}}
             double visible=animation.seconds(state.epoch,state.context+":"+state.route,System.nanoTime());
             LoadingScene.draw(this,width,height,state,visible,"light".equals(session.theme),session.reducedMotion,used,maximum,statusBottom,cancelTop);
         } finally {
@@ -61,6 +61,15 @@ public final class GameRenderer implements LoadingScene.Canvas {
         GL11.glDisable(GL11.GL_TEXTURE_2D);color(color);GL11.glBegin(GL11.GL_QUADS);GL11.glVertex2d(x1+dx,y1+dy);GL11.glVertex2d(x2+dx,y2+dy);GL11.glVertex2d(x2-dx,y2-dy);GL11.glVertex2d(x1-dx,y1-dy);GL11.glEnd();
     }
     public void logo(double x,double y,double size,double alpha,double angle){if(logo!=null){GL11.glPushMatrix();try{GL11.glTranslated(x,y,0);GL11.glRotated(Math.toDegrees(angle),0,0,1);quad(logo,-size/2,-size/2,size,size,alpha);}finally{GL11.glPopMatrix();}}}
+    public void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle){
+        if(body==null)return;
+        for(boolean isLeaf:new boolean[]{false,true}){
+            java.awt.geom.AffineTransform transform=LogoGrowth.transform(x,y,size,angle,leafScale,leafAngle,isLeaf);
+            double[] points={0,0,1,0,1,1,0,1};transform.transform(points,0,points,0,4);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);GL11.glBindTexture(GL11.GL_TEXTURE_2D,(isLeaf?leaf:body).id);GL11.glColor4d(1,1,1,alpha);GL11.glBegin(GL11.GL_QUADS);
+            for(int i=0;i<4;i++){GL11.glTexCoord2d(i==1||i==2?1:0,i>=2?1:0);GL11.glVertex2d(points[i*2],points[i*2+1]);}GL11.glEnd();GL11.glDisable(GL11.GL_TEXTURE_2D);
+        }
+    }
     private static void quad(Texture texture,double x,double y,double w,double h,double alpha){
         GL11.glEnable(GL11.GL_TEXTURE_2D);GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture.id);GL11.glColor4d(1,1,1,alpha);GL11.glBegin(GL11.GL_QUADS);GL11.glTexCoord2d(0,0);GL11.glVertex2d(x,y);GL11.glTexCoord2d(1,0);GL11.glVertex2d(x+w,y);GL11.glTexCoord2d(1,1);GL11.glVertex2d(x+w,y+h);GL11.glTexCoord2d(0,1);GL11.glVertex2d(x,y+h);GL11.glEnd();GL11.glDisable(GL11.GL_TEXTURE_2D);
     }

@@ -96,6 +96,23 @@ public final class StartupRuntime {
     public static void queueUpdate(Object state){if(state!=null&&flag(state.getClass(),"cancel"))handoff(false);}
     public static void queueRedirect(Object next){handoff(next!=null&&next.getClass().getName().equals("zombie.gameStates.GameLoadingState"));}
     public static void connectionEvent(String state){switch(state){case "Failed","Disconnected","Disconnecting","ClientVersionMismatch" -> handoff(false);default -> {}}}
+    private record StatusObservation(Object owner,NativeConnectionPresentation.Lease page,Object label) {}
+    private static boolean passiveState(String state){return switch(state){case "Connecting","GettingServerInfo","UDPConnecting","SteamConnecting","AuthPending","ConnectionPending","TestTCP","Connected","ConnectionImmediately","ApplyRequest" -> true;default -> false;};}
+    public static Object statusBefore(Object state,Object message,Object argument){
+        if(!(state instanceof String key))return null;
+        boolean allowed=passiveState(key);
+        if(key.equals("Message"))allowed=message instanceof String suffix&&passiveState(suffix);
+        if(key.equals("FormatMessage"))allowed="PlaceInQueue".equals(message)&&integer(argument)>=0&&integer(argument)<=255;
+        LoadingModel.Snapshot s=snapshot();Object owner=connectionOwner;
+        if(!allowed||s==null||!s.active||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||owner==null)return null;
+        NativeConnectionPresentation.Lease page=presentation.statusPage(owner.getClass().getClassLoader(),s);Object label=presentation.statusIdentity(page);
+        return page==null||label==null?null:new StatusObservation(owner,page,label);
+    }
+    public static void statusAfter(Object value){
+        if(!(value instanceof StatusObservation observation)||observation.owner!=connectionOwner)return;
+        LoadingModel m=model;if(m==null)return;LoadingModel.Snapshot s=m.snapshot();String label=presentation.statusAfter(observation.page,s,observation.label);
+        if(!label.isEmpty())m.nativeStatus(s.generation,label);
+    }
     public static void workshopEvent(Object flag,Object item,Object bytes,Object total){
         LoadingModel m=model;if(m==null||!(flag instanceof String kind))return;
         switch(kind){case "Error" -> handoff(false);case "Required" -> {m.workshop(listSize(item),-1,-1);workshopInteraction=new WorkshopInteraction(connectionOwner,m.snapshot().generation);presentation.clear();m.nativeInteraction(true);}

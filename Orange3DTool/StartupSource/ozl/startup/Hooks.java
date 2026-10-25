@@ -133,14 +133,16 @@ public final class Hooks {
     public static final class AspectDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element,@Advice.Argument(0)Object texture){return StartupRuntime.skipTexture(element,texture,"ASPECT");}}
     public static final class EndUI {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.This Object core){StartupRuntime.endFrameUI(core);}}
     public static final class Event {
-        @Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.Argument(0)String event,@Advice.Argument(value=1,optional=true)Object a,@Advice.Argument(value=2,optional=true)Object b,@Advice.Argument(value=3,optional=true)Object c,@Advice.Argument(value=4,optional=true)Object d){
-            // The name branches precede every payload access. Auth/QR payloads are never read.
-            if("OnGoogleAuthRequest".equals(event)||"OnQRReceived".equals(event)||"OnConnected".equals(event)){StartupRuntime.handoff(true);return;}
-            if("OnConnectFailed".equals(event)||"OnDisconnect".equals(event)){StartupRuntime.handoff(false);return;}
-            if("OnServerWorkshopItems".equals(event)){StartupRuntime.workshopEvent(a,b,c,d);return;}
-            if("OnConnectionStateChanged".equals(event)){if(a instanceof String state)StartupRuntime.connectionEvent(state);return;}
+        @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.Argument(0)String event,@Advice.Argument(value=1,optional=true)Object a,@Advice.Argument(value=2,optional=true)Object b,@Advice.Argument(value=3,optional=true)Object c,@Advice.Argument(value=4,optional=true)Object d){
+            // Branch before touching payloads; failure/auth text never enters public progress.
+            if("OnGoogleAuthRequest".equals(event)||"OnQRReceived".equals(event)||"OnConnected".equals(event)){StartupRuntime.handoff(true);return null;}
+            if("OnConnectFailed".equals(event)||"OnDisconnect".equals(event)){StartupRuntime.handoff(false);return null;}
+            if("OnServerWorkshopItems".equals(event)){StartupRuntime.workshopEvent(a,b,c,d);return null;}
+            if("OnConnectionStateChanged".equals(event)){if(a instanceof String state)StartupRuntime.connectionEvent(state);return StartupRuntime.statusBefore(a,b,c);}
             if("OnLoadedTileDefinitions".equals(event)||"OnLoadedMapZones".equals(event)||"OnGameTimeLoaded".equals(event))StartupRuntime.worldEvent(event);
+            return null;
         }
+        @Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Enter Object observation){StartupRuntime.statusAfter(observation);}
     }
     public static final class Swap {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(){StartupRuntime.beforeSwap();}}
     public static final class Idle {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.idle();}}
