@@ -11,7 +11,7 @@ namespace PZ3D {
   static bool Ready(ModernDispatchQueue queue){var p=typeof(ModernDispatchQueue).GetProperty("CanRestart");CoreFixture.Check(p!=null,"restart readiness is available without reservation");return (bool)p.GetValue(queue,null);}
   static object Preflight(ModernController controller,ModernDispatchQueue queue,bool capture=false){var m=typeof(ModernHostPolicy).GetMethod("CorePreflight",BindingFlags.Static|BindingFlags.NonPublic);CoreFixture.Check(m!=null,"native read-only restart preflight exists");return m.Invoke(null,new object[]{controller,queue,capture});}
   static bool Allowed(object result){return (bool)result.GetType().GetProperty("allowed").GetValue(result,null);}
-  public static int Main(string[] args){if(args.Length==1&&args[0]=="--fixture-game"){Thread.Sleep(60000);return 0;}if(args.Length!=0)return 2;try{Run();Console.WriteLine("CORE RESTART POLICY: "+CoreFixture.Passed+" PASS");return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
+  public static int Main(string[] args){LauncherRuntime.Initialize();if(args.Length==1&&args[0]=="--fixture-game"){Thread.Sleep(60000);return 0;}if(args.Length!=0)return 2;try{Run();Console.WriteLine("CORE RESTART POLICY: "+CoreFixture.Passed+" PASS");return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
   static void Run(){
    string root=CoreFixture.Root(),game=Path.Combine(root,"game"),user=Path.Combine(root,"user"),data=Path.Combine(root,"data");Directory.CreateDirectory(game);Directory.CreateDirectory(user);
    string image=Path.Combine(game,"ProjectZomboid64.exe");File.Copy(typeof(CoreFixture).Assembly.Location,image);File.WriteAllText(Path.Combine(game,"ProjectZomboid64.json"),"{\"vmArgs\":[]}");
