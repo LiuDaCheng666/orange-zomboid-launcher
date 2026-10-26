@@ -20,6 +20,16 @@
 
 所有检查均后台执行，没有打开真实前台游戏或Steam，没有把合成Stage/字节码测试声称为真实游戏进档验证。
 
-## 待发布校验
+## 发布校验
 
-发行构建、Defender、生产bootstrap与旧客户端更新、公开下载和网页历史同步回执在artifacts/publication-1.2.33记录。普通发布只更新发行文件、版本元数据和本次说明；保留网站current与页面资源/防护配置。
+源提交7a8314f1f581e09ac92d9429e7d396a8cbca0702，GitHub公开tag v1.2.33，自有服务器同步。正式目录E:\Projects\OrangeLauncher\dist\1.2.33-snapshots-ordering-20261027-final。10项发行文件、安装/便携归档和图标验证通过；Defender扫描未发现威胁。
+
+实际生产认证容器提取必需代理通过（4666292字节），保持21项bootstrap。旧1.2.32实际编译客户端在GitHub仍为草稿时从自有服务器下载并校验至Ready1.2.33；新1.2.33客户端为Latest。两来源20项匿名下载长度/SHA及当前feed/display元数据通过。
+
+网页仅同步changes.html，当前1.2.33，19项历史记录；1440/390px实际渲染无溢出。未切换网站current、未覆盖其它页面/样式/脚本/图片，未修改防护或SSH配置；843项受保护资源核对保持。网页备份/var/www/ozl/test-runs/changelog-193d92501d6749808ce06809390463f5/before.html。发布后固定指纹的密钥SSH/SFTP只读检查仍通过。
+
+Main EXE SHA256：6CACB700BCCB2AD89DF49F2C357702F03C3CE6EA55E07977F9A94BCD4287FE6A。
+Startup JAR SHA256：3AC14738AFF2A156A35FCB54C1F7CB0707EB4A4270F2FFF1702C364F3415732B。
+
+回执与公开校验：artifacts/publication-1.2.33，包括primary-receipt.json、production-agent.log、defender.log、old-client-ready.json、new-client-latest.json、public-download-proof.json、changelog-receipt.json及live-proof.json。
+
