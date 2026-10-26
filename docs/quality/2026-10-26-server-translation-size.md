@@ -21,3 +21,11 @@ The initial unpublished 1.2.25 candidate raised the per-file bound to 16 MiB. It
 - Final independent re-review passed after rerunning the nine synthetic and three actual-source checks; no release-blocking issue remains. It confirmed selected source-ID retention, whole-set fallback, bounded allocation arithmetic and narrow exception handling.
 
 Evidence is in ignored `artifacts/server-translation-20261026/`; publication receipts will be in `artifacts/publication-1.2.26/`. The real-source check reads public local translation files; it does not start Steam/game, write player files or test a live server join.
+
+## Published 1.2.26
+
+- Both first-party and GitHub public latest are 1.2.26, with ten assets each. GitHub release ID is `424092785`.
+- The actual 1.2.24 production updater checked and downloaded the first-party release to `Ready` before GitHub activation. The new production updater reports `Latest`. Both authenticated 21 bootstrap files and used isolated locators without applying an update or starting the game.
+- All twenty anonymous complete downloads matched local size/SHA-256; the current first-party feed matched too. Protected software-publication snapshots match for 748 paths; website, current, Caddy, HTTP guards and SSH configuration were preserved.
+- Archive/signature/icon verification and Defender scan passed. Final packaged assembly inspection confirms `MaxFileBytes` is absent and the optional-capacity fallback is present. Packaged main EXE SHA-256 is `389964E745DAA2F011D89AEA8D2D22935593276FAAF68944D4CE824ECCF14970`.
+- Post-release pinned-key SSH/SFTP checks passed. Final local package: `E:/Projects/OrangeLauncher/dist/1.2.26-server-translation-20261026-final`.
