@@ -60,6 +60,9 @@ async function manual(page){await page.getByRole('button',{name:'重启并更新
  await running.waitForFunction(()=>sent.some(m=>m.action==='coreUpdateApply'));assert.equal(await count(running,'coreUpdateApply'),1,'automatic/manual overlap and double consent apply once');
  assert.deepEqual(await running.evaluate(()=>sent.filter(m=>m.action==='coreUpdatePreflight').map(m=>m.payload)),[{protocol:1}]);await running.close();
 
+ for(const kind of ['launch','buddy','profile']){
+  const p=await setup(browser);await download(p);await p.evaluate(kind=>{if(kind==='launch')orange.state.status.launch.pending=true;if(kind==='buddy')orange.state.status.buddyRecovery.pending=true;if(kind==='profile')orange.state.playProfiles={pendingRecovery:{pending:true}};},kind);await emit(p);await p.locator('#confirm[open]').waitFor();await p.locator('#confirm-yes').click();await p.waitForFunction(()=>sent.some(m=>m.action==='coreUpdateApply'));assert.equal(await count(p,'coreUpdateApply'),1,kind+' idle recovery record cannot block signed self-update');assert.equal(await p.evaluate(kind=>kind==='launch'?orange.state.status.launch.pending:kind==='buddy'?orange.state.status.buddyRecovery.pending:orange.state.playProfiles.pendingRecovery.pending,kind),true,'self-update consent never removes '+kind+' recovery evidence');await p.close();
+ }
  for(const [name,options,prepare,event] of [
   ['startup Ready',{initial:{state:'Ready',taskId:A}},null,null],
   ['wrong version',{},null,{latestVersion:'9.9.9'}],
@@ -75,9 +78,6 @@ async function manual(page){await page.getByRole('button',{name:'重启并更新
   ['other modal',{},async p=>p.evaluate(()=>document.querySelector('#task-center').showModal()),{}],
   ['unsaved drafts',{},async p=>p.evaluate(()=>orange.state.memoryDirty=true),{}],
   ['active write task',{},async p=>p.evaluate(()=>reply({data:{event:'progress',data:{active:true,value:0,text:'Fixture writing'}}})),{}],
-  ['pending launch recovery',{},async p=>p.evaluate(()=>orange.state.status.launch.pending=true),{}],
-  ['pending Buddy recovery',{},async p=>p.evaluate(()=>orange.state.status.buddyRecovery.pending=true),{}],
-  ['profile recovery',{},async p=>p.evaluate(()=>orange.state.playProfiles={pendingRecovery:{pending:true}}),{}],
   ['local configuration transaction',{},async p=>p.evaluate(()=>orange.state.playApplying=true),{}],
   ['native recovery denial',{preflight:{protocol:1,allowed:false,message:'Fixture pending recovery'}},null,{}],
   ['unknown native readiness',{preflight:{}},null,{}],
@@ -101,7 +101,7 @@ async function manual(page){await page.getByRole('button',{name:'重启并更新
  }
  const readyReply=await setup(browser,{hold:'coreUpdateDownload'});await download(readyReply);await release(readyReply,'coreUpdateDownload',status({revision:20,state:'Ready',taskId:A}));await readyReply.locator('#confirm[open]').waitFor();await readyReply.close();
  const check=await setup(browser,{hold:'coreUpdateDownload'});await download(check);await check.getByRole('button',{name:'检查启动器更新',exact:true}).click();await release(check,'coreUpdateDownload',status({revision:20,state:'Ready',taskId:A}));await noPrompt(check,'new check invalidates old generation');await check.close();
- for(const during of ['task','version','draft','write','recovery','modal','protocol']){
+ for(const during of ['task','version','draft','write','modal','protocol']){
   const p=await setup(browser);await download(p);await emit(p);await p.locator('#confirm[open]').waitFor();
   if(during==='task')await emit(p,{revision:21,taskId:B});
   if(during==='version')await emit(p,{revision:21,latestVersion:'1.2.5'});

@@ -45,7 +45,7 @@ namespace PZ3D {
   static object Message(string message){return new{message=message};}
   bool Running(){return !test&&engine.RuntimeRunning();}
   bool ClientRunning(){return !test&&engine.RuntimeRunning(true);}
-  public void AssertCanRestart(){lock(gate){if(busy||networkRequests.Count!=0||workshopPreparation!=null&&workshopPreparation.Active)throw new InvalidOperationException("本机任务仍在结束，请稍后重试。");if(PlayProfileTransaction.Pending(engine))throw new InvalidOperationException(PlayProfileTransaction.PendingMessage);if(LaunchProfiles.Pending(engine))throw new InvalidOperationException("启动会话尚未恢复，请先恢复本地模组清单。");if(BuddyTakeover.Pending(engine))throw new InvalidOperationException("旧启动参数接管尚未恢复，请先完成恢复。");}}
+  public void AssertCanRestart(){lock(gate){if(busy||networkRequests.Count!=0||workshopPreparation!=null&&workshopPreparation.Active)throw new InvalidOperationException("本机任务仍在结束，请稍后重试。");}}
   void Report(int value,string text){journal.Update(value,text);lock(gate){progressValue=value;progressText=text;}var callback=Progress;if(callback!=null)callback(value,text);}
   void CheckStorage(){cancel.Token.ThrowIfCancellationRequested();foreach(string path in new[]{engine.Game,engine.Config,engine.Mods,user,data})LauncherMaintenance.NoReparse(path);}
   void CheckContent(){CheckStorage();engine.GuardContent();}
