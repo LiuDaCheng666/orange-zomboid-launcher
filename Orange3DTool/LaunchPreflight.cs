@@ -57,7 +57,8 @@ namespace PZ3D {
   internal void Capture(){Evidence=new LaunchReadSet();}
   internal void Expect(Action check){if(Evidence!=null)Evidence.Expect(check);}
   internal void ObserveMissing(string path){if(Evidence!=null&&!File.Exists(path))Evidence.File(path,null);}
-  public LaunchReadBudget(long maximumBytes){if(maximumBytes<0)throw new ArgumentOutOfRangeException("maximumBytes");remainingBytes=maximumBytes;}
+  public LaunchReadBudget(long maximumBytes):this(maximumBytes,4096){}
+  internal LaunchReadBudget(long maximumBytes,int maximumDirectories){if(maximumBytes<0||maximumDirectories<0)throw new ArgumentOutOfRangeException("maximumBytes");remainingBytes=maximumBytes;remainingDirectories=maximumDirectories;}
   internal void Unknown(){Incomplete=true;}
   internal void Charge(long bytes,long maximum=long.MaxValue){if(bytes<0||bytes>maximum){Incomplete=true;throw new IOException("预检文件超出大小限制。");}if(bytes>remainingBytes){Incomplete=true;throw new Exhausted();}remainingBytes-=bytes;}
   internal string[] Directories(string path){try{LauncherMaintenance.NoReparse(path);if(!Directory.Exists(path)){if(Evidence!=null)Evidence.Directory(path,new string[0]);return new string[0];}var result=Directory.EnumerateDirectories(path).Take(remainingDirectories+1).ToArray();if(result.Length>remainingDirectories){remainingDirectories=0;throw new IOException("预检目录超出累计数量上限。");}remainingDirectories-=result.Length;if(Evidence!=null)Evidence.Directory(path,result);return result;}catch{Incomplete=true;throw;}}

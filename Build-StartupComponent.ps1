@@ -14,7 +14,8 @@ if(-not(Test-Path -LiteralPath $buddy)){
 if((Get-FileHash -LiteralPath $buddy -Algorithm SHA256).Hash -ne $buddyHash){throw 'Pinned Byte Buddy development container hash mismatch'}
 $files=@(Get-ChildItem -LiteralPath $source -Recurse -Filter '*.java' -File | Sort-Object FullName)
 if($files.Count -eq 0){throw 'Startup Java sources missing'}
-$inputs=@($PSCommandPath,$logo)+@($files.FullName)
+$environmentFiles=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool\EnvironmentSource') -Recurse -Filter '*.java' -File | Sort-Object FullName)
+$inputs=@($PSCommandPath,$logo,(Join-Path $PSScriptRoot 'Build-EnvironmentComponent.ps1'))+@($files.FullName)+@($environmentFiles.FullName)
 $fingerprint=(@($inputs | ForEach-Object {(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash})+$buddyHash)-join ':'
 if(-not $Force -and (Test-Path -LiteralPath $asset) -and (Test-Path -LiteralPath $stamp)){
  try{$cached=Get-Content -LiteralPath $stamp -Raw | ConvertFrom-Json;if($cached.inputs -eq $fingerprint -and $cached.jar -eq (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash){return}}catch{}
@@ -39,6 +40,9 @@ New-Item -ItemType Directory -Path $classes -Force | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Startup component compilation failed'}
 $logoTarget=Join-Path $classes 'ozl\startup\orange.png'
 Copy-Item -LiteralPath $logo -Destination $logoTarget
+$environmentAgent=Join-Path $classes 'ozl\environment\EnvironmentAgent.jar'
+& (Join-Path $PSScriptRoot 'Build-EnvironmentComponent.ps1') -OutputPath $environmentAgent -JdkPath $JdkPath
+if($LASTEXITCODE -ne 0){throw 'Mandatory environment asset compilation failed'}
 $container=[IO.Compression.ZipFile]::OpenRead($buddy)
 try{
  foreach($entry in $container.Entries){

@@ -67,6 +67,7 @@ namespace PZ3D {
  sealed class Engine {
   public string Game,User,Data;
   public bool ManagedVersion;
+  internal SaveEnvironmentRecord FrozenEnvironment;
   public string BuddySource,ViewSource,ModelsSource;
   public Action<int,string> Progress;
   public string LastBackup;
@@ -80,12 +81,12 @@ namespace PZ3D {
   internal readonly Func<string,Process[]> ProcessInventory;
   public Engine(string game,string user,string data,bool test=false):this(game,user,data,test,null){}
   internal Engine(string game,string user,string data,bool test,Func<SteamLaunchOptionsSnapshot> options):this(game,user,data,test,options,null){}
-  internal Engine(string game,string user,string data,bool test,Func<SteamLaunchOptionsSnapshot> options,Func<string,Process[]> inventory){Game=Path.GetFullPath(game);User=user;Data=data;TestMode=test;steamOptions=options??(test?(Func<SteamLaunchOptionsSnapshot>)SteamLaunchOptions.Unavailable:SteamLaunchOptions.Current);ProcessInventory=inventory??Process.GetProcessesByName;}
+  internal Engine(string game,string user,string data,bool test,Func<SteamLaunchOptionsSnapshot> options,Func<string,Process[]> inventory){Game=Path.GetFullPath(game);User=user;Data=data;TestMode=test;steamOptions=options??(test?(Func<SteamLaunchOptionsSnapshot>)SteamLaunchOptions.Unavailable:SteamLaunchOptions.Current);ProcessInventory=inventory??Process.GetProcessesByName;string parent=Path.GetDirectoryName(Game);if(parent!=null&&File.Exists(Path.Combine(parent,SaveEnvironments.ManifestName)))FrozenEnvironment=SaveEnvironments.FindOwned(Data,Game,User);}
   internal bool RuntimeRunning(bool clientOnly=false){return clientOnly?GameProcessGuard.IsClientRunning(Game,ProcessInventory):GameProcessGuard.IsRunning(Game,ProcessInventory);}
   internal SteamLaunchOptionsSnapshot ReadSteamOptions(){return steamOptions();}
   public string Config {get{return Path.Combine(Game,"ProjectZomboid64.json");}}
-  public string Mods {get{return Path.Combine(User,"mods","default.txt");}}
-  public string Workshop {get{return Path.GetFullPath(Path.Combine(Game,"..","..","workshop","content","108600"));}}
+  public string Mods {get{return FrozenEnvironment==null?Path.Combine(User,"mods","default.txt"):Path.Combine(FrozenEnvironment.RootPath,"runtime","mods","default.txt");}}
+  public string Workshop {get{return FrozenEnvironment==null?Path.GetFullPath(Path.Combine(Game,"..","..","workshop","content","108600")):Path.Combine(FrozenEnvironment.RootPath,"runtime","no-live-workshop");}}
   public string BuddyLib {get{return Path.Combine(BuddySource??Path.Combine(Workshop,"3619862853"),"mods","ZombieBuddy","libs");}}
   public bool HasView {get{string source=ViewSource??Path.Combine(Workshop,"3809306528");return Directory.Exists(source) && Directory.EnumerateFiles(source,"mod.info",SearchOption.AllDirectories).Any(p=>Regex.IsMatch(File.ReadAllText(p),@"(?m)^id\s*=\s*Viewpoint\s*$"));}}
   public bool HasModels {get{return Directory.Exists(ModelsSource??Path.Combine(Workshop,"3810302175"));}}
@@ -107,7 +108,7 @@ namespace PZ3D {
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
    if(launch&&!TestMode&&RuntimeRunning(true))throw new Exception("客户端或无法核实用途的游戏 Java 进程仍在运行，请退出后再启动。");
    if(!launch&&!content)foreach(string name in new[]{"ProjectZomboid64.bat","ProjectZomboid32.bat"}){string bat=Path.Combine(Game,name);LauncherMaintenance.NoReparse(bat);if(File.Exists(bat)){if(new FileInfo(bat).Length>2097152)throw new Exception("备用启动 BAT 过大，无法核实。");var cleanup=BuddyLaunchArguments.CleanBat(File.ReadAllText(bat));if(!cleanup.Safe)throw new Exception("备用启动 BAT 参数不明确，请人工检查 Buddy 启动语法。");if(cleanup.Changed)throw new Exception("备用启动 BAT 有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
-   if(checkSteam){var options=ReadSteamOptions();if(!launch&&!TestMode&&options.State==SteamLaunchOptionsState.UnknownIdentity)options=SteamLaunchOptions.NativeCurrent(this).Options;if(!launch||options.State!=SteamLaunchOptionsState.UnknownIdentity)options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
+   if(checkSteam&&FrozenEnvironment==null){var options=ReadSteamOptions();if(!launch&&!TestMode&&options.State==SteamLaunchOptionsState.UnknownIdentity)options=SteamLaunchOptions.NativeCurrent(this).Options;if(!launch||options.State!=SteamLaunchOptionsState.UnknownIdentity)options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
   }
   public static string FindSteam(){using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){return k==null?null:(k.GetValue("SteamPath") as string);}}
   public static string DetectGame(){

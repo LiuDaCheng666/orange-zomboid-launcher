@@ -1,0 +1,27 @@
+/* Appended to app.css; uses the launcher theme variables and no external assets. */
+dialog.ozl-guide-dialog{width:min(840px,calc(100vw - 32px));max-width:none;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);margin:auto;padding:0;border:1px solid var(--line);border-radius:22px;background:var(--reading,var(--panel));color:var(--text);box-shadow:var(--shadow);overflow:hidden}
+dialog.ozl-guide-dialog[open]{display:flex;flex-direction:column}
+.ozl-guide-dialog::backdrop{background:#10141bb8;backdrop-filter:blur(5px)}
+.ozl-guide-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:22px 26px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.ozl-guide-header h1{font-size:24px;line-height:1.35;margin:3px 0 0}
+.ozl-guide-header>button{flex:0 0 auto}
+.ozl-guide-eyebrow{margin:0;color:var(--accent);font-size:12px;letter-spacing:.06em}
+.ozl-guide-layout{display:grid;grid-template-columns:184px minmax(0,1fr);min-height:0;overflow:hidden;flex:1 1 auto}
+.ozl-guide-nav{display:flex;flex-direction:column;gap:5px;overflow-y:auto;min-width:0;padding:18px 12px;border-right:1px solid var(--line);background:var(--bg)}
+.ozl-guide-nav button{display:flex;align-items:center;gap:9px;padding:9px 10px;text-align:left;justify-content:flex-start;width:auto;font-size:13px;white-space:nowrap;flex:0 0 auto;background:transparent}
+.ozl-guide-nav button::before{content:attr(data-guide-number);color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.ozl-guide-nav button[aria-current="step"]{background:var(--soft);color:var(--accent);font-weight:600}
+.ozl-guide-content{min-width:0;overflow-y:auto;overscroll-behavior:contain;padding:30px 32px 25px;overflow-wrap:anywhere;outline-offset:-4px}
+.ozl-guide-content h2{font-size:26px;line-height:1.35;margin:7px 0 12px;color:var(--text)}
+.ozl-guide-intro{font-size:16px;line-height:1.75;margin:0 0 20px;color:var(--text)}
+.ozl-guide-content ol{padding-left:23px;margin:0}
+.ozl-guide-content li{padding-left:4px;margin:0 0 16px;line-height:1.85;color:var(--muted)}
+.ozl-guide-content li::marker{color:var(--accent);font-weight:600}
+.ozl-guide-note{padding:13px 16px;margin:20px 0 0;border:1px solid var(--line);border-radius:12px;background:var(--bg);font-size:13px;line-height:1.8}
+.ozl-guide-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:17px 24px;border-top:1px solid var(--line);flex:0 0 auto}
+.ozl-guide-progress{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ozl-guide-controls{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;min-width:0}
+.ozl-guide-help{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 22px;margin:0 0 20px;background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.ozl-guide-help h2{font-size:17px;margin:0}.ozl-guide-help p{margin:5px 0 0;font-size:13px}
+@media(max-width:600px){dialog.ozl-guide-dialog{width:calc(100vw - 20px);max-height:calc(100vh - 20px);max-height:calc(100dvh - 20px);border-radius:17px}.ozl-guide-header{padding:16px 18px}.ozl-guide-header h1{font-size:21px}.ozl-guide-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}.ozl-guide-nav{flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:9px 10px;border-right:0;border-bottom:1px solid var(--line);gap:4px}.ozl-guide-nav button{font-size:12px;min-height:38px}.ozl-guide-content{padding:22px 20px 18px}.ozl-guide-content h2{font-size:23px}.ozl-guide-intro{font-size:15px;margin-bottom:16px}.ozl-guide-content li{margin-bottom:13px}.ozl-guide-footer{padding:12px 14px;gap:8px}.ozl-guide-controls{gap:5px}.ozl-guide-controls button{padding:9px 11px;font-size:12px;min-height:40px}.ozl-guide-progress{font-size:11px}.ozl-guide-note{padding:10px 12px}}
+@media(prefers-reduced-motion:reduce){.ozl-guide-dialog,.ozl-guide-dialog *{scroll-behavior:auto;animation:none;transition:none}}

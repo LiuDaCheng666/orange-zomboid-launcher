@@ -7,11 +7,22 @@ namespace PZ3D {
  static class BundledAssets {
   const string Resource="Orange3D.Bundle.zip";
   static readonly object sync=new object();
-  public static byte[] ReadOwnAsset(string name){if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua"&&name!="OrangeStartup.jar")throw new InvalidDataException("Unknown bridge asset.");
+  public static byte[] ReadOwnAsset(string name){if(name=="OrangeEnvironment.jar")return ReadEnvironmentAgent();if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua"&&name!="OrangeStartup.jar")throw new InvalidDataException("Unknown bridge asset.");
 #if OZL_VELOPACK
  if(DistributionPaths.Enabled)return DistributionBootstrap.Asset("Assets/"+name);
 #endif
 if(Assembly.GetExecutingAssembly().GetManifestResourceInfo("Launcher.UpdatePublicKey.xml")!=null){string root=CoreDeployment.Root(AppDomain.CurrentDomain.BaseDirectory),path="Assets/"+name;var record=CoreDeployment.ReadAuthenticated(root);var file=record.files.Find(f=>f.path==path);if(file==null)throw new InvalidDataException("Missing owned bridge asset.");CoreDeployment.RequireFile(root,path,file);return File.ReadAllBytes(CoreReleaseProtocol.Target(root,path));}using(var input=Assembly.GetExecutingAssembly().GetManifestResourceStream(name)){if(input==null)throw new InvalidDataException("Missing bridge resource.");using(var output=new MemoryStream()){input.CopyTo(output);return output.ToArray();}}}
+  // Reuse an existing authenticated distribution path so older clients can
+  // install this release without expanding their immutable file allowlist.
+  static byte[] ReadEnvironmentAgent(){
+   var assembly=Assembly.GetExecutingAssembly();
+   if(assembly.GetManifestResourceInfo("Launcher.UpdatePublicKey.xml")==null)using(var resource=assembly.GetManifestResourceStream("OrangeEnvironment.jar")){if(resource!=null){using(var output=new MemoryStream()){resource.CopyTo(output);return output.ToArray();}}}
+   using(var input=new MemoryStream(ReadOwnAsset("OrangeStartup.jar")))using(var archive=new ZipArchive(input,ZipArchiveMode.Read)){
+    ZipArchiveEntry selected=null;foreach(var entry in archive.Entries)if(entry.FullName=="ozl/environment/EnvironmentAgent.jar"){if(selected!=null)throw new InvalidDataException("Duplicate environment agent asset.");selected=entry;}
+    if(selected==null||selected.Length<=0||selected.Length>33554432)throw new InvalidDataException("Missing environment agent asset.");
+    using(var content=selected.Open())using(var output=new MemoryStream()){content.CopyTo(output);return output.ToArray();}
+   }
+  }
   public static bool Embedded{get{return Assembly.GetExecutingAssembly().GetManifestResourceInfo(Resource)!=null;}}
   public static string PresetPath{get{return Path.Combine(CurrentRoot,"PresetShaders");}}
   public static string NoticePath{get{return Path.Combine(CurrentRoot,"ThirdPartyNotices");}}

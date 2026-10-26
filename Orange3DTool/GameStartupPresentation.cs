@@ -10,7 +10,7 @@ namespace PZ3D {
   string startupSessionId;
 
   sealed class StartupAttempt {
-   internal GameStartupLaunch Launch;internal Engine Engine;internal string TargetId,Phase;internal DateTime Deadline;internal bool Reserved;
+   internal GameStartupLaunch Launch;internal Engine Engine,ResolvedEngine;internal string TargetId,Phase;internal DateTime Deadline;internal bool Reserved;
   }
   readonly object startupGate=new object();StartupAttempt startupAttempt;System.Threading.Timer startupLease;
   internal static bool StartupControl(string action){return action=="startupBegin"||action=="startupCancel"||action=="startupYield"||action=="startupResume"||action=="startupStatus";}
@@ -65,7 +65,8 @@ namespace PZ3D {
    lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");selectedEngine=engine;blocked=busy||networkRequests.Count>0;}
    if(id!="")lock(startupGate){selected=RequireAttempt(id);if(selected.Launch.TargetKind!=kind||selected.Reserved)throw new InvalidOperationException("启动目标已变化。");selected.Deadline=DateTime.UtcNow.AddSeconds(120);}
    try{
-    var result=LaunchPreflight.Check(selectedEngine,blocked,ClientRunning(),kind);
+    if(selected!=null){selectedEngine=ResolveEnvironmentEngine(selected.Engine,kind,selected.TargetId);selected.ResolvedEngine=selectedEngine;selected.Launch.GamePath=selectedEngine.Game;selected.Launch.UserPath=selectedEngine.User;RecoverLaunchEnvironment(selectedEngine,kind,selected.TargetId);}
+    var result=LaunchPreflight.CheckLaunch(selectedEngine,blocked,ClientRunning(),kind,selected==null?null:selected.TargetId,false);
     if(selected!=null){lock(startupGate){RequireAttempt(id);selected.Deadline=DateTime.UtcNow.AddSeconds(30);}if(!result.canLaunch)CancelStartup(id);}
     return result;
    }catch{if(id!="")CancelStartup(id);throw;}
@@ -82,7 +83,7 @@ namespace PZ3D {
    StartupAttempt selected;string kind=action=="launch"?"normal":Text(payload,"kind"),target=action=="launch"?"":Text(payload,"id");
    lock(startupGate){selected=RequireAttempt(id);if(selected.Reserved||selected.Phase=="yielded"||selected.Launch.TargetKind!=kind||selected.TargetId!=target)throw new InvalidOperationException("启动准备与目标不一致或已被使用。");selected.Reserved=true;selected.Deadline=DateTime.UtcNow.AddSeconds(120);}
    var watch=System.Diagnostics.Stopwatch.StartNew();
-   try{startupSessionId=id;object result=launch();lock(startupGate){if(selected.Phase!="committed")throw new OperationCanceledException("本次启动未提交。");selected.Phase="submitted";selected.Deadline=selected.Launch.StartedUtc.AddSeconds(180);}var submitted=System.Diagnostics.Stopwatch.StartNew();PublishStartup(selected.Launch,"submitted","游戏正在启动…");LaunchTiming("startup-submitted-observer",submitted.ElapsedMilliseconds);var outcome=result as GameLaunchOutcome;if(outcome!=null)outcome.startup=StartupStatus();return result;}
+   try{startupSessionId=id;selected.ResolvedEngine=ResolveEnvironmentEngine(selected.Engine,kind,target);selected.Launch.GamePath=selected.ResolvedEngine.Game;selected.Launch.UserPath=selected.ResolvedEngine.User;RememberEnvironment(selected.ResolvedEngine);object result=launch();lock(startupGate){if(selected.Phase!="committed")throw new OperationCanceledException("本次启动未提交。");selected.Phase="submitted";selected.Deadline=selected.Launch.StartedUtc.AddSeconds(180);}var submitted=System.Diagnostics.Stopwatch.StartNew();PublishStartup(selected.Launch,"submitted","游戏正在启动…");LaunchTiming("startup-submitted-observer",submitted.ElapsedMilliseconds);var outcome=result as GameLaunchOutcome;if(outcome!=null)outcome.startup=StartupStatus();return result;}
    catch(Exception error){bool committed;lock(startupGate){committed=selected.Phase=="committed";selected.Phase="cancelled";}PublishStartup(selected.Launch,committed?"failed":"cancelled",GameDiagnostics.Sanitize(error.Message));throw;}
    finally{LaunchTiming("native-launch-total",watch.ElapsedMilliseconds);startupSessionId=null;}
   }

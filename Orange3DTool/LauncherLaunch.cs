@@ -27,7 +27,7 @@ namespace PZ3D {
     var cfg=new JavaScriptSerializer().Deserialize<System.Collections.Generic.Dictionary<string,object>>(text);if(cfg==null||!cfg.ContainsKey("vmArgs")||!(cfg["vmArgs"] is IEnumerable)||cfg["vmArgs"] is string)return "启动配置无有效 vmArgs，请修复游戏启动配置。";
     var args=Arguments(cfg).ToList();
     if(args.Any(a=>a.IndexOf("-javaagent:OrangeShootPresentation",StringComparison.OrdinalIgnoreCase)>=0))return "检测到旧开镜 Java 启动插件，请先在组件页重新安装修复旧启动项。";
-    if(args.Any(a=>a.StartsWith("-javaagent:",StringComparison.OrdinalIgnoreCase)&&!GameStartupComponent.IsOwnedArgument(e,a)&&!(preparing&&GameStartupComponent.CanPrepareOwnedArgument(e,a))))return "检测到旧式或未支持的 Java 启动插件；本工具的 Buddy 使用 -agentlib:zbNative。请先重新安装基础组件或自行核对其他插件，工具未改动这些配置。";
+    if(args.Any(a=>a.StartsWith("-javaagent:",StringComparison.OrdinalIgnoreCase)&&!GameStartupComponent.IsOwnedArgument(e,a)&&!SaveEnvironmentRuntime.IsOwnedArgument(e,a)&&!(preparing&&GameStartupComponent.CanPrepareOwnedArgument(e,a))))return "检测到旧式或未支持的 Java 启动插件；本工具的 Buddy 使用 -agentlib:zbNative。请先重新安装基础组件或自行核对其他插件，工具未改动这些配置。";
     // Cleanup may normalize a valid branch-local loader. Launch only accepts one
     // canonical loader across all traversed branches; branch selection is unknown.
     if(args.Any(a=>!string.Equals(a,"-agentlib:zbNative",StringComparison.OrdinalIgnoreCase)&&(BuddyLaunchArguments.Classify(a)!=BuddyArgumentKind.None||a.StartsWith("-agentlib:zbNative",StringComparison.OrdinalIgnoreCase))))return "启动配置存在旧式或自定义 Buddy 参数，请在组件或维护页核对。";

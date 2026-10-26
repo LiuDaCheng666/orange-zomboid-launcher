@@ -8,7 +8,7 @@ namespace PZ3D {
  static class GameDiscovery {
   internal sealed class WorkshopSourceSet {internal readonly List<string> Roots=new List<string>();internal readonly List<string> Inputs=new List<string>();}
   internal static WorkshopSourceSet WorkshopSources(Engine e,List<string> warnings){
-   var result=new WorkshopSourceSet();result.Roots.Add(e.Workshop);
+   var result=new WorkshopSourceSet();if(e.FrozenEnvironment!=null)return result;result.Roots.Add(e.Workshop);
    var steamRoots=new List<string>();if(!e.TestMode)steamRoots.AddRange(SteamRoots());
    string common=Path.GetDirectoryName(e.Game),apps=common==null?null:Path.GetDirectoryName(common);
    if(common!=null&&apps!=null&&Path.GetFileName(common).Equals("common",StringComparison.OrdinalIgnoreCase)&&Path.GetFileName(apps).Equals("steamapps",StringComparison.OrdinalIgnoreCase))steamRoots.Add(Path.GetDirectoryName(apps));

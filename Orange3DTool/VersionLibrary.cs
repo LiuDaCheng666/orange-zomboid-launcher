@@ -62,6 +62,6 @@ namespace PZ3D {
    }catch{if(Directory.Exists(staging))RemoveOwned(staging);if(published&&Directory.Exists(target))RemoveOwned(target);throw;}
   });}
   // A worker may use only the legacy user identity or an exact registered game/user pair.
-  internal static bool OwnsUser(string dataRoot,string gamePath,string userPath){try{string legacy=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Zomboid");if(Same(legacy,userPath))return true;var library=new VersionLibrary(dataRoot,gamePath,legacy);return library.List().Any(row=>row.Managed&&Same(row.GamePath,gamePath)&&Same(row.UserPath,userPath));}catch{return false;}}
+  internal static bool OwnsUser(string dataRoot,string gamePath,string userPath){try{string legacy=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Zomboid");if(Same(legacy,userPath)||SaveEnvironments.OwnsUser(dataRoot,gamePath,userPath))return true;var library=new VersionLibrary(dataRoot,gamePath,legacy);return library.List().Any(row=>row.Managed&&Same(row.GamePath,gamePath)&&Same(row.UserPath,userPath));}catch{return false;}}
  }
 }
