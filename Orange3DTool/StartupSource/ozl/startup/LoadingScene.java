@@ -68,8 +68,9 @@ public final class LoadingScene {
             for(int i=0;i<3;i++)c.arc(cx,cy,107*s,2.4*s,orbit+i*Math.PI*2/3,.72,alpha(accent,190-i*45));
             c.arc(cx,cy,124*s,1*s,-orbit*.6+.3,1.1,alpha(accent,65));
         }
-        double logoSize=(state.context==LoadingModel.Context.BOOT?174:state.context==LoadingModel.Context.SAVE?130:150)*visualScale*growth.bodyScale();
-        c.growingLogo(cx,cy,logoSize,1,growth.angle(),growth.leafScale(),growth.leafAngle());
+        double logoBase=(state.context==LoadingModel.Context.BOOT?174:state.context==LoadingModel.Context.SAVE?130:150)*visualScale;
+        double logoSize=logoBase*growth.bodyScale();
+        c.growingLogo(cx,cy+logoBase*growth.lift(),logoSize,1,growth.angle(),growth.leafScale(),growth.leafAngle());
         String identity=state.context==LoadingModel.Context.BOOT?"O Z L":state.name;
         double infoCx=state.context==LoadingModel.Context.BOOT||nativeControls?w*.5:w*.68,infoWidth=state.context==LoadingModel.Context.BOOT||nativeControls?w*.84:w*.49;
         double labelY=nativeControls?top+88*s:state.context==LoadingModel.Context.BOOT?cy+157*s:h*.31;

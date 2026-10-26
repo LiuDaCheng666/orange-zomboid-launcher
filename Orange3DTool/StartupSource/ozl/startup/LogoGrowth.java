@@ -5,15 +5,22 @@ import java.awt.image.BufferedImage;
 
 /** Pure animation and image partition shared by GL and raster. Never reports progress. */
 public final class LogoGrowth {
-    public record Frame(double bodyScale,double leafScale,double angle,double leafAngle) {}
+    public record Frame(double bodyScale,double leafScale,double angle,double leafAngle,double lift) {}
+    private static double unit(double value){return Math.max(0,Math.min(1,value));}
+    private static double smooth(double value){double t=unit(value);return t*t*(3-2*t);}
+    private static double spring(double value){double t=unit(value)-1;return 1+2.4*t*t*t+1.4*t*t;}
     public static Frame at(double seconds,boolean reduced){
-        if(reduced)return new Frame(1,1,0,0);
-        double t=Math.max(0,seconds),entrance=Math.min(1,t/1.4);
-        entrance=entrance*entrance*(3-2*entrance);
-        double phase=2*Math.PI*t/8.4;
-        double grow=(1-Math.cos(phase))/2,unfold=(1-Math.cos(phase-.7))/2;
-        return new Frame((.32+.68*entrance)*(.80+.20*grow),.48+.52*unfold,
-            .035*Math.sin(phase),-.20*(1-unfold));
+        if(reduced)return new Frame(1,1,0,0,0);
+        double t=Double.isFinite(seconds)?Math.max(0,seconds)%8.4:0;
+        double growth=spring((t-.35)/2.25),leaf=spring((t-1.0)/2.0),fold=smooth((t-6.4)/2.0);
+        double idle=smooth((t-2.6)/.6)*(1-smooth((t-6.0)/.4));
+        double breath=Math.sin((t-2.6)*Math.PI*2/2.2)*idle;
+        double body=(.24+.76*growth+.022*breath)*(1-fold)+.24*fold;
+        double unfolded=(.05+.95*leaf)*(1-fold)+.05*fold;
+        double grown=unit(growth)*(1-fold);
+        return new Frame(body,unfolded,-.12*(1-grown)+.025*breath,
+            -.95*(1-unit(leaf)*(1-fold))+.075*breath,
+            .12*(1-grown)-.018*breath);
     }
     public record Parts(BufferedImage body,BufferedImage leaf) {}
     public static Parts split(BufferedImage source){

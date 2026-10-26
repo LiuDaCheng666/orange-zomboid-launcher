@@ -1,0 +1,28 @@
+[Unit]
+Description=OZL private user feedback collector
+After=network.target
+
+[Service]
+Type=simple
+User=ozl-feedback
+Group=ozl-feedback
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/ozl-feedback/server.py serve
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+CapabilityBoundingSet=
+ReadWriteDirectories=/var/lib/ozl-feedback
+MemoryLimit=128M
+LimitNPROC=16
+LimitNOFILE=128
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
