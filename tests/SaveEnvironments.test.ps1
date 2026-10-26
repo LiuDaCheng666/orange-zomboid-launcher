@@ -9,7 +9,7 @@ $fixtureDirectory=Join-Path ([IO.Path]::GetTempPath()) ('ozl-save-environments-'
 [IO.Directory]::CreateDirectory($fixtureDirectory)|Out-Null
 $output=Join-Path $fixtureDirectory 'SaveEnvironmentsTests.exe'
 $sources=@(Get-OzlProductionSources -ProjectDirectory $project)
-foreach($name in @('SaveEnvironments.cs','SaveEnvironmentRuntime.cs')){
+foreach($name in @('SaveEnvironments.cs','SaveEnvironmentRuntime.cs','SnapshotPreparation.cs')){
     $newSource=Join-Path $project $name
     if(Test-Path -LiteralPath $newSource){$sources+=$newSource}
 }

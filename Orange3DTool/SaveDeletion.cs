@@ -8,17 +8,25 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading;
 namespace PZ3D {
- // The only injectable OS boundary is recycling. Resolution, stamps and guards stay real.
+ // The only injectable OS boundary is deletion. Resolution, stamps and guards stay real.
  static class SaveDeletion {
   const int MaxEntries=100000,MaxDepth=64,MaxMetadata=16777216;
   internal static bool ValidId(string id){if(string.IsNullOrWhiteSpace(id)||id.Length>260||id.Contains('\\')||id.Contains(':'))return false;string[] parts=id.Split('/');return parts.Length==2&&parts.All(p=>p.Length>0&&p!="."&&p!=".."&&!p.EndsWith(".")&&!p.EndsWith(" ")&&p.IndexOfAny(Path.GetInvalidFileNameChars())<0&&!p.Any(char.IsControl));}
   internal static bool ValidStamp(string stamp){return stamp!=null&&Regex.IsMatch(stamp,@"\AsaveDelete:[a-f0-9]{64}\z");}
   static string Resolve(Engine e,string id){if(!ValidId(id))throw new InvalidOperationException("无效存档标识。");return SaveProfiles.ResolveSave(e,id);}
-  static void Guard(Engine e){
-   string workshopJournal=Path.Combine(e.Data,"workshop-rebuild.pending");
-   foreach(string p in new[]{e.Game,e.Config,e.User,e.Mods,e.Data,workshopJournal})LauncherMaintenance.NoReparse(p);
-   e.Guard();
-   if(File.Exists(workshopJournal)||Directory.Exists(workshopJournal))throw new InvalidOperationException("工坊维护尚未恢复，请先完成恢复。");
+  static void Guard(Engine e,string path){if(PendingSaveWrite(e,path))throw new IOException("此存档的模组清单尚有未完成写入，请先处理该存档的配置恢复："+Path.Combine(path,"mods.txt"));}
+  static bool PendingSaveWrite(Engine e,string path){
+   // Buddy, Workshop, normal-profile settings and other saves do not write this
+   // directory. Only a bound journal proving an attempted saveMods write to
+   // this exact target is relevant; unknown global metadata is not a conflict.
+   try{
+    string journal=PlayProfileTransaction.Journal(e);if(!File.Exists(journal))return false;byte[] bytes=PlayProfileTransaction.Read(journal,32768);if(bytes==null)return false;
+    var record=PlayProfileJson.Object(Encoding.UTF8.GetString(bytes),32768);object version,kind,id,binding,stage,entries;
+    if(!record.TryGetValue("version",out version)||!(version is int)||(int)version!=1||!record.TryGetValue("targetKind",out kind)||!object.Equals(kind,"save")||!record.TryGetValue("targetId",out id)||!(id is string)||!ValidId((string)id)||!record.TryGetValue("binding",out binding)||!(binding is string)||!record.TryGetValue("stage",out stage)||!(stage is string)||!new[]{"prepared","applying","rollingBack","recoveryRequired"}.Contains((string)stage)||!record.TryGetValue("entries",out entries)||!(entries is object[]))return false;
+    string expected=PlayProfileTransaction.Hash(Encoding.UTF8.GetBytes(Path.GetFullPath(e.Game).ToUpperInvariant()+"|"+Path.GetFullPath(e.User).ToUpperInvariant()+"|"+Path.GetFullPath(e.Data).ToUpperInvariant()));if((string)binding!=expected)return false;
+    string target=Path.GetFullPath(Path.Combine(e.User,"Saves",((string)id).Replace('/',Path.DirectorySeparatorChar)));if(!string.Equals(target,path,StringComparison.OrdinalIgnoreCase))return false;
+    foreach(object raw in (object[])entries){var entry=raw as Dictionary<string,object>;object slot,attempted;if(entry!=null&&entry.TryGetValue("target",out slot)&&object.Equals(slot,"saveMods")&&entry.TryGetValue("attempted",out attempted)&&attempted is bool&&(bool)attempted)return true;}return false;
+   }catch(Exception error){if(error is OutOfMemoryException||error is StackOverflowException)throw;return false;}
   }
   sealed class Snapshot {
    readonly StringBuilder text=new StringBuilder();int entries;
@@ -32,51 +40,19 @@ namespace PZ3D {
   static string Stamp(Engine e,string path){return new Snapshot().Read(e,path);}
   public static object Preview(Engine e,string id){string path=Resolve(e,id);return new{id=id,name=Path.GetFileName(path),mode=id.Split('/')[0],path=path,stamp=Stamp(e,path)};}
   public static object Delete(Engine e,string id,string stamp,bool confirmed){return Delete(e,id,stamp,confirmed,CancellationToken.None);}
-  internal static object Delete(Engine e,string id,string stamp,bool confirmed,CancellationToken cancellation){cancellation.ThrowIfCancellationRequested();if(e.TestMode)throw new InvalidOperationException("测试模式禁止调用真实回收站。");return Delete(e,id,stamp,confirmed,p=>Recycle(p,()=>Verify(e,id,p,stamp,cancellation)),cancellation);}
-  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> recycle){return Delete(e,id,stamp,confirmed,recycle,CancellationToken.None);}
-  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> recycle,CancellationToken cancellation){
+  internal static object Delete(Engine e,string id,string stamp,bool confirmed,CancellationToken cancellation){return Delete(e,id,stamp,confirmed,p=>Directory.Delete(p,true),cancellation);}
+  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> delete){return Delete(e,id,stamp,confirmed,delete,CancellationToken.None);}
+  internal static object Delete(Engine e,string id,string stamp,bool confirmed,Action<string> delete,CancellationToken cancellation){
    cancellation.ThrowIfCancellationRequested();
-   if(!confirmed)throw new InvalidOperationException("删除存档需要明确确认。");if(!ValidStamp(stamp))throw new InvalidOperationException("删除预览凭据无效，请重新核对。");if(recycle==null)throw new ArgumentNullException("recycle");Guard(e);string path=Resolve(e,id);
+   if(!confirmed)throw new InvalidOperationException("删除存档需要明确确认。");if(!ValidStamp(stamp))throw new InvalidOperationException("删除预览凭据无效，请重新核对。");if(delete==null)throw new ArgumentNullException("delete");string path=Resolve(e,id);Guard(e,path);
    // Same naming as SaveProfiles.Save, plus the shared launch/profile lease to close launch races.
    string name="Local\\OrangeSaveProfiles-"+DlssInstaller.Hash(Encoding.UTF8.GetBytes(Path.GetFullPath(Path.Combine(path,"mods.txt")).ToUpperInvariant())).ToLowerInvariant();
-   using(PlayProfileTransaction.Lock(e))using(var mutex=new Mutex(false,name)){bool held=false;try{try{held=mutex.WaitOne(5000);}catch(AbandonedMutexException){held=true;}if(!held)throw new IOException("存档配置正被其他窗口修改，请稍后重试。");Verify(e,id,path,stamp,cancellation);cancellation.ThrowIfCancellationRequested();recycle(path);if(Directory.Exists(path)||File.Exists(path))throw new IOException("回收站操作未完成；存档仍在原位置。");return new{status="completed",id=id,message=id.Split('/')[0].Equals("Multiplayer",StringComparison.OrdinalIgnoreCase)?"本地多人缓存已移到 Windows 回收站；服务器世界和远程角色未修改。":"存档已移到 Windows 回收站。"};}finally{if(held)mutex.ReleaseMutex();}}
+   using(PlayProfileTransaction.Lock(e))using(var mutex=new Mutex(false,name)){bool held=false;try{try{held=mutex.WaitOne(5000);}catch(AbandonedMutexException){held=true;}if(!held)throw new IOException("存档配置正被其他窗口修改，请稍后重试。");Verify(e,id,path,stamp,cancellation);cancellation.ThrowIfCancellationRequested();delete(path);if(Directory.Exists(path)||File.Exists(path))throw new IOException("删除未完成；存档仍在原位置。");return new{status="completed",id=id,message=id.Split('/')[0].Equals("Multiplayer",StringComparison.OrdinalIgnoreCase)?"本地多人缓存已永久删除；服务器世界和远程角色未修改。":"存档已永久删除。"};}finally{if(held)mutex.ReleaseMutex();}}
   }
-  static void Verify(Engine e,string id,string expectedPath,string stamp,CancellationToken cancellation){cancellation.ThrowIfCancellationRequested();Guard(e);string path=Resolve(e,id);if(!string.Equals(path,expectedPath,StringComparison.OrdinalIgnoreCase)||Stamp(e,path)!=stamp)throw new InvalidOperationException("存档已变化，请重新核对后删除。");cancellation.ThrowIfCancellationRequested();Guard(e);LauncherMaintenance.NoReparse(path);}
+  static void Verify(Engine e,string id,string expectedPath,string stamp,CancellationToken cancellation){cancellation.ThrowIfCancellationRequested();string path=Resolve(e,id);if(!string.Equals(path,expectedPath,StringComparison.OrdinalIgnoreCase)||Stamp(e,path)!=stamp)throw new InvalidOperationException("存档已变化，请重新核对后删除。");cancellation.ThrowIfCancellationRequested();Guard(e,path);LauncherMaintenance.NoReparse(path);}
   [StructLayout(LayoutKind.Sequential)]struct FileInfoNative {internal uint attributes;internal System.Runtime.InteropServices.ComTypes.FILETIME creation,access,write;internal uint volume,sizeHigh,sizeLow,links,indexHigh,indexLow;}
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(string path,uint access,uint share,IntPtr security,uint disposition,uint flags,IntPtr template);
   [DllImport("kernel32.dll",SetLastError=true)]static extern bool GetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle handle,out FileInfoNative info);
   static string Identity(string path){LauncherMaintenance.NoReparse(path);using(var handle=CreateFile(path,0,7,IntPtr.Zero,3,0x02200000,IntPtr.Zero)){FileInfoNative info;if(handle.IsInvalid||!GetFileInformationByHandle(handle,out info))throw new Win32Exception(Marshal.GetLastWin32Error(),"无法核实存档目录身份。");if((info.attributes&0x400)!=0)throw new IOException("拒绝重解析存档目录。");return info.volume+":"+info.indexHigh+":"+info.indexLow;}}
-  // IFileOperation runs as the current user on an STA; no elevation, shell command, or delete fallback.
-  static void Recycle(string path,Action verify){
-   Exception error=null;
-   var worker=new Thread(()=>{
-    IFileOperation operation=null;object item=null;
-    try{
-     verify();operation=(IFileOperation)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("3ad05575-8857-4850-9277-11b85bdb8e09")));
-     // RECYCLEONDELETE | EARLYFAILURE | NOERRORUI | NOCONFIRMATION | SILENT.
-     // PreDeleteItem separately refuses any transfer without recycle capability.
-     operation.SetOperationFlags(0x00080000|0x00100000|0x00000400|0x00000010|0x00000004);
-     Guid iid=new Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe");Marshal.ThrowExceptionForHR(SHCreateItemFromParsingName(path,IntPtr.Zero,ref iid,out item));
-     var sink=new RecycleSink(verify);operation.DeleteItem(item,sink);int result=operation.PerformOperations();bool aborted;operation.GetAnyOperationsAborted(out aborted);CheckRecycleResult(result,aborted,sink);
-    }catch(Exception x){error=x;}
-    finally{if(item!=null&&Marshal.IsComObject(item))Marshal.ReleaseComObject(item);if(operation!=null)Marshal.ReleaseComObject(operation);}
-   });
-   worker.SetApartmentState(ApartmentState.STA);worker.Start();worker.Join();if(error!=null)System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
-  }
-  static bool Cancellation(int result){return result==unchecked((int)0x800704c7)||result==unchecked((int)0x80004004);}
-  static void CheckRecycleResult(int result,bool aborted,RecycleSink sink){if(sink.Refused)throw new IOException("该存档无法移到回收站；已拒绝永久删除。");if(sink.Error!=null)throw sink.Error;if(result<0&&!Cancellation(result))Marshal.ThrowExceptionForHR(result);if(sink.Result<0&&!Cancellation(sink.Result))Marshal.ThrowExceptionForHR(sink.Result);if(aborted||Cancellation(result)||Cancellation(sink.Result))throw new OperationCanceledException("回收站操作已取消。");if(!sink.Recycled)throw new IOException("Windows 未确认存档已移入回收站。");}
-  [DllImport("shell32.dll",CharSet=CharSet.Unicode,PreserveSig=true)]static extern int SHCreateItemFromParsingName(string path,IntPtr bind,ref Guid iid,[MarshalAs(UnmanagedType.Interface)]out object item);
-  [ComImport,Guid("947aab5f-0a5c-4c13-b4d6-4bf7836fc9f8"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]interface IFileOperation {
-   void Advise(IntPtr sink,out uint cookie);void Unadvise(uint cookie);void SetOperationFlags(uint flags);void SetProgressMessage([MarshalAs(UnmanagedType.LPWStr)]string message);void SetProgressDialog(IntPtr dialog);void SetProperties(IntPtr properties);void SetOwnerWindow(IntPtr owner);void ApplyPropertiesToItem([MarshalAs(UnmanagedType.Interface)]object item);void ApplyPropertiesToItems([MarshalAs(UnmanagedType.Interface)]object items);void RenameItem([MarshalAs(UnmanagedType.Interface)]object item,[MarshalAs(UnmanagedType.LPWStr)]string name,IntPtr sink);void RenameItems([MarshalAs(UnmanagedType.Interface)]object items,[MarshalAs(UnmanagedType.LPWStr)]string name);void MoveItem([MarshalAs(UnmanagedType.Interface)]object item,[MarshalAs(UnmanagedType.Interface)]object destination,[MarshalAs(UnmanagedType.LPWStr)]string name,IntPtr sink);void MoveItems([MarshalAs(UnmanagedType.Interface)]object items,[MarshalAs(UnmanagedType.Interface)]object destination);void CopyItem([MarshalAs(UnmanagedType.Interface)]object item,[MarshalAs(UnmanagedType.Interface)]object destination,[MarshalAs(UnmanagedType.LPWStr)]string name,IntPtr sink);void CopyItems([MarshalAs(UnmanagedType.Interface)]object items,[MarshalAs(UnmanagedType.Interface)]object destination);void DeleteItem([MarshalAs(UnmanagedType.Interface)]object item,IFileOperationProgressSink sink);void DeleteItems([MarshalAs(UnmanagedType.Interface)]object items);void NewItem([MarshalAs(UnmanagedType.Interface)]object destination,uint attributes,[MarshalAs(UnmanagedType.LPWStr)]string name,[MarshalAs(UnmanagedType.LPWStr)]string template,IntPtr sink);[PreserveSig]int PerformOperations();void GetAnyOperationsAborted([MarshalAs(UnmanagedType.Bool)]out bool aborted);
-  }
  }
-  [ComVisible(true),Guid("04b0f1a7-9490-44bc-96e1-4296a31252e2"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]public interface IFileOperationProgressSink {
-   [PreserveSig]int StartOperations();[PreserveSig]int FinishOperations(int result);[PreserveSig]int PreRenameItem(uint flags,IntPtr item,IntPtr name);[PreserveSig]int PostRenameItem(uint flags,IntPtr item,IntPtr name,int result,IntPtr created);[PreserveSig]int PreMoveItem(uint flags,IntPtr item,IntPtr destination,IntPtr name);[PreserveSig]int PostMoveItem(uint flags,IntPtr item,IntPtr destination,IntPtr name,int result,IntPtr created);[PreserveSig]int PreCopyItem(uint flags,IntPtr item,IntPtr destination,IntPtr name);[PreserveSig]int PostCopyItem(uint flags,IntPtr item,IntPtr destination,IntPtr name,int result,IntPtr created);[PreserveSig]int PreDeleteItem(uint flags,IntPtr item);[PreserveSig]int PostDeleteItem(uint flags,IntPtr item,int result,IntPtr created);[PreserveSig]int PreNewItem(uint flags,IntPtr destination,IntPtr name);[PreserveSig]int PostNewItem(uint flags,IntPtr destination,IntPtr name,IntPtr template,uint attributes,int result,IntPtr created);[PreserveSig]int UpdateProgress(uint total,uint done);[PreserveSig]int ResetTimer();[PreserveSig]int PauseTimer();[PreserveSig]int ResumeTimer();
-  }
-  [ComVisible(true),ClassInterface(ClassInterfaceType.None)]public sealed class RecycleSink:IFileOperationProgressSink {
-   readonly Action verify;internal bool Refused,Recycled;internal int Result;internal Exception Error;internal RecycleSink(Action verify){this.verify=verify;}
-   public int PreDeleteItem(uint flags,IntPtr item){if((flags&0x80)==0){Refused=true;return unchecked((int)0x80004004);}try{verify();return 0;}catch(Exception x){Error=x;return unchecked((int)0x80004004);}}
-   public int PostDeleteItem(uint flags,IntPtr item,int result,IntPtr created){Result=result;Recycled=result>=0&&created!=IntPtr.Zero;return 0;}
-   public int StartOperations(){return 0;}public int FinishOperations(int result){if(result<0)Result=result;return 0;}public int PreRenameItem(uint f,IntPtr i,IntPtr n){return 0;}public int PostRenameItem(uint f,IntPtr i,IntPtr n,int r,IntPtr c){return 0;}public int PreMoveItem(uint f,IntPtr i,IntPtr d,IntPtr n){return 0;}public int PostMoveItem(uint f,IntPtr i,IntPtr d,IntPtr n,int r,IntPtr c){return 0;}public int PreCopyItem(uint f,IntPtr i,IntPtr d,IntPtr n){return 0;}public int PostCopyItem(uint f,IntPtr i,IntPtr d,IntPtr n,int r,IntPtr c){return 0;}public int PreNewItem(uint f,IntPtr d,IntPtr n){return 0;}public int PostNewItem(uint f,IntPtr d,IntPtr n,IntPtr t,uint a,int r,IntPtr c){return 0;}public int UpdateProgress(uint t,uint d){return 0;}public int ResetTimer(){return 0;}public int PauseTimer(){return 0;}public int ResumeTimer(){return 0;}
-  }
 }

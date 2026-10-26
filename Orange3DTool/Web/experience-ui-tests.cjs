@@ -49,7 +49,7 @@ async function setup(browser,theme='dark'){
     case'modCover':data={token:m.payload.token,cover:fx.cover??'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6ZyAAAAAASUVORK5CYII='};break;
     case'savesList':data={saves:fx.saves||[{id:'Sandbox/Test',name:'测试存档',mode:'Sandbox',editable:true,modifiedUtc:'2026-10-15T00:00:00Z',modCount:fx.saveMods?.length??1}],warnings:[]};break;
     case'saveDeletePreview':{assertPayload(['id']);const s=(fx.saves||[]).find(s=>s.id===m.payload.id);if(!s)throw new Error('Unknown synthetic save');data={id:s.id,name:s.name,mode:s.mode,path:'C:\\SyntheticSaves\\'+s.id.replaceAll('/','\\'),stamp:'saveDelete:'+'a'.repeat(64)};break;}
-    case'saveDelete':{assertPayload(['id','stamp','confirmed']);if(m.payload.stamp!=='saveDelete:'+'a'.repeat(64)||m.payload.confirmed!==true)throw new Error('Bad synthetic delete contract');fx.saves=fx.saves.filter(s=>s.id!==m.payload.id);data={status:'completed',id:m.payload.id,message:'已移入回收站'};break;}
+    case'saveDelete':{assertPayload(['id','stamp','confirmed']);if(m.payload.stamp!=='saveDelete:'+'a'.repeat(64)||m.payload.confirmed!==true)throw new Error('Bad synthetic delete contract');fx.saves=fx.saves.filter(s=>s.id!==m.payload.id);data={status:'completed',id:m.payload.id,message:'存档已永久删除。'};break;}
     case'componentsAction':data={message:fx.restoreMessage||'基础组件已恢复。',status:fx.restoreStatus||'completed'};if(fx.failRefresh)fx.failure='status';break;
     case'saveGet':data={id:m.payload.id,name:'测试存档',mode:'Sandbox',stamp:'save-1',enabled:fx.saveMods||['base'],maps:[],requiresConfirmation:false,warnings:[]};break;
     case'saveSave':fx.saveMods=m.payload.mods;data={message:'存档清单已保存'};break;

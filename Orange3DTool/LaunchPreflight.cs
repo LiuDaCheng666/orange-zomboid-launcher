@@ -30,8 +30,10 @@ namespace PZ3D {
   internal void Expect(Action check){checks.Add(check);}
   static bool Same(byte[] a,byte[] b){return a==null?b==null:b!=null&&a.SequenceEqual(b);}
   static IOException Changed(){return new IOException("模组来源或配置在启动检查期间改变，请重新启动。");}
-  internal void Validate(){
+  internal void Validate(){Validate(null);}
+  internal void Validate(Action checkpoint){
    foreach(var item in files){
+    if(checkpoint!=null)checkpoint();
     LauncherMaintenance.NoReparse(item.Key);
     if(item.Value==null){if(System.IO.File.Exists(item.Key))throw Changed();continue;}
     using(var input=new FileStream(item.Key,FileMode.Open,FileAccess.Read,FileShare.Read)){
@@ -42,11 +44,12 @@ namespace PZ3D {
     }
    }
    foreach(var item in directories){
+    if(checkpoint!=null)checkpoint();
     LauncherMaintenance.NoReparse(item.Key);
     var entries=System.IO.Directory.Exists(item.Key)?System.IO.Directory.EnumerateDirectories(item.Key).Take(item.Value.Length+1).OrderBy(p=>p,StringComparer.OrdinalIgnoreCase).ToArray():new string[0];
     if(!item.Value.SequenceEqual(entries,StringComparer.OrdinalIgnoreCase))throw Changed();
    }
-   foreach(var check in checks)check();
+   foreach(var check in checks){if(checkpoint!=null)checkpoint();check();}
   }
  }
  sealed class LaunchReadBudget {
@@ -54,15 +57,16 @@ namespace PZ3D {
   int remainingDirectories=4096;long remainingBytes;
   public bool Incomplete {get;private set;}
   internal LaunchReadSet Evidence;
+  internal Action<string,long> Checkpoint;
   internal void Capture(){Evidence=new LaunchReadSet();}
   internal void Expect(Action check){if(Evidence!=null)Evidence.Expect(check);}
   internal void ObserveMissing(string path){if(Evidence!=null&&!File.Exists(path))Evidence.File(path,null);}
   public LaunchReadBudget(long maximumBytes):this(maximumBytes,4096){}
   internal LaunchReadBudget(long maximumBytes,int maximumDirectories){if(maximumBytes<0||maximumDirectories<0)throw new ArgumentOutOfRangeException("maximumBytes");remainingBytes=maximumBytes;remainingDirectories=maximumDirectories;}
   internal void Unknown(){Incomplete=true;}
-  internal void Charge(long bytes,long maximum=long.MaxValue){if(bytes<0||bytes>maximum){Incomplete=true;throw new IOException("预检文件超出大小限制。");}if(bytes>remainingBytes){Incomplete=true;throw new Exhausted();}remainingBytes-=bytes;}
-  internal string[] Directories(string path){try{LauncherMaintenance.NoReparse(path);if(!Directory.Exists(path)){if(Evidence!=null)Evidence.Directory(path,new string[0]);return new string[0];}var result=Directory.EnumerateDirectories(path).Take(remainingDirectories+1).ToArray();if(result.Length>remainingDirectories){remainingDirectories=0;throw new IOException("预检目录超出累计数量上限。");}remainingDirectories-=result.Length;if(Evidence!=null)Evidence.Directory(path,result);return result;}catch{Incomplete=true;throw;}}
-  internal byte[] Read(string path,int maximum){try{LauncherMaintenance.NoReparse(path);if(!File.Exists(path)){if(Evidence!=null)Evidence.File(path,null);return null;}using(var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)){Charge(input.Length,maximum);var bytes=new byte[(int)input.Length];int offset=0,count;while(offset<bytes.Length&&(count=input.Read(bytes,offset,bytes.Length-offset))>0)offset+=count;if(offset!=bytes.Length)throw new IOException("预检文件读取未完成。");if(Evidence!=null)Evidence.File(path,bytes);return bytes;}}catch{Incomplete=true;throw;}}
+  internal void Charge(long bytes,long maximum=long.MaxValue){if(Checkpoint!=null)Checkpoint(null,0);if(bytes<0||bytes>maximum){Incomplete=true;throw new IOException("预检文件超出大小限制。");}if(bytes>remainingBytes){Incomplete=true;throw new Exhausted();}remainingBytes-=bytes;}
+  internal string[] Directories(string path){try{if(Checkpoint!=null)Checkpoint(null,0);LauncherMaintenance.NoReparse(path);if(!Directory.Exists(path)){if(Evidence!=null)Evidence.Directory(path,new string[0]);return new string[0];}var result=Directory.EnumerateDirectories(path).Select(directory=>{if(Checkpoint!=null)Checkpoint(null,0);return directory;}).Take(remainingDirectories+1).ToArray();if(result.Length>remainingDirectories){remainingDirectories=0;throw new IOException("预检目录超出累计数量上限。");}remainingDirectories-=result.Length;if(Evidence!=null)Evidence.Directory(path,result);return result;}catch{Incomplete=true;throw;}}
+  internal byte[] Read(string path,int maximum){try{if(Checkpoint!=null)Checkpoint(null,0);LauncherMaintenance.NoReparse(path);if(!File.Exists(path)){if(Evidence!=null)Evidence.File(path,null);return null;}using(var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)){Charge(input.Length,maximum);if(Checkpoint!=null)Checkpoint(path,input.Length);var bytes=new byte[(int)input.Length];int offset=0,count;while(offset<bytes.Length&&(count=input.Read(bytes,offset,bytes.Length-offset))>0){offset+=count;if(Checkpoint!=null)Checkpoint(null,0);}if(offset!=bytes.Length)throw new IOException("预检文件读取未完成。");if(Evidence!=null)Evidence.File(path,bytes);return bytes;}}catch{Incomplete=true;throw;}}
  }
  static class LaunchPreflight {
   static LaunchPreflightItem Item(string id,string status,string title,string message,string route,string[] details=null,bool canAutoSort=false){return new LaunchPreflightItem{id=id,status=status,title=title,message=message,route=route,details=(details??new string[0]).Select(s=>s.Length<=512?s:s.Substring(0,512)).Distinct(StringComparer.Ordinal).Take(100).ToArray(),canAutoSort=canAutoSort};}
@@ -86,7 +90,7 @@ namespace PZ3D {
    if(safe){try{
     byte[] bytes=budget.Read(e.Mods,1048576);string[] mods=ModConfigurations.ValidatePreflightMods(SaveProfiles.DefaultMods(bytes)),defaultMods=mods;byte[] parsed=SaveProfiles.ReplaceDefaultMods(bytes,mods);
     if(targetKind=="server"){string[] retained=LaunchProfiles.Retained(e,budget);LaunchProfiles.BuildDefault(new UTF8Encoding(false,true).GetString(bytes??parsed).TrimStart('\uFEFF'),"server",retained);mods=mods.Where(id=>retained.Contains(id.TrimStart('\\'))).ToArray();budget.Expect(()=>{if(!LaunchProfiles.Retained(e).SequenceEqual(retained))throw new IOException("服务器保留模组在检查期间改变，请重新启动。");});}
-    var warnings=new List<string>();string[] savedMods=targetKind=="save"&&targetId!=null?SaveProfiles.LaunchMods(e,targetId,budget):null;var catalog=SaveProfiles.PreflightEntries(e,mods.Concat(savedMods??new string[0]).ToArray(),warnings,budget);var sorted=ModConfigurations.SortPreflight(e,mods,budget,catalog,warnings);if(savedMods!=null){var saved=ModConfigurations.SortSavedPreflight(e,savedMods,catalog,warnings);sorted.errors=sorted.errors.Concat(saved.errors).Concat(saved.violations).ToArray();sorted.warnings=sorted.warnings.Concat(saved.warnings).Distinct(StringComparer.Ordinal).ToArray();}sorted.warnings=sorted.warnings.Where(w=>w!="作者元数据超过显示限制；目录保留有界原文摘要。"&&w!="封面路径无效。").ToArray();bool invalid=sorted.errors.Length>0||sorted.changed,canAutoSort=sorted.errors.Length==0&&sorted.changed;
+    var warnings=new List<string>();string[] savedMods=targetKind=="save"&&targetId!=null?SaveProfiles.LaunchMods(e,targetId,budget):null;var catalog=SaveProfiles.PreflightEntries(e,mods.Concat(savedMods??new string[0]).ToArray(),warnings,budget);if(savedMods!=null&&e.FrozenEnvironment!=null)savedMods=SnapshotPreparation.Expand(savedMods,catalog);var sorted=ModConfigurations.SortPreflight(e,mods,budget,catalog,warnings);if(savedMods!=null){var saved=ModConfigurations.SortSavedPreflight(e,savedMods,catalog,warnings);sorted.errors=sorted.errors.Concat(saved.errors).Concat(saved.violations).ToArray();sorted.warnings=sorted.warnings.Concat(saved.warnings).Distinct(StringComparer.Ordinal).ToArray();}sorted.warnings=sorted.warnings.Where(w=>w!="作者元数据超过显示限制；目录保留有界原文摘要。"&&w!="封面路径无效。").ToArray();bool invalid=sorted.errors.Length>0||sorted.changed,canAutoSort=sorted.errors.Length==0&&sorted.changed;
     if(canAutoSort&&targetKind=="server"){catalog.Select(defaultMods);var defaults=ModConfigurations.SortPreflight(e,defaultMods,budget,catalog,warnings);canAutoSort=defaults.errors.Length==0&&defaults.changed;}
     string message=sorted.errors.Length>0?"本次启动模组存在缺失、依赖或冲突问题，请按下列详情核对。":sorted.changed?"本次启动模组加载顺序与作者声明不一致，请按下列详情排序后继续启动。":sorted.warnings.Length>0?"部分模组信息读取不完整，请查看下方详情。":targetKind=="server"?"客户端组件检查通过，将使用服务器模组清单连接。":"已知本地来源的默认模组依赖与加载顺序通过。";
     items.Add(Item("mods",invalid?"error":sorted.warnings.Length>0?"warning":"ok",targetKind=="server"?"服务器保留模组依赖与顺序":"默认模组依赖与顺序",message,"mods",sorted.errors.Concat(sorted.violations).Concat(sorted.warnings).ToArray(),canAutoSort));modsChecked=true;

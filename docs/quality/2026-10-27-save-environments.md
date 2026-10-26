@@ -24,6 +24,8 @@
 
 源提交7a8314f1f581e09ac92d9429e7d396a8cbca0702，GitHub公开tag v1.2.33，自有服务器同步。正式目录E:\Projects\OrangeLauncher\dist\1.2.33-snapshots-ordering-20261027-final。10项发行文件、安装/便携归档和图标验证通过；Defender扫描未发现威胁。
 
+**后续运行事件补充：**上述结果只代表发布前那一次扫描。2026-10-27 04:19 用户更新至本版后，Defender 实时保护以 `Trojan:Win32/Prowloc.A!cl` 隔离实际主程序和桌面快捷方式，启动入口随后无法找到主程序。本版目前不能据此前扫描称为可正常运行；准确事件、样本身份及微软复核进展见[运行时检测记录](../security/2026-10-27-v133-runtime-detection.md)。
+
 实际生产认证容器提取必需代理通过（4666292字节），保持21项bootstrap。旧1.2.32实际编译客户端在GitHub仍为草稿时从自有服务器下载并校验至Ready1.2.33；新1.2.33客户端为Latest。两来源20项匿名下载长度/SHA及当前feed/display元数据通过。
 
 网页仅同步changes.html，当前1.2.33，19项历史记录；1440/390px实际渲染无溢出。未切换网站current、未覆盖其它页面/样式/脚本/图片，未修改防护或SSH配置；软件发布843项、更新记录发布857项受保护资源核对保持。网页备份/var/www/ozl/test-runs/changelog-193d92501d6749808ce06809390463f5/before.html。发布后固定指纹的密钥SSH/SFTP只读检查仍通过。

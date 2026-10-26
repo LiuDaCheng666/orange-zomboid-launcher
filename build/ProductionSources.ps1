@@ -84,6 +84,8 @@ function Get-OzlProductionSources {
         'SaveEnvironmentRuntime.cs',
         'SaveEnvironmentController.cs',
         'SaveEnvironmentLaunch.cs',
+        'SnapshotPreparation.cs',
+        'SnapshotPreviewWorkflow.cs', 'SnapshotDownloadWorkflow.cs',
         'ModWorkshopController.cs',
         'SafehouseCatalog.cs',
         'SafehouseTransferFormat.cs',

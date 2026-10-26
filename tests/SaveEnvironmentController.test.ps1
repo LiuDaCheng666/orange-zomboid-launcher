@@ -11,7 +11,7 @@ $agent=Join-Path $fixture 'OrangeEnvironment.jar'
 & (Join-Path $repo 'Build-EnvironmentComponent.ps1') -OutputPath $agent
 if($LASTEXITCODE -ne 0){throw 'Isolated environment agent build failed'}
 $sources=@(Get-OzlProductionSources -ProjectDirectory $project)
-foreach($name in @('SaveEnvironments.cs','SaveEnvironmentRuntime.cs','SaveEnvironmentController.cs','SaveEnvironmentControllerTests.cs','LauncherTestPaths.cs')){$path=Join-Path $project $name;if(Test-Path -LiteralPath $path){$sources+=$path}}
+foreach($name in @('SaveEnvironments.cs','SaveEnvironmentRuntime.cs','SnapshotPreparation.cs','SaveEnvironmentController.cs','SaveEnvironmentControllerTests.cs','LauncherTestPaths.cs')){$path=Join-Path $project $name;if(Test-Path -LiteralPath $path){$sources+=$path}}
 $sources=@($sources|Select-Object -Unique)
 $sdk=Join-Path $repo 'Dependencies/WebView2/lib/net462'
 $refs=@('System.Windows.Forms.dll','System.Drawing.dll','System.Web.Extensions.dll','System.Web.dll','System.Management.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll','System.Security.dll','System.Net.Http.dll')|ForEach-Object{"/reference:$_"}
