@@ -8,9 +8,10 @@ namespace PZ3D {
   public string value="",state="unknown",source="version.txt",warning="";
  }
  static class LauncherStatusMetadata {
-  // Display metadata comes only from the selected installation's bounded root file.
-  // The JAR-based compatibility probe has a separate purpose and is never a fallback here.
   public static GameVersionInfo GameVersion(string gameRoot){
+   var actual=GameVersionProbe.Read(gameRoot);return actual==null?RootVersion(gameRoot):new GameVersionInfo{value=actual.ToString(),state="known",source="projectzomboid.jar"};
+  }
+  static GameVersionInfo RootVersion(string gameRoot){
    try{
     string file=Path.Combine(Path.GetFullPath(gameRoot),"version.txt");
     for(string current=file;current!=null;current=Path.GetDirectoryName(current)){

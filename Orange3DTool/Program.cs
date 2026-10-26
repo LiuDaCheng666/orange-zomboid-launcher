@@ -66,6 +66,7 @@ namespace PZ3D {
  }
  sealed class Engine {
   public string Game,User,Data;
+  public bool ManagedVersion;
   public string BuddySource,ViewSource,ModelsSource;
   public Action<int,string> Progress;
   public string LastBackup;

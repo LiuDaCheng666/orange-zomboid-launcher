@@ -1,4 +1,4 @@
-# Explicit release inputs: adding a C# file never silently expands production.
+﻿# Explicit release inputs: adding a C# file never silently expands production.
 function Get-OzlProductionSources {
     param([Parameter(Mandatory=$true)][string]$ProjectDirectory)
     $names = @(
@@ -74,6 +74,15 @@ function Get-OzlProductionSources {
         'ModConfigurations.cs',
         'ModernAssets.cs',
         'ModernController.cs',
+        'LibraryController.cs',
+        'LibraryHost.cs',
+        'RecommendedServers.cs',
+        'SaveBackups.cs',
+        'SafehouseTransferFormat.cs',
+        'SafehouseTransfer.cs',
+        'JavaComponents.cs',
+        'VersionLibrary.cs',
+        'SteamVersionWorkflow.cs',
         'ModernDispatchQueue.cs',
         'ModernHost.cs',
         'ModernHostPolicy.cs',

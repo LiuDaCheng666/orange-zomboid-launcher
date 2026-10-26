@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>推荐服务器 · 橙子启动器</title><link rel="stylesheet" href="/admin/admin.css"><script defer src="/admin/admin.js"></script></head>
+<body>
+ <aside class="sidebar"><a class="brand" href="/admin"><span class="logo">橙</span><span>橙子启动器<small>服务器管理</small></span></a><div class="nav-item"><span>▦</span> 推荐服务器</div><div class="sidebar-note">在这里维护玩家看到的服务器列表。<br>保存为草稿，准备好后再发布。</div><div class="local-badge"><i></i> 私有管理通道</div></aside>
+ <main>
+  <header><div><div class="eyebrow">SERVER DIRECTORY</div><h1>推荐服务器</h1><p>让玩家发现适合自己的世界。</p></div><button id="logout" class="quiet" hidden>退出登录</button></header>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <section id="login-panel" class="login-panel"><div class="login-intro"><span class="login-symbol">↗</span><h2>管理你的推荐列表</h2><p>登录后可以维护服务器信息、调整顺序，以及发布或撤下推荐。</p><div class="hint">初始账号保存在启动或连接工具显示的私有凭据文件中。</div></div><form id="login-form"><h2>管理员登录</h2><label>账号<input name="username" autocomplete="username" required maxlength="128" value="admin"></label><label>密码<input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label><button class="primary" type="submit">登录管理台 <span>→</span></button></form></section>
+  <div id="workspace" hidden>
+   <section id="publication-panel" class="publication-status" role="status" hidden><p id="publication-status"></p><button id="retry-export" class="primary">重试公开同步</button></section>
+   <section class="stats"><div><span>服务器总数</span><strong id="total-count">0</strong></div><div><span>已发布</span><strong id="published-count">0</strong></div><div><span>草稿</span><strong id="draft-count">0</strong></div><div class="updated-stat"><span>最近保存</span><strong id="updated-at">—</strong></div></section>
+   <section class="toolbar"><div><h2>服务器列表</h2><p>顺序即玩家看到的推荐顺序</p></div><div class="toolbar-actions"><button id="refresh" class="quiet">刷新列表</button><button id="add" class="primary">＋ 添加服务器</button></div></section>
+   <div class="directory-grid"><section class="server-list" id="server-list" aria-label="服务器列表"></section>
+    <section class="editor" id="editor"><div class="editor-heading"><div><span class="eyebrow">SERVER DETAILS</span><h2 id="editor-title">添加服务器</h2></div><button id="close-editor" class="icon-button" aria-label="关闭编辑">×</button></div>
+     <form id="server-form"><input name="id" type="hidden"><input name="order" type="hidden" value="0">
+      <label>服务器名称 <em>*</em><input name="name" maxlength="120" required placeholder="例如：橙子合作生存服"></label>
+      <label>IP 地址 / 域名 <em>*</em><input name="host" maxlength="253" required placeholder="play.example.com" spellcheck="false"></label>
+      <div class="form-row"><label>游戏端口 <em>*</em><input name="port" type="number" min="1" max="65535" value="16261" required></label><label>查询端口<input name="queryPort" type="number" min="0" max="65535" value="0" required><small>留 0 时使用游戏端口</small></label></div>
+      <label>游戏版本<input name="version" maxlength="80" placeholder="例如：42.13"></label>
+      <label>服务器介绍<textarea name="description" rows="4" maxlength="2000" placeholder="介绍玩法、规则，以及适合什么样的玩家"></textarea></label>
+      <label>标签<input name="tags" maxlength="400" placeholder="合作，新手友好，长期运营"><small>用逗号分隔，最多 12 个标签</small></label>
+      <label>封面图片<input name="cover" type="url" maxlength="2048" placeholder="https://…"><small>可选，填写 HTTPS 图片地址</small></label>
+      <label class="check"><input name="useSteamRelay" type="checkbox"><span>通过 Steam 中继连接</span></label>
+      <label class="check publish-choice"><input name="published" type="checkbox"><span>发布到推荐列表<small>未勾选时仅保存为草稿</small></span></label>
+      <div class="form-footer"><button type="button" id="cancel-edit" class="quiet">取消</button><button type="submit" class="primary">保存服务器</button></div>
+     </form>
+    </section>
+   </div>
+  </div>
+  <footer>橙子启动器 · 推荐服务器管理</footer>
+ </main>
+</body></html>

@@ -1,0 +1,29 @@
+[Unit]
+Description=OZL private recommended server administrator
+After=network.target
+
+[Service]
+Type=simple
+User=ozl-recommendations
+Group=ozl-recommendations
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/ozl-recommendations/server.py --private-dir /var/lib/ozl-recommendations --port 18083 --export-feed /var/lib/ozl-recommendations-public/feed.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+CapabilityBoundingSet=
+ReadWriteDirectories=/var/lib/ozl-recommendations /var/lib/ozl-recommendations-public
+MemoryLimit=128M
+LimitNPROC=32
+LimitNOFILE=128
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

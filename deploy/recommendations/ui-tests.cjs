@@ -1,0 +1,101 @@
+/* Real admin HTTP/UI flow; private temporary store, headless Edge, no public server. */
+const { chromium } = require('../../Orange3DTool/Web/playwright-runtime.cjs');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawn } = require('node:child_process');
+const privatePath = fs.mkdtempSync(path.join(os.tmpdir(), 'ozl-rec-browser-'));
+const output = path.resolve(__dirname, '../../artifacts/recommendations-browser');
+fs.mkdirSync(output, { recursive: true });
+const publicPath = path.join(privatePath, 'public-fixture');
+fs.mkdirSync(publicPath);
+const service = spawn('python', ['-u', path.join(__dirname, 'server.py'), '--private-dir', privatePath, '--port', '0', '--export-feed', path.join(publicPath, 'feed.json')], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+let browser;
+async function ready() {
+  return await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Local fixture service did not start')), 10000);
+    let text = '';
+    service.stdout.on('data', chunk => { text += chunk; const match = text.match(/Local admin: (http:\/\/127\.0\.0\.1:\d+\/admin)/); if (match) { clearTimeout(timeout); resolve(match[1]); } });
+    service.once('exit', () => { clearTimeout(timeout); reject(new Error('Local fixture service exited')); });
+  });
+}
+async function feed(page, url) { return await page.evaluate(async endpoint => await (await fetch(endpoint)).json(), url.replace('/admin', '/api/recommended-servers')); }
+(async () => {
+  const url = await ready();
+  const credentials = JSON.parse(fs.readFileSync(path.join(privatePath, 'initial-credentials.json'), 'utf8'));
+  browser = await chromium.launch({ channel: 'msedge', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('dialog', dialog => dialog.accept());
+  await page.route('**/*', async route => { const target = new URL(route.request().url()); if (target.hostname === '127.0.0.1') await route.continue(); else await route.abort(); });
+  await page.goto(url);
+  await page.locator('#login-form').waitFor();
+  await page.screenshot({ path: path.join(output, 'desktop-login.png'), fullPage: true });
+  await page.locator('#login-form [name=username]').fill(credentials.username);
+  await page.locator('#login-form [name=password]').fill(credentials.password);
+  await page.locator('#login-form button').click();
+  await page.locator('#workspace').waitFor();
+  assert.equal(await page.locator('#total-count').textContent(), '0');
+  const hostile = '<img src=x onerror=alert(1)> 橙子合作服';
+  await page.locator('#server-form [name=name]').fill(hostile);
+  await page.locator('#server-form [name=host]').fill('127.0.0.1');
+  await page.locator('#server-form [name=version]').fill('42.13');
+  await page.locator('#server-form [name=description]').fill('长期合作生存\n欢迎新玩家，友好交流。');
+  await page.locator('#server-form [name=tags]').fill('合作，新手友好');
+  await page.locator('#server-form button[type=submit]').click();
+  await page.waitForFunction(() => document.querySelector('#total-count').textContent === '1');
+  assert.equal((await feed(page, url)).servers.length, 0, 'draft is excluded from launcher feed');
+  assert.equal(await page.locator('.server-name').textContent(), hostile, 'remote text rendered literally');
+  assert.equal(await page.locator('.server-name img').count(), 0, 'remote text creates no HTML');
+  fs.renameSync(publicPath, publicPath + '-offline');
+  fs.writeFileSync(publicPath, 'fixture export unavailable');
+  await page.getByRole('button', { name: '发布推荐', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#published-count').textContent === '1');
+  await page.locator('#publication-panel').waitFor();
+  assert.equal(JSON.parse(fs.readFileSync(path.join(publicPath + '-offline', 'feed.json'), 'utf8')).servers.length, 0, 'failed export keeps last complete static feed');
+  fs.unlinkSync(publicPath);
+  fs.renameSync(publicPath + '-offline', publicPath);
+  await page.getByRole('button', { name: '重试公开同步', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#publication-panel').hidden);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(publicPath, 'feed.json'), 'utf8')).servers.length, 1, 'explicit retry publishes committed revision');
+  assert.equal((await feed(page, url)).servers[0].name, hostile);
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  await page.locator('#server-form [name=name]').fill('橙子合作生存服');
+  await page.locator('#server-form button[type=submit]').click();
+  await page.waitForFunction(() => document.querySelector('.server-name').textContent === '橙子合作生存服');
+  await page.getByRole('button', { name: '＋ 添加服务器', exact: true }).click();
+  await page.locator('#server-form [name=name]').fill('河畔长夜 · 建造服');
+  await page.locator('#server-form [name=host]').fill('play.example.invalid');
+  await page.locator('#server-form [name=description]').fill('慢节奏建造，自由探索，一起留下故事。');
+  await page.locator('#server-form [name=tags]').fill('建造，轻松');
+  await page.locator('#server-form [name=published]').check();
+  await page.locator('#server-form button[type=submit]').click();
+  await page.waitForFunction(() => document.querySelector('#total-count').textContent === '2');
+  await page.getByRole('button', { name: '上移 河畔长夜 · 建造服', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.server-name').textContent === '河畔长夜 · 建造服');
+  assert.deepEqual((await feed(page, url)).servers.map(row => row.name), ['河畔长夜 · 建造服', '橙子合作生存服']);
+  for (const width of [1440, 960, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1050 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no horizontal overflow at ' + width);
+    await page.screenshot({ path: path.join(output, width + '-directory.png'), fullPage: true });
+  }
+  await page.locator('.server-card').first().getByRole('button', { name: '撤下推荐', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#published-count').textContent === '1');
+  assert.equal((await feed(page, url)).servers.length, 1);
+  await page.locator('.server-card').first().getByRole('button', { name: '删除', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#total-count').textContent === '1');
+  await page.getByRole('button', { name: '退出登录', exact: true }).click();
+  await page.locator('#login-form').waitFor();
+  assert.deepEqual(errors, [], 'admin has no browser runtime errors');
+  console.log('PASS admin login, draft/edit/publish/order/unpublish/delete/logout, escaped text, desktop/narrow screenshots');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(async () => {
+  if (browser) await browser.close();
+  service.kill();
+  await new Promise(resolve => { if (service.exitCode !== null) resolve(); else service.once('exit', resolve); });
+  const resolved = path.resolve(privatePath);
+  if (path.dirname(resolved) !== path.resolve(os.tmpdir()) || !path.basename(resolved).startsWith('ozl-rec-browser-')) throw new Error('Refusing unexpected cleanup target');
+  fs.rmSync(resolved, { recursive: true, force: true });
+});

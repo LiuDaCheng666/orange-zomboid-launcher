@@ -106,8 +106,9 @@ namespace PZ3D {
    try{LauncherMaintenance.NoReparse(bound.Executable);if(!File.Exists(bound.Executable)||!SamePath(bound.Executable,Path.Combine(bound.Options.Root,"steam.exe")))return BuddySteamState.Changed;
     var r=RegistryIdentity();if(r==null||!SamePath(r.Item1,bound.Options.Root)||(r.Item2!=0&&r.Item2!=bound.Options.Account)||(r.Item3!=0&&r.Item3!=(uint)bound.Pid))return BuddySteamState.Changed;
     bool alive=false;try{using(var p=Process.GetProcessById(bound.Pid)){if(!p.HasExited){if(p.StartTime.ToUniversalTime().Ticks!=bound.Birth||!SamePath(p.MainModule.FileName,bound.Executable))return BuddySteamState.Changed;alive=true;}}}catch(ArgumentException){}
-    if(alive&&bound.Native)return BuddySteamState.Running;
-    if(alive)return r.Item2==bound.Options.Account&&r.Item3==(uint)bound.Pid?BuddySteamState.Running:BuddySteamState.Changed;
+    // Steam clears ActiveProcess before its bound process finishes exiting. Keep waiting;
+    // nonzero account/PID changes and reused process identities have already been rejected.
+    if(alive)return BuddySteamState.Running;
     // A relaunched same client must not be treated as the old process's safe exit.
     foreach(var p in Process.GetProcessesByName("steam")){using(p){if(!p.HasExited&&SamePath(p.MainModule.FileName,bound.Executable))return BuddySteamState.Changed;}}
     return BuddySteamState.Exited;
