@@ -7,6 +7,14 @@ namespace PZ3D {
  static class DisplayCache {
   const int MaximumIdentities=4,MaximumValues=32;
   static readonly TimeSpan MaximumAge=TimeSpan.FromSeconds(30);
+  // These writes cannot alter catalog sources or component code/receipts. Keep
+  // their display snapshot; authoritative read/write paths never use this cache.
+  // Unknown mutations remain conservative and retire the snapshot.
+  static readonly HashSet<string> IndependentMutations=new HashSet<string>(StringComparer.Ordinal){
+   "theme","memorySave","settingsSave","shaderSelect","saveSave",
+   "modProfileSave","modProfileDelete","playProfileCapture","playProfileSave",
+   "playProfileDelete","playProfileSelect","playProfileImport"
+  };
   sealed class Value {internal object Data;internal DateTime Created=DateTime.UtcNow;}
   sealed class Snapshot:IDisposable {
    internal volatile bool Dirty;
@@ -100,5 +108,6 @@ namespace PZ3D {
     if(snapshots.TryGetValue(key,out snapshot)){snapshots.Remove(key);snapshot.Dispose();}
    }
   }
+  internal static void AfterMutation(Engine e,string action){if(!IndependentMutations.Contains(action))Invalidate(e);}
  }
 }

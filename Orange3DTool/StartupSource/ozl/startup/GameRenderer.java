@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage;
 import java.nio.*;
 import java.io.*;
 import java.util.*;
+import java.util.function.LongSupplier;
 import javax.imageio.ImageIO;
 import org.lwjgl.opengl.*;
 
@@ -17,7 +18,9 @@ public final class GameRenderer implements LoadingScene.Canvas {
     private final BufferedImage measureImage=new BufferedImage(1,1,BufferedImage.TYPE_INT_ARGB);
     private final Graphics2D measure=measureImage.createGraphics();
     private final AnimationClock animation=new AnimationClock();
-    public GameRenderer(){measure.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);}
+    private final LongSupplier clock;
+    public GameRenderer(){this(System::nanoTime);}
+    public GameRenderer(LongSupplier clock){this.clock=Objects.requireNonNull(clock);measure.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);}
     public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum) throws Exception {draw(state,session,used,maximum,0,0);}
     public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum,double statusBottom,double cancelTop) throws Exception {
         if(!GameDisplay.created()||GL.getCapabilities()==null)return;
@@ -36,7 +39,7 @@ public final class GameRenderer implements LoadingScene.Canvas {
             GL11.glMatrixMode(GL11.GL_PROJECTION);GL11.glPushMatrix();projection=true;GL11.glLoadIdentity();GL11.glOrtho(0,width,height,0,-1,1);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPushMatrix();modelview=true;GL11.glLoadIdentity();
             if(logo==null){try(InputStream input=GameRenderer.class.getResourceAsStream("/ozl/startup/orange.png")){if(input==null)throw new IOException("Missing OZL mark");BufferedImage source=ImageIO.read(input);logo=upload(source);LogoGrowth.Parts parts=LogoGrowth.split(source);body=upload(parts.body());leaf=upload(parts.leaf());}}
-            double visible=animation.seconds(state.epoch,state.context+":"+state.route,System.nanoTime());
+            double visible=animation.seconds(state.epoch,state.context+":"+state.route,clock.getAsLong());
             LoadingScene.draw(this,width,height,state,visible,"light".equals(session.theme),session.reducedMotion,used,maximum,statusBottom,cancelTop);
         } finally {
             if(modelview){GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPopMatrix();}

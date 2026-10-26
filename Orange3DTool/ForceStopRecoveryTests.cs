@@ -38,8 +38,8 @@ namespace PZ3D {
    Check(!report.items.Single(i=>i.id=="recovery").message.Contains("Buddy")&&before.SequenceEqual(f.Snapshot()),"unbound diagnostic reports session recovery separately and never mutates files");
   }}
   static void PreparedAndSteamGrace(){foreach(string state in new[]{"prepared","launched"})using(var f=new Fixture())using(var c=f.Controller()){
-   f.Stage("normal",state,0,0);var before=f.Snapshot();var payload=GameStartupPresentationTests.Begin(c);var report=(LaunchPreflightReport)c.Execute("launchPreflight",payload);
-   Check(!report.canLaunch&&LaunchProfiles.Pending(f.E)&&before.SequenceEqual(f.Snapshot()),"fresh "+state+" session retains its launch race grace and exact files");
+   f.Stage("normal",state,0,0);var before=f.Snapshot();bool blocked=false;try{var payload=GameStartupPresentationTests.Begin(c);blocked=!((LaunchPreflightReport)c.Execute("launchPreflight",payload)).canLaunch;}catch(InvalidOperationException){blocked=true;}
+   Check(blocked&&LaunchProfiles.Pending(f.E)&&before.SequenceEqual(f.Snapshot()),"fresh "+state+" session retains its launch race grace and exact files");
   }}
   sealed class Handle:IClientProcessHandle {
    internal ClientIdentity Identity;internal bool Done,Fail;internal Action OnStop;

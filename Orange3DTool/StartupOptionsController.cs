@@ -1,0 +1,6 @@
+using System;using System.Collections.Generic;
+namespace PZ3D {sealed partial class ModernController {
+ internal static bool StartupOptionsAction(string action){return action=="loadingOptions"||action=="loadingSetEnabled"||action=="loadingUninstall";}
+ internal static void ValidateStartupOptions(string action,Dictionary<string,object> p){object value;if(p==null)throw new InvalidOperationException("加载画面参数无效。");if(action=="loadingOptions"){if(p.Count!=0)throw new InvalidOperationException("加载画面状态不接受路径。");return;}if(p.Count!=(action=="loadingSetEnabled"?2:1)||!p.TryGetValue("confirmed",out value)||!(value is bool)||!(bool)value)throw new InvalidOperationException("请确认加载画面操作。");if(action=="loadingSetEnabled"&&(!p.TryGetValue("enabled",out value)||!(value is bool)))throw new InvalidOperationException("请选择是否启用加载画面。");}
+ object StartupOptions(string action,Dictionary<string,object> p){ValidateStartupOptions(action,p);if(action=="loadingOptions")return GameStartupComponent.State(engine);Check();if(action=="loadingSetEnabled")GameStartupComponent.SetEnabled(engine,(bool)p["enabled"]);else GameStartupComponent.Remove(engine);return new{message=action=="loadingUninstall"?"加载画面已卸载":(bool)p["enabled"]?"加载画面已开启，下次启动生效":"加载画面已关闭",state=GameStartupComponent.State(engine)};}
+}}

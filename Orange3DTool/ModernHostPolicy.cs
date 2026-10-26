@@ -11,7 +11,7 @@ namespace PZ3D {
    Uri uri;if(!Uri.TryCreate(source,UriKind.Absolute,out uri)||uri.Scheme!="https"||uri.Host!="orange.local"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.AbsolutePath!="/index.html")throw new Exception("拒绝非本地受信界面的请求。");
    if(text==null||text.Length>262144)throw new Exception("界面请求过大或为空。");
    var request=new JavaScriptSerializer{MaxJsonLength=262144,RecursionLimit=24}.Deserialize<Dictionary<string,object>>(text);object id,action,payload;
-   if(request==null||!request.TryGetValue("id",out id)||!(id is string)||!Regex.IsMatch((string)id,@"^[A-Za-z0-9_-]{1,96}$")||!request.TryGetValue("action",out action)||!(action is string)||(!Actions.Contains((string)action)&&!CoreAction((string)action)&&!BuddyAction((string)action)&&!PlayProfiles.Action((string)action)))throw new Exception("未知或无效的界面操作。");
+   if(request==null||!request.TryGetValue("id",out id)||!(id is string)||!Regex.IsMatch((string)id,@"^[A-Za-z0-9_-]{1,96}$")||!request.TryGetValue("action",out action)||!(action is string)||(!Actions.Contains((string)action)&&!CoreAction((string)action)&&!BuddyAction((string)action)&&!PlayProfiles.Action((string)action)&&!FeedbackService.Action((string)action)&&!ModernController.StartupOptionsAction((string)action)))throw new Exception("未知或无效的界面操作。");
    if(!request.TryGetValue("payload",out payload)||!(payload is Dictionary<string,object>))throw new Exception("操作参数必须是对象。");
    if(ModernController.ServerWorkshopAction((string)action))ValidateWorkshopPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="openContact")LauncherContact.Resolve((Dictionary<string,object>)payload);
@@ -27,11 +27,13 @@ namespace PZ3D {
    if(ModernController.StartupControl((string)action))ValidateStartupPayload((string)action,(Dictionary<string,object>)payload);if((string)action=="launch"||(string)action=="profileLaunch")ValidateLaunchPayload((string)action,(Dictionary<string,object>)payload);if((string)action=="launchPreflight")ValidatePreflightPayload((Dictionary<string,object>)payload);if((string)action=="modAutoSort")ValidateAutoSortPayload((Dictionary<string,object>)payload);
    if((string)action=="gameDiagnostics")GameDiagnostics.ValidatePayload((Dictionary<string,object>)payload);
    if(ModernController.LogAnalysisAction((string)action))ModernController.ValidateLogAnalysisPayload((Dictionary<string,object>)payload);
+   if(FeedbackService.Action((string)action))FeedbackService.Validate((string)action,(Dictionary<string,object>)payload);
+   if(ModernController.StartupOptionsAction((string)action))ModernController.ValidateStartupOptions((string)action,(Dictionary<string,object>)payload);
    if(BuddyAction((string)action))ValidateBuddyPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="saveDeletePreview"||(string)action=="saveDelete")ValidateSaveDeletionPayload((string)action,(Dictionary<string,object>)payload);
    return request;
   }
-  static ModernHostPolicy(){foreach(string action in new[]{"startupBegin","startupCancel","startupYield","startupResume"})Actions.Add(action);foreach(string action in new[]{"logAnalysisStatus","logAnalysisLocal","logAnalysisImport","logAnalysisFolder","logAnalysisCancel","logAnalysisExport"})Actions.Add(action);Actions.Add("openContact");Actions.Add("gameDiagnostics");Actions.Add("gameProcesses");Actions.Add("forceCloseGame");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");foreach(string action in new[]{"serverWorkshopGet","serverWorkshopImport","serverWorkshopPrepare","serverWorkshopStatus","serverWorkshopCancel"})Actions.Add(action);}
+  static ModernHostPolicy(){foreach(string action in new[]{"startupBegin","startupCancel","startupYield","startupResume","startupStatus"})Actions.Add(action);foreach(string action in new[]{"logAnalysisStatus","logAnalysisLocal","logAnalysisImport","logAnalysisFolder","logAnalysisCancel","logAnalysisExport"})Actions.Add(action);Actions.Add("openContact");Actions.Add("gameDiagnostics");Actions.Add("gameProcesses");Actions.Add("forceCloseGame");Actions.Add("saveDeletePreview");Actions.Add("saveDelete");foreach(string action in new[]{"serverWorkshopGet","serverWorkshopImport","serverWorkshopPrepare","serverWorkshopStatus","serverWorkshopCancel"})Actions.Add(action);}
   internal static void ValidateWorkshopPayload(string action,Dictionary<string,object> p){
    if(p==null)throw new Exception("缺少清单参数。");string[] fields=action=="serverWorkshopStatus"?new string[0]:action=="serverWorkshopCancel"?new[]{"jobId"}:action=="serverWorkshopGet"?new[]{"id"}:action=="serverWorkshopImport"?new[]{"id","stamp","text","confirmed"}:new[]{"id","stamp","confirmed"};if(p.Count!=fields.Length||fields.Any(k=>!p.ContainsKey(k)))throw new Exception("清单操作参数无效。");foreach(string field in fields){if(field=="confirmed"){if(!(p[field] is bool)||!(bool)p[field])throw new Exception("操作需要明确确认。");}else if(!(p[field] is string)||((string)p[field]).Length>(field=="text"?65536:field=="stamp"?64:32))throw new Exception("清单操作参数无效。");}
   }
@@ -42,6 +44,7 @@ namespace PZ3D {
   internal static bool StartupId(object value){return value is string&&System.Text.RegularExpressions.Regex.IsMatch((string)value,@"\A[a-f0-9]{32}\z");}
   internal static void ValidateStartupPayload(string action,Dictionary<string,object> p){
    object kind,id;if(p==null)throw new Exception("缺少启动参数。");
+   if(action=="startupStatus"){if(p.Count!=0)throw new Exception("启动状态读取不接受目标参数。");return;}
    if(action=="startupBegin"){
     if(p.Count!=2||!p.TryGetValue("targetKind",out kind)||!(kind is string)||!new[]{"normal","save","server"}.Contains((string)kind)||!p.TryGetValue("targetId",out id)||!(id is string)||((string)id).Length>1024||((string)id).Any(c=>c<' '||c=='\u007f')||((string)kind=="normal"?((string)id)!="":String.IsNullOrWhiteSpace((string)id)))throw new Exception("启动准备只接受明确的本机目标。");
    }else if(p.Count!=1||!p.TryGetValue("startupId",out id)||!StartupId(id))throw new Exception("启动准备标识无效。");

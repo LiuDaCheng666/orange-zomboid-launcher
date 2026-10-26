@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 namespace PZ3D {
- sealed class GameLaunchOutcome { public string message; public string stage; public string warning; public LaunchPreflightReport preflight; }
+ sealed class GameLaunchOutcome { public string message; public string stage; public string warning; public LaunchPreflightReport preflight; public GameStartupPending startup; }
  sealed class ProfileLaunchRequest {
   public string Kind,Id,Mode,Save,Host,Username,UserPassword,ServerPassword;
   public int Port; public bool UseSteamRelay;
@@ -36,6 +36,9 @@ namespace PZ3D {
   public static string Recover(Engine e,bool force=false,string expectedNonce=null){using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;try{try{acquired=mutex.WaitOne(5000);}catch(AbandonedMutexException){acquired=true;}if(!acquired)return "另一个启动任务正在准备，请稍后恢复。";if(PlayProfileTransaction.Pending(e))return PlayProfileTransaction.PendingMessage;if(!Pending(e))return "";if(expectedNonce!=null&&Load(e).Nonce!=expectedNonce)return "旧会话已结束；未改动新会话。";return RecoverUnlocked(e,force);}finally{if(acquired)mutex.ReleaseMutex();}}}
   public static bool Pending(Engine e){return File.Exists(Journal(e));}
   internal static string RecoveryNonce(Engine e){return Pending(e)?Load(e).Nonce:null;}
+  // A new UI/controller can reconnect only to a validated, still-fresh Steam
+  // submission. A recovery journal on its own is not a pending launch forever.
+  internal static GameStartupLaunch PendingStartup(Engine e,DateTime now){try{if(!Pending(e))return null;var record=Load(e);DateTime created;if(record.Kind!="normal"||record.State!="launched"||record.Pid!=0||!DateTime.TryParse(record.CreatedUtc,out created))return null;created=created.ToUniversalTime();if(created>now||now-created>=TimeSpan.FromSeconds(180))return null;return new GameStartupLaunch{SessionId=record.Nonce,GamePath=e.Game,UserPath=e.User,DataPath=e.Data,StartedUtc=created,TargetKind="normal",Stage="submitted"};}catch{return null;}}
   // Only identities verified and terminated by the confirmed close preview can
   // end Steam's no-PID grace early. Bind that proof to the session seen before
   // closing; a delayed close must never force recovery of a replacement session.

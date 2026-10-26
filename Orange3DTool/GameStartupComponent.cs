@@ -20,7 +20,7 @@ namespace PZ3D {
   static readonly Lazy<byte[]> BundledPayload=new Lazy<byte[]>(LoadPayload);
   [DllImport("user32.dll")]static extern bool SystemParametersInfo(uint action,uint parameter,out bool enabled,uint flags);
   static bool ReducedMotion(){try{bool enabled;return SystemParametersInfo(0x1042,0,out enabled,0)&&!enabled;}catch{return false;}}
-  sealed class Ownership {public string version,jar,session,issues;internal bool PreparationPending;}
+  sealed class Ownership {public string version,jar,session,issues;internal bool PreparationPending,RemovalPending;}
   sealed class PendingOwnership {public string version,kind,jar,session,issues,nextJar,nextSession,nextIssues;}
   static string Folder(string game){return Path.Combine(Path.GetFullPath(game),"OrangeLauncherRuntime","startup");}
   static string Encode(string value){return Convert.ToBase64String(Encoding.UTF8.GetBytes(value??""));}
@@ -38,14 +38,14 @@ namespace PZ3D {
   static string OptionalHash(byte[] bytes){return bytes==null?null:Hash(bytes);}
   static bool HashValue(string value,bool nullable){return nullable&&value==null||Regex.IsMatch(value??"",@"\A[A-F0-9]{64}\z");}
   static void RequireHash(string path,byte[] bytes,string hash){if(bytes==null||!Regex.IsMatch(hash??"",@"\A[A-F0-9]{64}\z")||Hash(bytes)!=hash)throw new IOException("启动组件文件缺失或被修改，未覆盖："+Path.GetFileName(path));}
-  static void RequireTransition(string name,byte[] bytes,string before,string after){if(!HashValue(before,true)||!HashValue(after,false))throw new IOException("启动组件恢复记录校验无效。");string actual=OptionalHash(bytes);if(actual!=before&&actual!=after)throw new IOException("启动组件恢复遇到外部修改，未覆盖："+name);}
+  static void RequireTransition(string name,byte[] bytes,string before,string after,bool removal=false){if(!HashValue(before,!removal)||!HashValue(after,removal)||removal&&after!=null)throw new IOException("启动组件恢复记录校验无效。");string actual=OptionalHash(bytes);if(actual!=before&&actual!=after)throw new IOException("启动组件恢复遇到外部修改，未覆盖："+name);}
   static Ownership Existing(string folder,byte[] jar,byte[] session,byte[] issues,byte[] record){
    if(record==null){if(jar!=null||session!=null||issues!=null)throw new IOException("已有同名启动组件文件缺少所有权记录，未覆盖。");return null;}
    Ownership owner;try{string text=new UTF8Encoding(false,true).GetString(record);var header=Json.Deserialize<Dictionary<string,object>>(text);object version;if(header==null||!header.TryGetValue("version",out version))throw new IOException();
     if(Equals(version,"OZL1-PENDING")){
-     CoreReleaseProtocol.ReadStoredObject(record,"version","kind","jar","session","issues","nextJar","nextSession","nextIssues");var pending=Json.Deserialize<PendingOwnership>(text);if(pending.kind!="prepare"&&pending.kind!="issues")throw new IOException("未知的启动组件事务。");
-     RequireTransition("OrangeStartup.jar",jar,pending.jar,pending.nextJar);RequireTransition("session.properties",session,pending.session,pending.nextSession);RequireTransition("issues.txt",issues,pending.issues,pending.nextIssues);
-     return new Ownership{version="OZL1",jar=OptionalHash(jar),session=OptionalHash(session),issues=OptionalHash(issues),PreparationPending=pending.kind=="prepare"};
+     CoreReleaseProtocol.ReadStoredObject(record,"version","kind","jar","session","issues","nextJar","nextSession","nextIssues");var pending=Json.Deserialize<PendingOwnership>(text);if(pending.kind!="prepare"&&pending.kind!="issues"&&pending.kind!="remove")throw new IOException("未知的启动组件事务。");bool removal=pending.kind=="remove";
+     RequireTransition("OrangeStartup.jar",jar,pending.jar,pending.nextJar,removal);RequireTransition("session.properties",session,pending.session,pending.nextSession,removal);RequireTransition("issues.txt",issues,pending.issues,pending.nextIssues,removal);
+     return new Ownership{version="OZL1",jar=OptionalHash(jar),session=OptionalHash(session),issues=OptionalHash(issues),PreparationPending=pending.kind=="prepare"||removal,RemovalPending=removal};
     }
     CoreReleaseProtocol.ReadStoredObject(record,"version","jar","session","issues");owner=Json.Deserialize<Ownership>(text);
    }catch{throw new IOException("启动组件所有权或恢复记录无效，未覆盖。");}
@@ -91,6 +91,37 @@ namespace PZ3D {
    if(count==1&&atRoot)return original;
    foreach(var branch in branches)branch["vmArgs"]=((IEnumerable)branch["vmArgs"]).Cast<string>().Where(a=>a!=Argument).ToArray();config["vmArgs"]=((IEnumerable)config["vmArgs"]).Cast<string>().Concat(new[]{Argument}).ToArray();byte[] bytes=new UTF8Encoding(false).GetBytes(Json.Serialize(config));if(bytes.Length>ConfigLimit)throw new IOException("游戏启动配置超过安全大小。");return bytes;
   }
+  static string Preference(Engine e){return Path.Combine(Path.GetFullPath(e.Data),"game-startup-enabled.txt");}
+  static bool PreferenceValue(byte[] bytes){if(bytes==null)return true;string value=Encoding.ASCII.GetString(bytes);if(value=="enabled\n")return true;if(value=="disabled\n")return false;throw new IOException("加载页设置格式无效，未覆盖。");}
+  internal static bool Enabled(Engine e){if(e==null)throw new ArgumentNullException("e");return PreferenceValue(Read(Preference(e),64));}
+  static byte[] Detached(byte[] original,out bool installed){
+   if(original==null)throw new IOException("游戏启动配置不存在。");string text=new UTF8Encoding(false,true).GetString(original).TrimStart('\uFEFF');if(!BuddyLaunchArguments.CleanJson(text).Safe)throw new IOException("游戏启动配置存在重复或不明确字段。");var config=Json.Deserialize<Dictionary<string,object>>(text);if(config==null||!config.ContainsKey("vmArgs"))throw new IOException("游戏启动配置缺少 vmArgs。");var branches=Branches(config).ToArray();installed=branches.Any(branch=>((IEnumerable)branch["vmArgs"]).Cast<string>().Contains(Argument));if(!installed)return original;
+   foreach(var branch in branches)branch["vmArgs"]=((IEnumerable)branch["vmArgs"]).Cast<string>().Where(arg=>arg!=Argument).ToArray();byte[] result=new UTF8Encoding(false).GetBytes(Json.Serialize(config));if(result.Length>ConfigLimit)throw new IOException("游戏启动配置超过安全大小。");return result;
+  }
+  internal static object State(Engine e){
+   bool enabled=true,installed=false,removable=false;string warning="";if(e==null)return new{enabled=enabled,installed=installed,removable=removable,warning="未选择游戏目录。"};
+   try{enabled=Enabled(e);}catch(Exception error){warning=error.Message;}
+   try{bool detected;Detached(Read(e.Config,ConfigLimit),out detected);installed=detected;}catch(Exception error){warning=warning==""?error.Message:warning+" "+error.Message;}
+   try{Paths(e.Game,e.User);string folder=Folder(e.Game);byte[] session=Read(Path.Combine(folder,"session.properties"),SessionLimit);var owner=Existing(folder,Read(Path.Combine(folder,"OrangeStartup.jar"),JarLimit),session,Read(Path.Combine(folder,"issues.txt"),IssueLimit),Read(Path.Combine(folder,"ownership.json"),4096));if(owner!=null&&session!=null)Session(e.Game,e.User,session,false);removable=owner!=null&&(!owner.PreparationPending||owner.RemovalPending);if(owner!=null&&owner.RemovalPending)warning=warning==""?"加载页卸载未完成，请重试卸载。":warning;else if(owner!=null&&owner.PreparationPending)warning=warning==""?"加载页准备未完成，请先恢复启动。":warning;}catch(Exception error){warning=warning==""?error.Message:warning+" "+error.Message;}
+   return new{enabled=enabled,installed=installed,removable=removable,warning=warning};
+  }
+  static void ControlGuard(Engine e){if(e==null)throw new ArgumentNullException("e");Paths(e.Game,e.User);LauncherMaintenance.NoReparse(e.Config);LauncherMaintenance.NoReparse(Path.GetFullPath(e.Data));LauncherMaintenance.NoReparse(Preference(e));LauncherMaintenance.NoReparse(LaunchProfiles.Journal(e));if(LaunchProfiles.Pending(e))throw new IOException("启动会话尚未恢复，未改动加载页。");e.GuardLaunch();if(!e.TestMode&&e.RuntimeRunning())throw new IOException("游戏客户端或同目录服务器仍在运行，请退出后再修改加载页。");}
+  static void SaveEnabled(Engine e,bool enabled,byte[] preference,byte[] config,byte[] detached){
+   byte[] next=Encoding.ASCII.GetBytes(enabled?"enabled\n":"disabled\n");PreferenceValue(preference);if(!Same(Read(Preference(e),64),preference)||!Same(Read(e.Config,ConfigLimit),config))throw new IOException("加载页设置或游戏配置已改变，请刷新后重试。");bool wroteConfig=false;
+   try{if(!enabled&&!Same(config,detached)){Atomic(e.Config,detached);wroteConfig=true;}if(!Same(preference,next))Atomic(Preference(e),next);}
+   catch{if(wroteConfig){try{if(Same(Read(e.Config,ConfigLimit),detached))Atomic(e.Config,config);}catch{ /* Exact detachment remains safe; never overwrite a later external edit. */ }}throw;}
+  }
+  static void UpdatePreference(Engine e,bool enabled,bool onlyIfDisabled){ControlGuard(e);using(var lease=Lease(e.Game)){if(!Acquire(lease))throw new IOException("另一个加载页操作正在进行。");try{byte[] preference=Read(Preference(e),64);if(onlyIfDisabled&&PreferenceValue(preference))return;byte[] config=Read(e.Config,ConfigLimit);bool installed;byte[] detached=Detached(config,out installed);SaveEnabled(e,enabled,preference,config,detached);}finally{lease.ReleaseMutex();}}}
+  internal static void SetEnabled(Engine e,bool enabled){UpdatePreference(e,enabled,false);}
+  internal static void Remove(Engine e){ControlGuard(e);using(var lease=Lease(e.Game)){if(!Acquire(lease))throw new IOException("另一个加载页操作正在进行。");try{
+   string folder=Folder(e.Game),recordPath=Path.Combine(folder,"ownership.json");string[] targets={Path.Combine(folder,"OrangeStartup.jar"),Path.Combine(folder,"session.properties"),Path.Combine(folder,"issues.txt")};byte[][] bytes={Read(targets[0],JarLimit),Read(targets[1],SessionLimit),Read(targets[2],IssueLimit)};byte[] record=Read(recordPath,4096),preference=Read(Preference(e),64),config=Read(e.Config,ConfigLimit);bool installed;byte[] detached=Detached(config,out installed);var owner=Existing(folder,bytes[0],bytes[1],bytes[2],record);PreferenceValue(preference);
+   if(owner!=null&&owner.PreparationPending&&!owner.RemovalPending)throw new IOException("启动组件准备尚未恢复，请先完成启动恢复后再卸载。");if(owner!=null&&bytes[1]!=null)Session(e.Game,e.User,bytes[1],false);
+   SaveEnabled(e,false,preference,config,detached);if(owner==null)return;
+   byte[] journal=owner.RemovalPending?record:Encoding.UTF8.GetBytes(Json.Serialize(new PendingOwnership{version="OZL1-PENDING",kind="remove",jar=owner.jar,session=owner.session,issues=owner.issues,nextJar=null,nextSession=null,nextIssues=null}));
+   for(int i=0;i<targets.Length;i++)if(!Same(Read(targets[i],i==0?JarLimit:i==1?SessionLimit:IssueLimit),bytes[i]))throw new IOException("加载页文件已改变，未删除。");if(!Same(Read(recordPath,4096),record))throw new IOException("加载页所有权记录已改变，未删除。");if(!owner.RemovalPending)Atomic(recordPath,journal);
+   for(int i=0;i<targets.Length;i++){if(!Same(Read(targets[i],i==0?JarLimit:i==1?SessionLimit:IssueLimit),bytes[i]))throw new IOException("加载页卸载遇到外部修改，未删除。");if(bytes[i]!=null)File.Delete(targets[i]);}
+   if(!Same(Read(recordPath,4096),journal))throw new IOException("加载页所有权记录已改变，未删除。");File.Delete(recordPath);foreach(string directory in new[]{folder,Path.GetDirectoryName(folder)}){LauncherMaintenance.NoReparse(directory);if(Directory.Exists(directory)&&!Directory.EnumerateFileSystemEntries(directory).Any())Directory.Delete(directory,false);}
+  }finally{lease.ReleaseMutex();}}}
   internal static bool IsOwnedArgument(Engine e,string argument){if(argument!=Argument||e==null)return false;try{Paths(e.Game,e.User);return Same(Read(Path.Combine(Folder(e.Game),"OrangeStartup.jar"),JarLimit),Payload());}catch{return false;}}
   // Read-only preflight may offer to replace an intact recorded prior version.
   // Launch validation still requires IsOwnedArgument after preparation succeeds.
@@ -98,11 +129,11 @@ namespace PZ3D {
    Paths(e.Game,e.User);string folder=Folder(e.Game);byte[] session=Read(Path.Combine(folder,"session.properties"),SessionLimit);var owner=Existing(folder,Read(Path.Combine(folder,"OrangeStartup.jar"),JarLimit),session,Read(Path.Combine(folder,"issues.txt"),IssueLimit),Read(Path.Combine(folder,"ownership.json"),4096));return owner!=null&&(session==null||Session(e.Game,e.User,session,false)!=null);
   }catch{return false;}}
   internal static void Prepare(Engine e,string sessionId){
-   if(e==null)throw new ArgumentNullException("e");if(!Nonce(sessionId))throw new IOException("启动组件会话标识无效。");Paths(e.Game,e.User);LauncherMaintenance.NoReparse(e.Config);LauncherMaintenance.NoReparse(LaunchProfiles.Journal(e));if(LaunchProfiles.Pending(e))throw new IOException("启动会话尚未恢复，未改动启动组件。");e.GuardLaunch();byte[] payload=Payload();
+   if(e==null)throw new ArgumentNullException("e");if(!Nonce(sessionId))throw new IOException("启动组件会话标识无效。");if(!Enabled(e)){UpdatePreference(e,false,true);return;}Paths(e.Game,e.User);LauncherMaintenance.NoReparse(e.Config);LauncherMaintenance.NoReparse(LaunchProfiles.Journal(e));if(LaunchProfiles.Pending(e))throw new IOException("启动会话尚未恢复，未改动启动组件。");e.GuardLaunch();byte[] payload=Payload();
    using(var lease=Lease(e.Game)){bool acquired=Acquire(lease);if(!acquired)throw new IOException("另一个启动组件准备正在进行。");try{
     string folder=Folder(e.Game),jarPath=Path.Combine(folder,"OrangeStartup.jar"),sessionPath=Path.Combine(folder,"session.properties"),issuesPath=Path.Combine(folder,"issues.txt"),recordPath=Path.Combine(folder,"ownership.json");
     var before=new Dictionary<string,byte[]>{{jarPath,Read(jarPath,JarLimit)},{sessionPath,Read(sessionPath,SessionLimit)},{issuesPath,Read(issuesPath,IssueLimit)},{recordPath,Read(recordPath,4096)},{e.Config,Read(e.Config,ConfigLimit)}};
-    var owner=Existing(folder,before[jarPath],before[sessionPath],before[issuesPath],before[recordPath]);Dictionary<string,string> previous=null;if(owner!=null&&before[sessionPath]!=null)previous=Session(e.Game,e.User,before[sessionPath],false);
+    var owner=Existing(folder,before[jarPath],before[sessionPath],before[issuesPath],before[recordPath]);if(owner!=null&&owner.RemovalPending)throw new IOException("加载页卸载未完成，请先重试卸载。");Dictionary<string,string> previous=null;if(owner!=null&&before[sessionPath]!=null)previous=Session(e.Game,e.User,before[sessionPath],false);
     byte[] config=Configuration(before[e.Config]);long created=DateTimeOffset.UtcNow.ToUnixTimeSeconds();bool reuse=previous!=null&&previous["session"]==sessionId&&long.Parse(previous["expires"],CultureInfo.InvariantCulture)>created&&before[issuesPath]!=null&&new UTF8Encoding(false,true).GetString(before[issuesPath]).StartsWith("OZL1\n"+sessionId+"\n",StringComparison.Ordinal);
     byte[] session=reuse?before[sessionPath]:Encoding.ASCII.GetBytes(string.Join("\n",new[]{"version=OZL1","session="+sessionId,"created="+created.ToString(CultureInfo.InvariantCulture),"expires="+(created+600).ToString(CultureInfo.InvariantCulture),"game="+Encode(Path.GetFullPath(e.Game)),"user="+Encode(Path.GetFullPath(e.User)),"issues="+Encode(issuesPath),"theme="+(LauncherTheme.Load(e.Data).Light?"light":"dark"),"reducedMotion="+(ReducedMotion()?"true":"false")})+"\n");
     Session(e.Game,e.User,session,true);byte[] issues=reuse?before[issuesPath]:IssueBytes(sessionId,null);byte[] record=Encoding.UTF8.GetBytes(Json.Serialize(new Ownership{version="OZL1",jar=Hash(payload),session=Hash(session),issues=Hash(issues)}));

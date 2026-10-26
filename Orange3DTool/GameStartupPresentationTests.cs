@@ -28,6 +28,7 @@ namespace PZ3D {
      Assert(events[0].TargetKind==kind&&events[1].StartedUtc>=before&&events[0].StartedUtc.Kind==DateTimeKind.Utc,"target and launch birth recorded for "+kind);
      Assert(!ReferenceEquals(events[0],events[1])&&events[0].Stage=="preflight","previous lifecycle event remains immutable");
      Assert(events[0].Message.IndexOf("must-not-appear",StringComparison.Ordinal)<0&&events[0].Message.IndexOf("private-target",StringComparison.Ordinal)<0,"startup display excludes private target credentials");
+     controller.ExpireStartup(DateTime.UtcNow.AddSeconds(181));
     }
     events.Clear();var failure=new IOException("Failed access_token=private-token");Exception actual=null;
     var failurePayload=Begin(controller);try{controller.RunStartupPresentation("launch",failurePayload,()=>{controller.CommitStartup();throw failure;});}catch(Exception error){actual=error;}
@@ -35,15 +36,15 @@ namespace PZ3D {
     Assert(events.Count==3&&events[2].Stage=="failed"&&!events[2].Message.Contains("private-token"),"failed launch keeps safe diagnostic in same startup session");
     events.Clear();controller.RunStartupPresentation("status",null,()=>new object());Assert(events.Count==0,"nonlaunch reads never create startup windows");
     controller.StartupPresentation=value=>{throw new InvalidOperationException("observer unavailable");};int launched=0;
-    var observerPayload=Begin(controller);controller.RunStartupPresentation("launch",observerPayload,()=>{controller.CommitStartup();launched++;return new object();});Assert(launched==1,"presentation failure cannot prevent game launch");
+    var observerPayload=Begin(controller);controller.RunStartupPresentation("launch",observerPayload,()=>{controller.CommitStartup();launched++;return new object();});Assert(launched==1,"presentation failure cannot prevent game launch");controller.ExpireStartup(DateTime.UtcNow.AddSeconds(181));
     controller.StartupPresentation=value=>events.Add(value);
     var cancelled=Begin(controller);string cancelledId=(string)cancelled["startupId"];controller.CancelStartup(cancelledId);
     Reject(()=>controller.RunStartupPresentation("launch",cancelled,()=>{throw new Exception("must not run");}),"preflight close prevents delayed launch");
     var stale=Begin(controller);controller.ExpireStartup(DateTime.UtcNow.AddMinutes(3));Reject(()=>controller.RunStartupPresentation("launch",stale,()=>new object()),"orphan lease prevents late launch");
     var wrong=Begin(controller,"server","server-id");Reject(()=>controller.RunStartupPresentation("profileLaunch",new Dictionary<string,object>{{"startupId",wrong["startupId"]},{"kind","server"},{"id","other"}},()=>new object()),"attempt binds exact target");controller.CancelStartup((string)wrong["startupId"]);
-    var yielded=Begin(controller);var idOnly=new Dictionary<string,object>{{"startupId",yielded["startupId"]}};controller.Execute("startupYield",idOnly);Reject(()=>controller.RunStartupPresentation("launch",yielded,()=>new object()),"yielded confirmation cannot launch");controller.Execute("startupResume",idOnly);controller.RunStartupPresentation("launch",yielded,()=>{controller.CommitStartup();return new object();});Reject(()=>controller.RunStartupPresentation("launch",yielded,()=>new object()),"consumed attempt cannot replay");
+    var yielded=Begin(controller);var idOnly=new Dictionary<string,object>{{"startupId",yielded["startupId"]}};controller.Execute("startupYield",idOnly);Reject(()=>controller.RunStartupPresentation("launch",yielded,()=>new object()),"yielded confirmation cannot launch");controller.Execute("startupResume",idOnly);controller.RunStartupPresentation("launch",yielded,()=>{controller.CommitStartup();return new object();});Reject(()=>controller.RunStartupPresentation("launch",yielded,()=>new object()),"consumed attempt cannot replay");controller.ExpireStartup(DateTime.UtcNow.AddSeconds(181));
     Reject(()=>controller.Execute("startupBegin",new Dictionary<string,object>{{"targetKind","normal"},{"targetId",""},{"path","untrusted"}}),"startup rejects extra path payload");
-    var previous=Begin(controller);controller.CancelStartup((string)previous["startupId"]);var current=Begin(controller);controller.CancelStartup((string)previous["startupId"]);controller.RunStartupPresentation("launch",current,()=>{controller.CommitStartup();return new object();});Assert(true,"old cancellation cannot cancel a newer launch attempt");
+    var previous=Begin(controller);controller.CancelStartup((string)previous["startupId"]);var current=Begin(controller);controller.CancelStartup((string)previous["startupId"]);controller.RunStartupPresentation("launch",current,()=>{controller.CommitStartup();return new object();});Assert(true,"old cancellation cannot cancel a newer launch attempt");controller.ExpireStartup(DateTime.UtcNow.AddSeconds(181));
     var changed=Begin(controller);typeof(ModernController).GetField("engine",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).SetValue(controller,new Engine(Path.Combine(root,"other"),Path.Combine(root,"user"),Path.Combine(root,"data"),true));Reject(()=>controller.RunStartupPresentation("launch",changed,()=>new object()),"engine identity change invalidates preflight attempt");controller.CancelStartup((string)changed["startupId"]);
 
    }}finally{Directory.Delete(root,true);}

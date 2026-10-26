@@ -93,6 +93,9 @@ public final class LoadingScene {
         if(state.downloaded>=0&&state.downloadTotal>0)detail=String.format(Locale.ROOT,"创意工坊下载  %.2f / %.2f MiB",state.downloaded/1048576d,state.downloadTotal/1048576d);
         // The original connectLabel occupies its own lane; do not duplicate it above the native text.
         if(!nativeControls||"排队".equals(state.stage))centered(c,detail,infoCx,detailY,infoSize,muted,infoWidth);
+        LoadingHumor.Caption caption=LoadingHumor.at(seconds,state.epoch,state.context,reduced);
+        double humorY=nativeControls?Math.min(cy+150*visualScale,cancelTop*h-15*s):state.context==LoadingModel.Context.BOOT?labelY+28*s:cy+153*s;
+        centered(c,caption.text(),cx,humorY,Math.max(10,12*s),alpha(muted,caption.opacity()),Math.min(w*.52,300*s));
         double line=Math.max(16,23*s),bottom=h-Math.max(23,45*s),body=font(13*s),leftWidth=w*.46-margin,rightWidth=w*.42-margin;
         if(nativeControls){leftWidth=Math.min(leftWidth,w*.5-75-margin);rightWidth=Math.min(rightWidth,w*.5-75-margin);}
         int rows=Math.min(5,state.activity.length);
