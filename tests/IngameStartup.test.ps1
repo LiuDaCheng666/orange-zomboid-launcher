@@ -26,12 +26,16 @@ if($LASTEXITCODE -ne 0){throw 'Server information receipt behavior failed'}
 if($LASTEXITCODE -ne 0){throw 'Owned server public query behavior failed'}
 & java -cp ($classes+';'+$asset) ozl.startup.tests.SceneContractTest
 if($LASTEXITCODE -ne 0){throw 'Loading scene animation/context behavior failed'}
+foreach($contract in @('motion','humor','layout')){
+ & java -cp ($classes+';'+$asset) ozl.startup.LoadingVisualRefinementTest $contract
+ if($LASTEXITCODE -ne 0){throw "Loading visual refinement contract failed: $contract"}
+}
 & java '-Djava.awt.headless=true' -cp ($classes+';'+$asset) ozl.startup.tests.SceneProbe (Join-Path $output 'scenes') (Join-Path $repo 'Orange3DTool\Assets\orange-app.png')
 if($LASTEXITCODE -ne 0){throw 'Loading scene viewport checks failed'}
 & java '-Djava.awt.headless=true' -cp ($classes+';'+$asset) ozl.startup.tests.GrowthRasterTest (Join-Path $output 'growth') (Join-Path $repo 'Orange3DTool\Assets\orange-app.png')
 if($LASTEXITCODE -ne 0){throw 'Sustained growth raster contracts failed'}
 & java '-Djava.awt.headless=true' -cp ($classes+';'+$asset) ozl.startup.tests.GrowthMotionProbe (Join-Path $output 'growth-motion') (Join-Path $repo 'Orange3DTool\Assets\orange-app.png')
-if($LASTEXITCODE -ne 0){throw 'Visible seed/growth/leaf/loop contracts failed'}
+if($LASTEXITCODE -ne 0){throw 'Once-only entrance and bounded idle repertoire contracts failed'}
 & java '-Djava.awt.headless=true' -cp ($classes+';'+$asset) ozl.startup.tests.HumorSceneTest (Join-Path $output 'humor') (Join-Path $repo 'Orange3DTool\Assets\orange-app.png')
 if($LASTEXITCODE -ne 0){throw 'Occasional humor scene/timing/reduced-motion contracts failed'}
 $fixture=Join-Path $output ('game-'+[guid]::NewGuid().ToString('N'))
@@ -56,9 +60,13 @@ foreach($probe in @('NativeCompositionTest','NativeLifecycleTest','NativeStatusT
 Push-Location $fixture
 try{& $runtime '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+$asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.GlProbe (Join-Path $output 'scenes');if($LASTEXITCODE -ne 0){throw 'Real GL render/state regression failed'}}finally{Pop-Location}
 Push-Location $fixture
+try{& $runtime '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+$asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.RendererTextProbe;if($LASTEXITCODE -ne 0){throw 'Glyph cache/tint actual-GL regression failed'}}finally{Pop-Location}
+Push-Location $fixture
 try{& $runtime '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+$asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.HumorGlProbe (Join-Path $output 'humor');if($LASTEXITCODE -ne 0){throw 'Deterministic actual-GL humor regression failed'}}finally{Pop-Location}
 Push-Location $fixture
 try{& $runtime '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+$asset+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.GrowthGlProbe (Join-Path $output 'growth-motion');if($LASTEXITCODE -ne 0){throw 'Actual GL visible growth/reduced-motion regression failed'}}finally{Pop-Location}
+Push-Location $fixture
+try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.LoadingFrameRateTest;if($LASTEXITCODE -ne 0){throw 'Loading cadence/native handoff regression failed'}}finally{Pop-Location}
 Push-Location $fixture
 try{& $runtime '-javaagent:OrangeLauncherRuntime/startup/OrangeStartup.jar' '--enable-native-access=ALL-UNNAMED' -cp ($classes+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) ozl.startup.tests.QueuedGlProbe (Join-Path $output 'scenes');if($LASTEXITCODE -ne 0){throw 'Queued GL compositing regression failed'}}finally{Pop-Location}
 $actualClasses=Join-Path $output 'actual-classes'

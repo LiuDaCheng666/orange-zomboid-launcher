@@ -65,31 +65,37 @@ public final class GameRenderer implements LoadingScene.Canvas {
     }
     public void logo(double x,double y,double size,double alpha,double angle){if(logo!=null){GL11.glPushMatrix();try{GL11.glTranslated(x,y,0);GL11.glRotated(Math.toDegrees(angle),0,0,1);quad(logo,-size/2,-size/2,size,size,alpha);}finally{GL11.glPopMatrix();}}}
     public void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle){
+        growingLogo(x,y,size,alpha,angle,leafScale,leafAngle,1,1);
+    }
+    public void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle,double stretchX,double stretchY){
         if(body==null)return;
         for(boolean isLeaf:new boolean[]{false,true}){
-            java.awt.geom.AffineTransform transform=LogoGrowth.transform(x,y,size,angle,leafScale,leafAngle,isLeaf);
+            java.awt.geom.AffineTransform transform=LogoGrowth.transform(x,y,size,angle,leafScale,leafAngle,isLeaf,stretchX,stretchY);
             double[] points={0,0,1,0,1,1,0,1};transform.transform(points,0,points,0,4);
             GL11.glEnable(GL11.GL_TEXTURE_2D);GL11.glBindTexture(GL11.GL_TEXTURE_2D,(isLeaf?leaf:body).id);GL11.glColor4d(1,1,1,alpha);GL11.glBegin(GL11.GL_QUADS);
             for(int i=0;i<4;i++){GL11.glTexCoord2d(i==1||i==2?1:0,i>=2?1:0);GL11.glVertex2d(points[i*2],points[i*2+1]);}GL11.glEnd();GL11.glDisable(GL11.GL_TEXTURE_2D);
         }
     }
     private static void quad(Texture texture,double x,double y,double w,double h,double alpha){
-        GL11.glEnable(GL11.GL_TEXTURE_2D);GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture.id);GL11.glColor4d(1,1,1,alpha);GL11.glBegin(GL11.GL_QUADS);GL11.glTexCoord2d(0,0);GL11.glVertex2d(x,y);GL11.glTexCoord2d(1,0);GL11.glVertex2d(x+w,y);GL11.glTexCoord2d(1,1);GL11.glVertex2d(x+w,y+h);GL11.glTexCoord2d(0,1);GL11.glVertex2d(x,y+h);GL11.glEnd();GL11.glDisable(GL11.GL_TEXTURE_2D);
+        quad(texture,x,y,w,h,alpha,0xffffffff);
+    }
+    private static void quad(Texture texture,double x,double y,double w,double h,double alpha,int tint){
+        GL11.glEnable(GL11.GL_TEXTURE_2D);GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture.id);GL11.glColor4d(((tint>>16)&255)/255d,((tint>>8)&255)/255d,(tint&255)/255d,alpha*((tint>>>24)/255d));GL11.glBegin(GL11.GL_QUADS);GL11.glTexCoord2d(0,0);GL11.glVertex2d(x,y);GL11.glTexCoord2d(1,0);GL11.glVertex2d(x+w,y);GL11.glTexCoord2d(1,1);GL11.glVertex2d(x+w,y+h);GL11.glTexCoord2d(0,1);GL11.glVertex2d(x,y+h);GL11.glEnd();GL11.glDisable(GL11.GL_TEXTURE_2D);
     }
     private Font sized(double size){return font.deriveFont((float)LoadingScene.font(size));}
     public double measure(String text,double size){return measure.getFontMetrics(sized(size)).stringWidth(text);}
     public void text(String value,double x,double y,double size,int color,boolean right){
         if(value.isEmpty())return;
-        String key=Math.round(size*10)+":"+color+":"+value;Texture texture=words.get(key);
+        String key=Math.round(size*10)+":"+value;Texture texture=words.get(key);
         Font selected=sized(size);FontMetrics metrics=measure.getFontMetrics(selected);
         if(texture==null){
             int w=Math.min(2048,Math.max(1,metrics.stringWidth(value)+4)),h=Math.max(1,metrics.getHeight()+4);
             BufferedImage image=new BufferedImage(w,h,BufferedImage.TYPE_INT_ARGB);Graphics2D g=image.createGraphics();
-            try{g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);g.setFont(selected);g.setColor(new Color(color,true));g.drawString(value,2,metrics.getAscent()+2);}finally{g.dispose();}
+            try{g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);g.setFont(selected);g.setColor(Color.WHITE);g.drawString(value,2,metrics.getAscent()+2);}finally{g.dispose();}
             texture=upload(image);words.put(key,texture);
             while(words.size()>96){var iterator=words.entrySet().iterator();Texture old=iterator.next().getValue();iterator.remove();GL11.glDeleteTextures(old.id);}
         }
-        quad(texture,(right?x-texture.width:x)-2,y-metrics.getAscent()-2,texture.width,texture.height,1);
+        quad(texture,(right?x-texture.width:x)-2,y-metrics.getAscent()-2,texture.width,texture.height,1,color);
     }
     private static Texture upload(BufferedImage image){
         int w=image.getWidth(),h=image.getHeight();ByteBuffer bytes=ByteBuffer.allocateDirect(w*h*4);

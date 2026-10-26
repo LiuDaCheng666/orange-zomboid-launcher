@@ -23,7 +23,10 @@ public final class GrowthGlProbe {
             Path agent=Path.of("OrangeLauncherRuntime/startup/OrangeStartup.jar"),cwd=Path.of(System.getProperty("user.dir"));Session session=Session.read(agent,cwd,System.currentTimeMillis()/1000);check(session!=null,"isolated receipt valid");
             LoadingModel boot=new LoadingModel();boot.phase("Loading Mods");boot.mod("Project Viewpoint");long[] clock={0};GameRenderer renderer=new GameRenderer(()->clock[0]);int smallest=1000,largest=0;
             for(double time:new double[]{0,.5,1.3,2.2,3.1,4.4,6.4,7.4,8.4,10.6}){clock[0]=(long)(time*1e9);BufferedImage image=HumorGlProbe.draw(renderer,boot,session);int height=orangeHeight(image);smallest=Math.min(smallest,height);largest=Math.max(largest,height);ImageIO.write(image,"png",out.resolve("gl-growth-t"+time+".png").toFile());}
-            check(smallest>0&&largest/(double)smallest>3,"actual GL body clearly repeats seed-to-grown motion");
+            check(smallest>0&&largest/(double)smallest>3,"actual GL body clearly grows during its once-only entrance");
+            int idleSmallest=1000,idleLargest=0;
+            for(double time:new double[]{4,7,11,17,19,20,24,30,33,60}){clock[0]=(long)(time*1e9);int height=orangeHeight(HumorGlProbe.draw(renderer,boot,session));idleSmallest=Math.min(idleSmallest,height);idleLargest=Math.max(idleLargest,height);}
+            check(idleSmallest>0&&idleLargest/(double)idleSmallest<1.3,"actual GL long wait never shrinks the grown mark back to seed");
             check(GL11.glGetError()==GL11.GL_NO_ERROR,"growth leaves no GL errors");
             Files.writeString(receipt,original.replace("reducedMotion=false","reducedMotion=true"));Session reduced=Session.read(agent,cwd,System.currentTimeMillis()/1000);check(reduced!=null&&reduced.reducedMotion,"reduced receipt valid");
             for(int context=0;context<3;context++){LoadingModel model=new LoadingModel();if(context==1)model.worldBegin(false,"Rosewood","Sandbox","Rosewood");if(context==2)model.serverBegin("橙子社区服务器","203.0.113.7",16261);clock[0]=0;renderer=new GameRenderer(()->clock[0]);BufferedImage a=HumorGlProbe.draw(renderer,model,reduced);clock[0]=90_000_000_000L;BufferedImage b=HumorGlProbe.draw(renderer,model,reduced);check(Arrays.equals(pixels(a),pixels(b)),"actual GL reduced motion stable in context "+context);}

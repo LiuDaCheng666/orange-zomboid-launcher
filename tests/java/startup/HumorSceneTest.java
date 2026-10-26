@@ -11,7 +11,7 @@ public final class HumorSceneTest {
     static int checks;
     static void check(boolean ok,String why){if(!ok)throw new AssertionError(why);checks++;}
     static final Set<String> PHRASES=Set.of("狗正在跨越栅栏","正在摧毁模组","正在添加bug","正在鞭策浣熊","正在给僵尸系鞋带","正在说服直升机绕路");
-    static String joke(SceneContractTest.Frame frame){return frame.texts.stream().map(a->(String)a[0]).filter(PHRASES::contains).findFirst().orElse("");}
+    static String joke(SceneContractTest.Frame frame){return frame.texts.stream().filter(a->((int)a[4]>>>24)>0&&((int)a[4]>>>24)<170).map(a->(String)a[0]).filter(v->v.startsWith("正在")||v.startsWith("狗正在")).findFirst().orElse("");}
     static SceneContractTest.Frame frame(LoadingModel model,int width,int height,double time,boolean reduced,boolean nativeLane){
         SceneContractTest.Frame frame=new SceneContractTest.Frame();
         LoadingScene.draw(frame.canvas(),width,height,model.snapshot(),time,false,reduced,4097L<<20,12288L<<20,nativeLane?(height*.1+228)/height:0,nativeLane?(height*.9-50)/height:0);
@@ -22,20 +22,20 @@ public final class HumorSceneTest {
         LoadingModel boot=new LoadingModel();boot.phase("Loading Mods");boot.mod("ActualViewpointMod");
         String stage=boot.snapshot().stage;int activity=boot.snapshot().activity.length;
         Set<String> phrases=new HashSet<>();String previous="";double entered=-1,exited=-1;int appearances=0;
-        for(int tick=0;tick<=2000;tick++){
+        for(int tick=0;tick<=2400;tick++){
             double time=tick/10d;String current=joke(frame(boot,1280,720,time,false,false));
             if(tick==0)check(current.isEmpty(),"short loads do not immediately show a joke");
             if(!current.isEmpty()&&previous.isEmpty()){
-                if(exited>=0)check(time-exited>=11.8&&time-exited<=18.2,"jokes have a substantial 12-18 second quiet interval");
+                if(exited>=0)check(time-exited>=1.8&&time-exited<=3.0,"jokes have a short quiet interval between readable phrases");
                 else check(time>=6&&time<=8,"first joke waits for a real loading pause");
                 entered=time;appearances++;phrases.add(current);
             }
             if(current.isEmpty()&&!previous.isEmpty()){
-                check(time-entered>=3&&time-entered<=6,"each phrase is readable for 3-6 seconds");exited=time;
+                check(time-entered>=4.5&&time-entered<=5.2,"each phrase is readable for 3-6 seconds");exited=time;
             }
             previous=current;
         }
-        check(appearances>=7&&appearances<=12,"jokes are occasional during a long quiet wait");
+        check(appearances>=30&&appearances<=33,"jokes are occasional during a long quiet wait");
         for(String phrase:new String[]{"狗正在跨越栅栏","正在摧毁模组","正在添加bug","正在鞭策浣熊"})check(phrases.stream().anyMatch(v->v.contains(phrase)),"requested phrase reaches the actual scene: "+phrase);
         check(boot.snapshot().stage.equals(stage)&&boot.snapshot().activity.length==activity,"humor never fabricates phase or activity observations");
         LoadingModel save=new LoadingModel(),server=new LoadingModel();save.worldBegin(false,"Rosewood — Day 48","Sandbox","Rosewood");server.serverBegin("橙子社区服务器","203.0.113.7",16261);
@@ -46,7 +46,7 @@ public final class HumorSceneTest {
             double visible=-1;for(int second=6;second<=12;second++)if(!joke(frame(models[index],size[0],size[1],second,false,nativeLane)).isEmpty()){visible=second;break;}
             check(visible>=0,"every passive context displays occasional humor");
             SceneContractTest.Frame commands=frame(models[index],size[0],size[1],visible,false,nativeLane);
-            for(Object[] command:commands.texts)if(PHRASES.contains((String)command[0])){
+            for(Object[] command:commands.texts)if(((String)command[0]).equals(joke(commands))){
                 double x=(double)command[1],y=(double)command[2],font=(double)command[3],width=commands.canvas().measure((String)command[0],font);
                 check(x>=0&&x+width<=size[0]&&y-font>0&&y<size[1],"humor stays inside viewport");
                 if(nativeLane)check(y-font>size[1]*.1+228&&y<size[1]*.9-50,"humor respects the original native status and Abort lanes");

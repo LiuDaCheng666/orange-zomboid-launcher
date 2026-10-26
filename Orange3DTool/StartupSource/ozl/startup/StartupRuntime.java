@@ -10,6 +10,7 @@ public final class StartupRuntime {
     private static Session session;
     private static GameRenderer renderer;
     private static long lastSwap,lastIssueRead;
+    private static final long IDLE_FRAME_NANOS=1_000_000_000L/60;
     private static volatile long issueFloor;
     private static boolean drawing,reportedFailure;
     private static final ThreadLocal<String> frame=new ThreadLocal<>();
@@ -187,6 +188,6 @@ public final class StartupRuntime {
     }
     public static void beforeSwap(){lastSwap=System.nanoTime();LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||!currentContext())return;try{draw(s);}catch(Throwable failure){failed(failure);}}
     /** Full overlays can idle on the existing render thread. Behind-UI frames use only the game's queue. */
-    public static void idle(){LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||System.nanoTime()-lastSwap<33_333_333L||!currentContext())return;try{GameDisplay.swap();}catch(Throwable failure){failed(failure);}}
+    public static void idle(){LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||System.nanoTime()-lastSwap<IDLE_FRAME_NANOS||!currentContext())return;try{GameDisplay.swap();}catch(Throwable failure){failed(failure);}}
     public static void failed(Throwable failure){publicQuery.cancel();LoadingModel m=model;if(m!=null)m.disable();if(!reportedFailure){reportedFailure=true;System.err.println("[OZL-STARTUP-JAVA] presentation disabled: "+failure.getClass().getSimpleName());}}
 }

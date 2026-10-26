@@ -72,7 +72,7 @@ namespace PZ3D {
   }
   internal void CommitStartup(){
    StartupAttempt selected;lock(startupGate){selected=RequireAttempt(startupSessionId);if(!selected.Reserved||selected.Phase=="committed")throw new InvalidOperationException("启动请求已被使用。");selected.Phase="committed";selected.Launch.StartedUtc=DateTime.UtcNow;}
-   PublishStartup(selected.Launch,"preparing","正在启动游戏…");
+   var watch=System.Diagnostics.Stopwatch.StartNew();PublishStartup(selected.Launch,"preparing","正在启动游戏…");LaunchTiming("startup-observer",watch.ElapsedMilliseconds);
   }
 
   // Presentation is an observer: it never owns the launch or its configuration transaction.
@@ -81,9 +81,10 @@ namespace PZ3D {
    string id=Text(payload??new Dictionary<string,object>(),"startupId");
    StartupAttempt selected;string kind=action=="launch"?"normal":Text(payload,"kind"),target=action=="launch"?"":Text(payload,"id");
    lock(startupGate){selected=RequireAttempt(id);if(selected.Reserved||selected.Phase=="yielded"||selected.Launch.TargetKind!=kind||selected.TargetId!=target)throw new InvalidOperationException("启动准备与目标不一致或已被使用。");selected.Reserved=true;selected.Deadline=DateTime.UtcNow.AddSeconds(120);}
-   try{startupSessionId=id;object result=launch();lock(startupGate){if(selected.Phase!="committed")throw new OperationCanceledException("本次启动未提交。");selected.Phase="submitted";selected.Deadline=selected.Launch.StartedUtc.AddSeconds(180);}PublishStartup(selected.Launch,"submitted","游戏正在启动…");var outcome=result as GameLaunchOutcome;if(outcome!=null)outcome.startup=StartupStatus();return result;}
+   var watch=System.Diagnostics.Stopwatch.StartNew();
+   try{startupSessionId=id;object result=launch();lock(startupGate){if(selected.Phase!="committed")throw new OperationCanceledException("本次启动未提交。");selected.Phase="submitted";selected.Deadline=selected.Launch.StartedUtc.AddSeconds(180);}var submitted=System.Diagnostics.Stopwatch.StartNew();PublishStartup(selected.Launch,"submitted","游戏正在启动…");LaunchTiming("startup-submitted-observer",submitted.ElapsedMilliseconds);var outcome=result as GameLaunchOutcome;if(outcome!=null)outcome.startup=StartupStatus();return result;}
    catch(Exception error){bool committed;lock(startupGate){committed=selected.Phase=="committed";selected.Phase="cancelled";}PublishStartup(selected.Launch,committed?"failed":"cancelled",GameDiagnostics.Sanitize(error.Message));throw;}
-   finally{startupSessionId=null;}
+   finally{LaunchTiming("native-launch-total",watch.ElapsedMilliseconds);startupSessionId=null;}
   }
   void PublishStartup(GameStartupLaunch request,string stage,string message){
    var callback=StartupPresentation;if(callback==null)return;

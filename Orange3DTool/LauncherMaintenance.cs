@@ -29,7 +29,10 @@ namespace PZ3D {
   // Existing callers may display this before starting the isolated worker.
   public static bool WorkshopRebuildSupported {get{return true;}}
   public static string WorkshopRebuildUnavailableReason {get{return "";}}
-  internal static void NoReparse(string path){string current=Path.GetFullPath(path);while(current!=null){if((File.Exists(current)||Directory.Exists(current))&&(File.GetAttributes(current)&FileAttributes.ReparsePoint)!=0)throw new Exception("拒绝重解析点 / 联接路径："+current);current=Path.GetDirectoryName(current);}}
+  // One fresh attribute query per ancestor avoids the previous existence/type/
+  // attribute triplet. Missing paths are allowed; unknown failures stay closed.
+  [DllImport("kernel32.dll",EntryPoint="GetFileAttributesW",CharSet=CharSet.Unicode,SetLastError=true)]static extern uint PathAttributes(string path);
+  internal static void NoReparse(string path){string current=Path.GetFullPath(path);while(current!=null){uint attributes=PathAttributes(current);if(attributes==uint.MaxValue){int error=Marshal.GetLastWin32Error();if(error!=2&&error!=3)throw new IOException("无法核实路径属性："+current,new System.ComponentModel.Win32Exception(error));}else if((attributes&(uint)FileAttributes.ReparsePoint)!=0)throw new Exception("拒绝重解析点 / 联接路径："+current);current=Path.GetDirectoryName(current);}}
   static Dictionary<string,object> Read(Engine e){NoReparse(e.Config);var j=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(e.Config));if(j==null||!j.ContainsKey("vmArgs"))throw new Exception("启动 JSON 缺少 vmArgs。");Arrays(j).ToArray();return j;}
   static IEnumerable<List<string>> Arrays(Dictionary<string,object> config){
    object raw;if(config.TryGetValue("vmArgs",out raw)){var items=raw as IEnumerable;if(raw is string||items==null)throw new Exception("vmArgs 必须是字符串数组。");var args=items.Cast<object>().ToArray();if(args.Any(a=>!(a is string)))throw new Exception("vmArgs 含非字符串参数。");var list=args.Cast<string>().ToList();foreach(string s in list)if(s.StartsWith("-Xmx",StringComparison.Ordinal)||s.StartsWith("-Xms",StringComparison.Ordinal))HeapBytes(s);yield return list;}

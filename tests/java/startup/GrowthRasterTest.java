@@ -29,6 +29,16 @@ public final class GrowthRasterTest {
    ImageIO.write(still,"png",out.resolve(names[i]+"-reduced.png").toFile());
   }
   for(int[] viewport:new int[][]{{640,480},{1280,720},{1920,1080},{3840,2160}}){BufferedImage frame=draw(logo,server,viewport[0],viewport[1],4,false,true);ImageIO.write(frame,"png",out.resolve("native-lanes-"+viewport[0]+".png").toFile());checks++;}
+  for(int tick=0;tick<180;tick++){
+   double time=tick*.2;BufferedImage frame=draw(logo,server,640,480,time,false,true);int mark=0;
+   for(int y=0;y<480;y++)for(int x=0;x<640;x++){
+    int p=frame.getRGB(x,y),r=(p>>16)&255,g=(p>>8)&255,b=p&255;
+    if((r>140&&r>g*1.3&&g>b*1.3)||(g>90&&g>r*1.05&&g>b*1.2)){
+     if(y<=276||y>=382)throw new AssertionError("Rotated body/leaf escapes native lane at t"+time+" y"+y);mark++;
+    }
+   }
+   check(mark>20,"source mark remains visible through the complete native-lane repertoire");
+  }
   for(int i=0;i<64;i++)ImageIO.write(draw(logo,boot,640,480,2+i*8.4/64,false,false),"png",out.resolve(String.format("motion-%03d.png",i)).toFile());
   System.out.println("PASS "+checks+" growth raster/alpha/partition/reduced/viewport contracts");
  }

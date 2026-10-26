@@ -16,6 +16,7 @@ namespace PZ3D {
   public int Port; public bool UseSteamRelay;
   internal string StartupSessionId;
   internal Action ValidateBeforeStage;
+  internal Action<string,long> Timing;
  }
  sealed class ProfileSessionRecord {
   public string Game,User,Original,AppliedHash,CreatedUtc,State,Token,Nonce;
@@ -58,6 +59,7 @@ namespace PZ3D {
   internal static byte[] RetirePresentationRecord(Engine e,byte[] before,byte[] after){if(!Pending(e))return null;var record=Load(e);bool changed=false;if(record.Original!=null){byte[] original=Convert.FromBase64String(record.Original),clean=PresentationBridge.RemoveRow(original);if(!original.SequenceEqual(clean)){record.Original=Convert.ToBase64String(clean);changed=true;}}if(before!=null&&DlssInstaller.Hash(before)==record.AppliedHash&&!PlayProfileTransaction.Same(before,after)){record.AppliedHash=DlssInstaller.Hash(after);changed=true;}return changed?Encoding.UTF8.GetBytes(Json.Serialize(record)):null;}
   public static void ExpireRequest(Engine e,string expectedNonce){using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;try{try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}if(!acquired||!Pending(e))return;var record=Load(e);DateTime created;if(record.Nonce!=expectedNonce||!DateTime.TryParse(record.CreatedUtc,out created)||DateTime.UtcNow-created.ToUniversalTime()<TimeSpan.FromSeconds(RequestLifetimeSeconds))return;bool hasRequest=false;foreach(string request in RequestFiles(e)){LauncherMaintenance.NoReparse(request);if(File.Exists(request)&&new FileInfo(request).Length>0)hasRequest=true;}if(hasRequest){ClearRequest(e);Atomic(LuaFile(e,StatusName),Encoding.UTF8.GetBytes("expired-or-invalid-request\n"));}}finally{if(acquired)mutex.ReleaseMutex();}}}
   static bool Alive(Process process){if(process==null)return false;try{return !process.HasExited;}catch{return false;}}
+  static void Timed(Action<string,long> timing,string phase,Stopwatch watch){if(timing!=null)try{timing(phase,watch.ElapsedMilliseconds);}catch{ /* Timing is diagnostic and cannot change the launch transaction. */ }}
   static bool RecordedAlive(ProfileSessionRecord record){if(record.Pid<=0||record.Birth<=0)return false;try{using(var process=Process.GetProcessById(record.Pid))return !process.HasExited&&process.StartTime.ToUniversalTime().Ticks==record.Birth;}catch(ArgumentException){return false;}catch(InvalidOperationException){return false;}catch{return true;}}
   static string Clean(string s,int maximum=256){s=s??"";if(s.Length>maximum||s.Any(c=>c<' '||c=='\u007f'))throw new Exception("启动配置包含无效长度或控制字符。");return s;}
   public static string BuildDefault(string original,string kind,string[] retained){
@@ -78,6 +80,7 @@ namespace PZ3D {
    return string.Join("\n",new[]{"ORANGE1",nonce,DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),r.Kind,Clean(r.Mode),Clean(r.Save),Clean(r.Host),r.Port.ToString(),Clean(r.Username),Clean(r.UserPassword,1024),Clean(r.ServerPassword,1024),r.UseSteamRelay?"1":"0"})+"\n";
   }
   public static void Stage(Engine e,ProfileLaunchRequest r){
+   var watch=Stopwatch.StartNew();
    e.GuardLaunch();foreach(string path in new[]{e.User,e.Mods,e.Data,Journal(e)})LauncherMaintenance.NoReparse(path);if(Pending(e))throw new Exception("上一次启动配置尚未恢复，请查看启动状态。");string payload=Payload(r);
    byte[] original=File.Exists(e.Mods)?File.ReadAllBytes(e.Mods):null;if(original!=null&&original.Length>1048576)throw new Exception("模组清单异常过大。");string text=original==null?"VERSION = 1,\r\nmods\r\n{\r\n}\r\nmaps\r\n{\r\n}\r\n":new UTF8Encoding(false,true).GetString(original).TrimStart('\uFEFF');string next=BuildDefault(text,r.Kind,Retained(e));var translations=r.Kind=="server"?ServerLaunchTranslations.Build(e,SaveProfiles.DefaultMods(original)):new Dictionary<string,byte[]>();if(translations.Count>0){foreach(string id in ServerLaunchTranslations.Ids.Where(id=>translations.ContainsKey(Path.Combine(ServerLaunchTranslations.Root(e,id),"42","mod.info")))){string root=ServerLaunchTranslations.Root(e,id);LauncherMaintenance.NoReparse(root);if(Directory.Exists(root))throw new Exception("发现已有同名联机汉化目录，未覆盖。");}byte[] nextBytes=Encoding.UTF8.GetBytes(next);next=Encoding.UTF8.GetString(SaveProfiles.ReplaceDefaultMods(nextBytes,SaveProfiles.DefaultMods(nextBytes).Concat(ServerLaunchTranslations.GeneratedIds(e,SaveProfiles.DefaultMods(original),translations)).Distinct().ToArray()));}byte[] applied=new UTF8Encoding(original!=null&&original.Length>=3&&original[0]==239&&original[1]==187&&original[2]==191).GetPreamble().Concat(new UTF8Encoding(false).GetBytes(next)).ToArray();
    string folder=Path.Combine(e.User,"mods",ModId);LauncherMaintenance.NoReparse(folder);if(Directory.Exists(folder))throw new Exception("发现已有同名启动桥接目录，未覆盖。");string request=LuaFile(e,RequestName),status=LuaFile(e,StatusName);LauncherMaintenance.NoReparse(status);foreach(string oldRequest in RequestFiles(e)){LauncherMaintenance.NoReparse(oldRequest);if(File.Exists(oldRequest))throw new Exception("存在上次启动请求，未覆盖。");}
@@ -85,8 +88,8 @@ namespace PZ3D {
    if(record.CaptureEndpoint!=null){try{record.CaptureRevision=ServerWorkshopCatalog.Revision(e.Data,record.CaptureEndpoint);}catch{record.CaptureRevision=null;}}
    var files=new Dictionary<string,byte[]>{{Path.Combine(folder,"common","mod.info"),Encoding.UTF8.GetBytes("name=Orange Launcher Session\nid="+ModId+"\ndescription=一次性客户端启动桥接，不修改服务器。\n")},{Path.Combine(folder,"42","mod.info"),Encoding.UTF8.GetBytes("name=Orange Launcher Session\nid="+ModId+"\n")},{Path.Combine(folder,"42","media","lua","client","OrangeLaunchBridge.lua"),Script()}};
    foreach(var file in translations)files.Add(file.Key,file.Value);foreach(var file in files)record.Files[file.Key]=DlssInstaller.Hash(file.Value);
-   ValidateRecord(e,record);byte[] journalBytes=Encoding.UTF8.GetBytes(Json.Serialize(record));if(journalBytes.Length>MaxJournalBytes)throw new Exception("联机汉化文件记录过大，未改动配置。");if(r.ValidateBeforeStage!=null)r.ValidateBeforeStage();Atomic(Journal(e),journalBytes);
-   try{foreach(var file in files)Atomic(file.Key,file.Value);Directory.CreateDirectory(Path.GetDirectoryName(request));PrivateRequest(request,payload);Atomic(status,Encoding.UTF8.GetBytes("prepared\n"));if(!SameOriginal(e.Mods,original))throw new Exception("准备期间本地模组清单改变，拒绝覆盖。");if(!e.TestMode&&e.RuntimeRunning(true))throw new Exception("客户端或无法核实用途的游戏 Java 已运行，取消重复启动。");Atomic(e.Mods,applied);}catch{Recover(e,true);throw;}
+   ValidateRecord(e,record);byte[] journalBytes=Encoding.UTF8.GetBytes(Json.Serialize(record));if(journalBytes.Length>MaxJournalBytes)throw new Exception("联机汉化文件记录过大，未改动配置。");Timed(r.Timing,"stage-plan",watch);if(r.ValidateBeforeStage!=null)r.ValidateBeforeStage();watch.Restart();Atomic(Journal(e),journalBytes);
+   try{foreach(var file in files)Atomic(file.Key,file.Value);Directory.CreateDirectory(Path.GetDirectoryName(request));PrivateRequest(request,payload);Atomic(status,Encoding.UTF8.GetBytes("prepared\n"));if(!SameOriginal(e.Mods,original))throw new Exception("准备期间本地模组清单改变，拒绝覆盖。");if(!e.TestMode&&e.RuntimeRunning(true))throw new Exception("客户端或无法核实用途的游戏 Java 已运行，取消重复启动。");Atomic(e.Mods,applied);}catch{Recover(e,true);throw;}finally{Timed(r.Timing,"stage-write",watch);}
   }
   static bool SameOriginal(string file,byte[] original){return original==null?!File.Exists(file):File.Exists(file)&&File.ReadAllBytes(file).SequenceEqual(original);}
   static void ValidateRecord(Engine e,ProfileSessionRecord record){if(record.Files==null||record.Files.Count<3||record.Files.Count>4096||!Regex.IsMatch(record.Nonce??"",@"^[a-f0-9]{32}$")||!Regex.IsMatch(record.AppliedHash??"",@"^[A-F0-9]{64}$"))throw new Exception("启动恢复记录缺少有效会话及文件校验。");string folder=Path.Combine(e.User,"mods",ModId);var allowed=new HashSet<string>(new[]{Path.Combine(folder,"common","mod.info"),Path.Combine(folder,"42","mod.info"),Path.Combine(folder,"42","media","lua","client","OrangeLaunchBridge.lua")}.Select(Path.GetFullPath),StringComparer.OrdinalIgnoreCase);var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);foreach(var file in record.Files){string path=Path.GetFullPath(file.Key);if((!allowed.Contains(path)&&!ServerLaunchTranslations.OwnedPath(e,path))||!seen.Add(path)||!Regex.IsMatch(file.Value??"",@"^[A-F0-9]{64}$"))throw new Exception("启动恢复记录文件越界或校验无效。");LauncherMaintenance.NoReparse(path);}if(!allowed.IsSubsetOf(seen))throw new Exception("启动恢复记录缺少启动脚本。");if(record.Original!=null&&Convert.FromBase64String(record.Original).Length>1048576)throw new Exception("启动恢复原文件异常过大。");}
@@ -103,19 +106,21 @@ namespace PZ3D {
   public static object State(Engine e){string warning="";try{if(Pending(e))warning="存在一次性启动会话；可继续编辑配置，退出后清理会话并保留期间的编辑。";string stage="";foreach(string status in new[]{LuaFile(e,StatusName),LuaFile(e,"OrangeLauncherSession.status"),Path.Combine(e.User,"OrangeLauncherSession.status")}){LauncherMaintenance.NoReparse(status);if(File.Exists(status)){if(new FileInfo(status).Length<=1024)stage=File.ReadAllText(status).Trim();break;}}return new{pending=Pending(e),stage=StageText(stage),warning=warning};}catch(Exception ex){return new{pending=Pending(e),stage="恢复需检查",warning=ex.Message};}}
   internal static string RecoverWatched(Engine e,string nonce){using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;try{while(!acquired){try{acquired=mutex.WaitOne(5000);}catch(AbandonedMutexException){acquired=true;}if(!acquired){if(!Pending(e))return "";if(Load(e).Nonce!=nonce)return "旧会话已结束；未改动新会话。";}}return Recover(e,true,nonce);}finally{if(acquired)mutex.ReleaseMutex();}}}
   // Steam keeps its original URI and arguments; the owned one-shot mod only observes menu readiness.
-  internal static GameLaunchOutcome LaunchNormal(Engine e,string sessionId,Action openSteam,Action validateBeforeStage=null){
+  internal static GameLaunchOutcome LaunchNormal(Engine e,string sessionId,Action openSteam,Action validateBeforeStage=null,Action<string,long> timing=null){
    if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");
    if(openSteam==null)throw new ArgumentNullException("openSteam");
-   string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));if(reason!="")throw new Exception(reason);
+   var watch=Stopwatch.StartNew();string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));Timed(timing,"launch-check",watch);if(reason!="")throw new Exception(reason);
    using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;
     try{
      try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}
      if(!acquired)throw new Exception("另一个启动器正在准备游戏。");
-     Recover(e);Stage(e,new ProfileLaunchRequest{Kind="normal",StartupSessionId=sessionId,ValidateBeforeStage=validateBeforeStage});
-     try{openSteam();}catch{Recover(e,true);throw;}
+     watch.Restart();Recover(e);Timed(timing,"session-recover",watch);Stage(e,new ProfileLaunchRequest{Kind="normal",StartupSessionId=sessionId,ValidateBeforeStage=validateBeforeStage,Timing=timing});
+     watch.Restart();try{openSteam();}catch{Recover(e,true);throw;}finally{Timed(timing,"steam-submit",watch);}
+     watch.Restart();
      var record=Load(e);record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));
-     try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }
+     Timed(timing,"session-record",watch);watch.Restart();try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }
      catch{return new GameLaunchOutcome{message="游戏启动请求已发送，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送",warning="启动监控未能启动，请在退出游戏后打开“修复”处理启动状态。"};}
+     finally{Timed(timing,"session-worker",watch);}
      return new GameLaunchOutcome{message="已通过 Steam 请求启动游戏。",stage="游戏启动请求已发送"};
     }finally{if(acquired)mutex.ReleaseMutex();}
    }
@@ -170,7 +175,21 @@ namespace PZ3D {
     RecoverWatched(e,nonce);return 0;
    }finally{if(client!=null)client.Dispose();}
   }
-  public static GameLaunchOutcome Launch(Engine e,ProfileLaunchRequest r){if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));if(reason!="")throw new Exception(reason);string mutexName=MutexName(e);using(var mutex=new Mutex(false,mutexName)){bool acquired=false;try{try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}if(!acquired)throw new Exception("另一个启动器正在准备游戏。");Recover(e);Stage(e,r);var start=new ProcessStartInfo(Path.Combine(e.Game,"ProjectZomboid64.exe")){UseShellExecute=false,WorkingDirectory=e.Game};Process game;try{game=Process.Start(start);}catch{Recover(e,true);throw;}var record=Load(e);record.Pid=game.Id;record.Birth=game.StartTime.ToUniversalTime().Ticks;record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));game.Dispose();try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }catch{return new GameLaunchOutcome{message="游戏已启动，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送",warning="启动监控未能启动，请在退出游戏后打开“修复”处理启动状态。"};}return new GameLaunchOutcome{message="游戏已启动，正在准备所选目标。",stage="游戏启动请求已发送"};}finally{if(acquired)mutex.ReleaseMutex();}}}
+  public static GameLaunchOutcome Launch(Engine e,ProfileLaunchRequest r){
+   if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");
+   var watch=Stopwatch.StartNew();string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));Timed(r.Timing,"launch-check",watch);if(reason!="")throw new Exception(reason);
+   using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;try{
+    try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}if(!acquired)throw new Exception("另一个启动器正在准备游戏。");
+    watch.Restart();Recover(e);Timed(r.Timing,"session-recover",watch);Stage(e,r);
+    var start=new ProcessStartInfo(Path.Combine(e.Game,"ProjectZomboid64.exe")){UseShellExecute=false,WorkingDirectory=e.Game};Process game;
+    watch.Restart();try{game=Process.Start(start);}catch{Recover(e,true);throw;}finally{Timed(r.Timing,"process-submit",watch);}
+    watch.Restart();var record=Load(e);record.Pid=game.Id;record.Birth=game.StartTime.ToUniversalTime().Ticks;record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));game.Dispose();Timed(r.Timing,"session-record",watch);
+    watch.Restart();try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }
+    catch{return new GameLaunchOutcome{message="游戏已启动，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送",warning="启动监控未能启动，请在退出游戏后打开“修复”处理启动状态。"};}
+    finally{Timed(r.Timing,"session-worker",watch);}
+    return new GameLaunchOutcome{message="游戏已启动，正在准备所选目标。",stage="游戏启动请求已发送"};
+   }finally{if(acquired)mutex.ReleaseMutex();}}
+  }
   public static int Watch(string token,string nonce){try{if(!Regex.IsMatch(token??"",@"^[A-F0-9]{64}$")||!Regex.IsMatch(nonce??"",@"^[a-f0-9]{32}$"))return 1;string data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PZ3DManager"),journal=Path.Combine(data,"launch-sessions",token+".json");LauncherMaintenance.NoReparse(journal);if(!File.Exists(journal))return 0;var r=Json.Deserialize<ProfileSessionRecord>(File.ReadAllText(journal));string user=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Zomboid");if(r.User!=user||r.Token!=token||r.Nonce!=nonce||!GameDiscovery.IsGameFolder(r.Game))return 1;var e=new Engine(r.Game,user,data);Load(e);if(r.Kind=="normal")return WatchNormal(e,nonce,TimeSpan.FromSeconds(180),1000);Process original=null;try{original=Process.GetProcessById(r.Pid);if(original.StartTime.ToUniversalTime().Ticks!=r.Birth){original.Dispose();original=null;}}catch{}try{while(Alive(original)||e.RuntimeRunning(true)){ExpireRequest(e,nonce);Thread.Sleep(2000);}}finally{if(original!=null)original.Dispose();}Thread.Sleep(2000);RecoverWatched(e,nonce);return 0;}catch{return 1;}}
  }
 }

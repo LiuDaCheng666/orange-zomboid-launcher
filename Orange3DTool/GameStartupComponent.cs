@@ -34,7 +34,9 @@ namespace PZ3D {
   static Mutex Lease(string game){return new Mutex(false,"Local\\OrangeStartup-"+Hash(Encoding.UTF8.GetBytes(Path.GetFullPath(game).ToUpperInvariant())));}
   static bool Acquire(Mutex lease){try{return lease.WaitOne(5000);}catch(AbandonedMutexException){return true;}}
   static void Atomic(string path,byte[] bytes){LauncherMaintenance.NoReparse(path);Directory.CreateDirectory(Path.GetDirectoryName(path));string temp=path+".new-"+Guid.NewGuid().ToString("N");try{using(var output=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None)){output.Write(bytes,0,bytes.Length);output.Flush(true);}LauncherMaintenance.NoReparse(path);if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);}finally{if(File.Exists(temp))File.Delete(temp);}}
-  static bool Same(byte[] a,byte[] b){return a==null?b==null:b!=null&&a.SequenceEqual(b);}
+  // Issue-only commits retain the same JAR buffer. Distinct reads still compare
+  // every byte, including when a replacement preserves size and timestamps.
+  static bool Same(byte[] a,byte[] b){if(ReferenceEquals(a,b))return true;if(a==null||b==null||a.Length!=b.Length)return false;for(int i=0;i<a.Length;i++)if(a[i]!=b[i])return false;return true;}
   static string OptionalHash(byte[] bytes){return bytes==null?null:Hash(bytes);}
   static bool HashValue(string value,bool nullable){return nullable&&value==null||Regex.IsMatch(value??"",@"\A[A-F0-9]{64}\z");}
   static void RequireHash(string path,byte[] bytes,string hash){if(bytes==null||!Regex.IsMatch(hash??"",@"\A[A-F0-9]{64}\z")||Hash(bytes)!=hash)throw new IOException("启动组件文件缺失或被修改，未覆盖："+Path.GetFileName(path));}

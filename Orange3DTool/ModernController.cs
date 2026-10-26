@@ -55,7 +55,10 @@ namespace PZ3D {
   void CancelHall(string requestId){lock(gate){if(!disposed&&hallReceiptId==requestId){hallOrder++;hallReceiptId="";if(hallRequest!=null)hallRequest.Cancel();}}}
   static string NetworkId(Dictionary<string,object> payload){object raw;string id=payload.TryGetValue("requestId",out raw)?raw as string:Guid.NewGuid().ToString("N");if(string.IsNullOrEmpty(id)||id.Length>80||!Regex.IsMatch(id,@"^[A-Za-z0-9_-]+$"))throw new Exception("网络请求标识无效。");return id;}
   public void ReserveHall(Dictionary<string,object> payload){string id=NetworkId(payload);lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");hallReceiptId=id;payload["requestId"]=id;payload["_hallReceipt"]=new HallReceipt{Order=++hallOrder,Id=id};if(hallRequest!=null)hallRequest.Cancel();}}
-  void DrainNetworkBeforeLaunch(){if(workshopPreparation!=null)workshopPreparation.Drain();lock(gate){hallOrder++;hallReceiptId="";foreach(var request in networkRequests)request.Cancel();}var watch=Stopwatch.StartNew();while(true){cancel.Token.ThrowIfCancellationRequested();lock(gate)if(networkRequests.Count==0)return;if(watch.ElapsedMilliseconds>7000)throw new Exception("Steam 查询尚未释放，未启动游戏。请稍后重试。");Thread.Sleep(20);}}
+  void LaunchTiming(string phase,long elapsed){try{journal.Diagnostic("启动阶段 "+phase+" 耗时 "+elapsed+" ms");}catch{ /* Diagnostics must not block a launch. */ }}
+  void PrepareStartupComponent(){var watch=Stopwatch.StartNew();try{GameStartupComponent.Prepare(engine,startupSessionId);}finally{LaunchTiming("startup-component",watch.ElapsedMilliseconds);}}
+  void StartLaunchPlaytime(){var watch=Stopwatch.StartNew();try{PlaytimeTracker.Start(engine);}finally{LaunchTiming("playtime-worker",watch.ElapsedMilliseconds);}}
+  void DrainNetworkBeforeLaunch(){var drain=Stopwatch.StartNew();try{if(workshopPreparation!=null)workshopPreparation.Drain();lock(gate){hallOrder++;hallReceiptId="";foreach(var request in networkRequests)request.Cancel();}var watch=Stopwatch.StartNew();while(true){cancel.Token.ThrowIfCancellationRequested();lock(gate)if(networkRequests.Count==0)return;if(watch.ElapsedMilliseconds>7000)throw new Exception("Steam 查询尚未释放，未启动游戏。请稍后重试。");Thread.Sleep(20);}}finally{LaunchTiming("network-drain",drain.ElapsedMilliseconds);}}
   // Every SDK download entry uses this controller's shared lane. Waiting never
   // holds gate, so preparation status and cancellation remain available.
   T WithSteamLane<T>(CancellationToken token,Func<T> work){
@@ -101,7 +104,7 @@ namespace PZ3D {
   }
   LaunchPreflightReport RequireLaunchPreflight(string targetKind="normal",string targetId=null){
    cancel.Token.ThrowIfCancellationRequested();Report(-1,"正在启动游戏…");
-   RecoverStartup();cancel.Token.ThrowIfCancellationRequested();
+   var recovery=Stopwatch.StartNew();RecoverStartup();LaunchTiming("preflight-recovery",recovery.ElapsedMilliseconds);cancel.Token.ThrowIfCancellationRequested();
    var watch=Stopwatch.StartNew();var report=LaunchPreflight.CheckLaunch(engine,false,ClientRunning(),targetKind,targetId,true);
    journal.Diagnostic("启动预检耗时 "+watch.ElapsedMilliseconds+" ms");cancel.Token.ThrowIfCancellationRequested();
    lock(startupGate){RequireAttempt(startupSessionId);}
@@ -109,10 +112,10 @@ namespace PZ3D {
   }
   void ValidateLaunchEvidence(LaunchPreflightReport report){
    CheckStorage();if(report.Evidence==null)throw new InvalidOperationException("缺少本次启动检查证据。");
-   var watch=Stopwatch.StartNew();report.Evidence.Validate();Check(true);
+   var watch=Stopwatch.StartNew();report.Evidence.Validate();long evidence=watch.ElapsedMilliseconds;Check(true);long guard=watch.ElapsedMilliseconds-evidence;
    string reason=LauncherLaunch.Reason(engine,false,false);if(reason!="")throw new IOException(reason);
    cancel.Token.ThrowIfCancellationRequested();
-   journal.Diagnostic("启动提交校验耗时 "+watch.ElapsedMilliseconds+" ms");
+   journal.Diagnostic("启动提交校验耗时 "+watch.ElapsedMilliseconds+" ms（来源证据 "+evidence+" ms；路径与进程 "+guard+" ms；启动配置 "+(watch.ElapsedMilliseconds-evidence-guard)+" ms）");
    // Stage calls this immediately before its first journal write. Keep the bound
    // attempt cancellable through every fresh read, then commit under startupGate.
    CommitStartup();
@@ -166,7 +169,7 @@ namespace PZ3D {
    case "serverUpsert":return servers.Upsert(p);
    case "serverDelete":return servers.Delete(Text(p,"id"),Text(p,"stamp"));
    case "serverQuery":return servers.Query(Text(p,"id"),cancel.Token);
-   case "profileLaunch":string targetKind=Text(p,"kind"),targetId=Text(p,"id");var profilePreflight=RequireLaunchPreflight(targetKind,test?null:targetId);if(test)throw new Exception("测试模式禁止真实游戏启动。");var launchRequest=new ProfileLaunchRequest{Kind=targetKind,Id=targetId,StartupSessionId=startupSessionId,ValidateBeforeStage=()=>ValidateLaunchEvidence(profilePreflight)};if(targetKind=="save"){string savePath=SaveProfiles.ResolveSave(engine,targetId);launchRequest.Mode=Directory.GetParent(savePath).Name;launchRequest.Save=Path.GetFileName(savePath);}else if(targetKind=="server"){var target=servers.Target(targetId);launchRequest.Host=target.Host;launchRequest.Port=target.Port;launchRequest.Username=target.Username;launchRequest.UserPassword=target.UserPassword;launchRequest.ServerPassword=target.ServerPassword;launchRequest.UseSteamRelay=target.UseSteamRelay;}else throw new Exception("未知启动目标。");cancel.Token.ThrowIfCancellationRequested();GameStartupComponent.Prepare(engine,startupSessionId);CheckStorage();var launchResult=LaunchProfiles.Launch(engine,launchRequest);launchResult.preflight=profilePreflight;PlaytimeTracker.Start(engine);return launchResult;
+   case "profileLaunch":string targetKind=Text(p,"kind"),targetId=Text(p,"id");var profilePreflight=RequireLaunchPreflight(targetKind,test?null:targetId);if(test)throw new Exception("测试模式禁止真实游戏启动。");var launchRequest=new ProfileLaunchRequest{Kind=targetKind,Id=targetId,StartupSessionId=startupSessionId,ValidateBeforeStage=()=>ValidateLaunchEvidence(profilePreflight),Timing=LaunchTiming};if(targetKind=="save"){string savePath=SaveProfiles.ResolveSave(engine,targetId);launchRequest.Mode=Directory.GetParent(savePath).Name;launchRequest.Save=Path.GetFileName(savePath);}else if(targetKind=="server"){var target=servers.Target(targetId);launchRequest.Host=target.Host;launchRequest.Port=target.Port;launchRequest.Username=target.Username;launchRequest.UserPassword=target.UserPassword;launchRequest.ServerPassword=target.ServerPassword;launchRequest.UseSteamRelay=target.UseSteamRelay;}else throw new Exception("未知启动目标。");cancel.Token.ThrowIfCancellationRequested();PrepareStartupComponent();CheckStorage();var launchResult=LaunchProfiles.Launch(engine,launchRequest);launchResult.preflight=profilePreflight;StartLaunchPlaytime();return launchResult;
    case "setGame":string path=Text(p,"path");LauncherMaintenance.NoReparse(path);string preference=Path.Combine(data,"game-path.txt");LauncherMaintenance.NoReparse(preference);Directory.CreateDirectory(data);string preferenceTemp=preference+".new-"+Guid.NewGuid().ToString("N");try{File.WriteAllText(preferenceTemp,path,new UTF8Encoding(false));if(File.Exists(preference))File.Replace(preferenceTemp,preference,null);else File.Move(preferenceTemp,preference);}finally{if(File.Exists(preferenceTemp))File.Delete(preferenceTemp);}SetEngine(path);return Status();
    case "componentsAction":string component=Text(p,"component"),operation=Text(p,"operation");string componentResult=Components(component,operation,p);if(operation!="uninstall"&&component!="all"&&!componentResult.Contains("[失败]"))ComponentEvidence.Record(engine,component);return new{message=componentResult,status=componentResult.Contains("[失败]")?"partial":"completed"};
    case "memoryGet":return MemoryGet();
@@ -177,7 +180,7 @@ namespace PZ3D {
    case "shaderSelect":CheckContent();string sh=Text(p,"stamp");ShaderSelection shader;if(!shaderSnapshots.TryGetValue(sh,out shader)||sh!=ShaderStamp())throw new Exception("光影包或配置已改变，请重新读取后选择。");return Message(shader.Select(Text(p,"id"),false));
    case "importShader":Check();string zip=Path.GetFullPath(Text(p,"path"));LauncherMaintenance.NoReparse(zip);if(!zip.EndsWith(".zip",StringComparison.OrdinalIgnoreCase))throw new Exception("请选择光影 ZIP。");LauncherMaintenance.NoReparse(engine.ShaderDir);return Message(engine.Import(zip));
    case "maintenance":Confirm(p);Check();string kind=Text(p,"kind");if(kind=="cache")return Message(LauncherMaintenance.ClearMultiplayerCache(engine));if(kind=="cacheAll")return Message(LauncherMaintenance.ClearAllMultiplayerData(engine));if(kind=="workshop")return Message(WithSteamLane(cancel.Token,()=>LauncherMaintenance.RebuildWorkshop(engine,(v,t)=>Report(v,t),cancel.Token)));throw new Exception("未知维护操作。");
-   case "launch":var normalPreflight=RequireLaunchPreflight();if(test)throw new Exception("测试模式禁止启动游戏。");GameStartupComponent.Prepare(engine,startupSessionId);CheckStorage();var normalLaunch=LaunchProfiles.LaunchNormal(engine,startupSessionId,()=>Links.Open("steam://rungameid/108600"),()=>ValidateLaunchEvidence(normalPreflight));normalLaunch.preflight=normalPreflight;PlaytimeTracker.Start(engine);return normalLaunch;
+   case "launch":var normalPreflight=RequireLaunchPreflight();if(test)throw new Exception("测试模式禁止启动游戏。");PrepareStartupComponent();CheckStorage();var normalLaunch=LaunchProfiles.LaunchNormal(engine,startupSessionId,()=>Links.Open("steam://rungameid/108600"),()=>ValidateLaunchEvidence(normalPreflight),LaunchTiming);normalLaunch.preflight=normalPreflight;StartLaunchPlaytime();return normalLaunch;
    case "theme":string theme=Text(p,"value");if(theme!="dark"&&theme!="light")throw new Exception("未知主题。");LauncherMaintenance.NoReparse(data);LauncherTheme.Create(theme=="light").Save(data);return new{theme=theme};
    case "help":return new{body=ModernHelp()+"\r\n\r\n"+ProfileGuide(),rights=LegalContent.Statement+LegalContent.OptionalCredits,recovery=engine.ManualGuide(),dlss="第三方 DLSS 实验组件可在画面设置中启用或关闭；使用步骤见帮助。",sources=new[]{"https://github.com/jlrouzies-fr/DLSS5-Feeder","https://reshade.me/","https://github.com/umar-afzaal/LumeniteFX"}};
    case "logs":return new{entries=log.ToArray(),logPath=Path.Combine(data,"diagnostics"),backupPath=Path.Combine(data,"backups")};
