@@ -22,10 +22,13 @@ public final class StartupRuntime {
     private static volatile WorkshopInteraction workshopInteraction;
     private static WorkshopDownload download;
     private static volatile boolean workshopRestorePending;
+    private static NativeConnectionPresentation.BootMenu bootHandoff;
+    private static boolean bootAwaitedTick;
+    private record BootTick(NativeConnectionPresentation.BootMenu pending) {}
     private static void rejectWorkshop(){presentation.restoreWorkshop();LoadingModel m=model;if(m!=null&&m.snapshot().downloadPage){m.download(false,"","",-1,-1,-1,-1);m.nativeInteraction(true);if(download!=null)download.valid=false;}}
     private static final class WorkshopInteraction {final Object owner;final long generation;volatile boolean success;WorkshopInteraction(Object owner,long generation){this.owner=owner;this.generation=generation;}}
     private static final ServerQuery publicQuery=new ServerQuery((operation,result)->{LoadingModel m=model;if(m!=null)m.publicInfo(operation,result.name,result.map,result.players,result.maximum);});
-    public static void begin(Session accepted){publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;session=accepted;model=new LoadingModel();issueFloor=0;}
+    public static void begin(Session accepted){publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;bootHandoff=null;session=accepted;model=new LoadingModel();issueFloor=0;}
     public static LoadingModel.Snapshot snapshot(){LoadingModel value=model;return value==null?null:value.snapshot();}
     public static void phase(String value){LoadingModel m=model;if(m!=null)m.phase(value);}
     public static void early(String value){LoadingModel m=model;if(m!=null)m.early(value.equals("initFonts")?"fonts":value);}
@@ -34,12 +37,20 @@ public final class StartupRuntime {
     public static void mod(String value){LoadingModel m=model;if(m!=null)m.mod(value);}
     public static void script(String value){LoadingModel m=model;if(m!=null)m.script(value);}
     public static long generation(){LoadingModel.Snapshot s=snapshot();return s==null?0:s.generation;}
-    public static void menuReady(){publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.menuReady();System.out.println("[OZL-STARTUP-JAVA] game-menu");}}
+    public static void menuReady(Object state){
+        LoadingModel.Snapshot s=snapshot();
+        if(state!=null&&s!=null&&s.active&&s.context==LoadingModel.Context.BOOT&&session!=null&&session.pendingDirectServer(System.currentTimeMillis()/1000)){
+            NativeConnectionPresentation.BootMenu pending=presentation.bootMenu(state.getClass().getClassLoader());
+            if(pending!=null&&pending.delay()>0){bootAwaitedTick=false;bootHandoff=pending;return;}
+        }
+        menuReady();
+    }
+    public static void menuReady(){bootHandoff=null;publicQuery.cancel();LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.menuReady();System.out.println("[OZL-STARTUP-JAVA] game-menu");}}
     public static void serverBegin(String friendly){serverBegin(friendly,"","");}
-    public static void serverBegin(String friendly,String host,String port){publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();int parsed=0;try{if(port!=null&&port.length()<8)parsed=Integer.parseInt(port.trim());}catch(NumberFormatException invalid){}m.serverBegin(friendly,host==null?"":host.trim(),parsed);startQuery(m,host,parsed);}}
+    public static void serverBegin(String friendly,String host,String port){bootHandoff=null;publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();int parsed=0;try{if(port!=null&&port.length()<8)parsed=Integer.parseInt(port.trim());}catch(NumberFormatException invalid){}m.serverBegin(friendly,host==null?"":host.trim(),parsed);startQuery(m,host,parsed);}}
     private static void startQuery(LoadingModel m,String host,int port){if(host==null||m.snapshot().endpoint.isEmpty())return;String target=host.trim();if(target.startsWith("[")&&target.endsWith("]"))target=target.substring(1,target.length()-1);publicQuery.request(m.snapshot().generation,target,port);}
     public static void coopConnected(Object client){LoadingModel m=model;if(m==null||client==null)return;Class<?> type=client.getClass();String host=string(type,"ip");int port=number(type,null,"port");m.endpoint(m.snapshot().generation,host,port);startQuery(m,host,port);}
-    public static void handoff(boolean keep){if(!keep)publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.handoff(keep);}}
+    public static void handoff(boolean keep){bootHandoff=null;if(!keep)publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;LoadingModel m=model;if(m!=null){issueFloor=System.currentTimeMillis();m.handoff(keep);}}
     public static void queueBegin(){LoadingModel m=model;if(m!=null){m.serverResume();m.queueWaiting();}}
     public static void queue(int position){LoadingModel m=model;if(m!=null)m.queue(position);}
     private static int integer(Object value){if(value instanceof Byte||value instanceof Short||value instanceof Integer||value instanceof Long){long n=((Number)value).longValue();if(n>=Integer.MIN_VALUE&&n<=Integer.MAX_VALUE)return (int)n;}return -1;}
@@ -104,7 +115,9 @@ public final class StartupRuntime {
         // Options/auth/menu resets must not take over a different native page.
         LoadingModel m=model;Object owner=connectionOwner;
         if(m==null||owner==null||connectionDispatch.get()!=owner||!"ConnectedToServer".equals(reason))return null;
-        long generation=m.snapshot().generation,epoch=m.serverLuaReloadBegin();if(epoch==0)return null;
+        LoadingModel.Snapshot before=m.snapshot();
+        NativeConnectionPresentation.Lease layout=presentation.statusPage(owner.getClass().getClassLoader(),before);
+        long generation=before.generation,epoch=m.serverLuaReloadBegin(layout==null?0:layout.statusBottom,layout==null?0:layout.cancelTop);if(epoch==0)return null;
         presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;
         return new LuaReload(m,generation,epoch);
     }
@@ -131,6 +144,7 @@ public final class StartupRuntime {
         return page==null||label==null?null:new StatusObservation(owner,page,label);
     }
     public static void statusAfter(Object value){
+        if(value instanceof BootTick tick){if(bootHandoff==tick.pending)menuReady();return;}
         if(!(value instanceof StatusObservation observation)||observation.owner!=connectionOwner)return;
         LoadingModel m=model;if(m==null)return;LoadingModel.Snapshot s=m.snapshot();String label=presentation.statusAfter(observation.page,s,observation.label);
         if(!label.isEmpty())m.nativeStatus(s.generation,label);
@@ -145,8 +159,23 @@ public final class StartupRuntime {
             case "Success" -> {WorkshopInteraction interaction=workshopInteraction;if(interaction!=null&&interaction.owner!=null&&interaction.owner==connectionOwner&&interaction.owner==connectionDispatch.get()&&interaction.generation==m.snapshot().generation){Object state=read(connectionOwner.getClass(),connectionOwner,"state");if(state instanceof Enum<?> actual&&actual.name().equals("WorkshopUpdate")){interaction.success=true;download=null;m.download(false,"","",-1,-1,-1,-1);presentation.restoreWorkshop();m.nativeInteraction(true);m.serverStage("CheckMods",-1,-1);}}}default -> {}}
     }
     public static void worldEvent(String event){LoadingModel m=model;if(m==null)return;m.worldStatus(switch(event){case "OnLoadedTileDefinitions" -> "已读取地形定义";case "OnLoadedMapZones" -> "已读取地图区域";case "OnGameTimeLoaded" -> "已读取世界时间";default -> "";});}
-    public static String enterFrame(String type){String prior=frame.get();if(workshopRestorePending){workshopRestorePending=false;rejectWorkshop();}if(snapshot()==null||!snapshot().active||!snapshot().downloadPage)presentation.restoreWorkshop();presentation.clear();cpuFrame.set(new long[]{frameSequence.incrementAndGet(),0});frame.set(type.equals("zombie.gameStates.MainScreenState")?"MENU":type.equals("zombie.gameStates.LoadingQueueState")?"QUEUE":"");return prior;}
-    public static void exitFrame(String prior){presentation.clear();cpuFrame.remove();if(prior==null)frame.remove();else frame.set(prior);}
+    /** GameWindow emits this after menu render, before DoFrameReady. */
+    public static Object bootTickBefore(Class<?> eventType){
+        NativeConnectionPresentation.BootMenu pending=bootHandoff;
+        if(pending==null||eventType==null||eventType.getClassLoader()!=pending.loader())return null;
+        NativeConnectionPresentation.BootMenu current=presentation.bootMenu(pending.loader());
+        if(!pending.same(current)){menuReady();return null;}
+        return current.delay()<=0?new BootTick(pending):null;
+    }
+    public static String enterFrame(String type){String prior=frame.get();
+        NativeConnectionPresentation.BootMenu pending=bootHandoff;
+        if(pending!=null){NativeConnectionPresentation.BootMenu current=presentation.bootMenu(pending.loader());if(bootAwaitedTick||!pending.same(current)||!session.pendingDirectServer(System.currentTimeMillis()/1000))menuReady();}
+        if(workshopRestorePending){workshopRestorePending=false;rejectWorkshop();}if(snapshot()==null||!snapshot().active||!snapshot().downloadPage)presentation.restoreWorkshop();presentation.clear();cpuFrame.set(new long[]{frameSequence.incrementAndGet(),0});frame.set(type.equals("zombie.gameStates.MainScreenState")?"MENU":type.equals("zombie.gameStates.LoadingQueueState")?"QUEUE":"");return prior;}
+    public static void exitFrame(String prior){exitFrame(prior,null);}
+    public static void exitFrame(String prior,Throwable error){
+        NativeConnectionPresentation.BootMenu pending=bootHandoff;
+        if(pending!=null&&(error!=null||!pending.same(presentation.bootMenu(pending.loader()))))menuReady();
+        presentation.clear();cpuFrame.remove();if(prior==null)frame.remove();else frame.set(prior);}
     static boolean acceptedFrame(long sequence){long[] cpu=cpuFrame.get();return cpu!=null&&cpu[0]==sequence&&cpu[1]!=0;}
     public static boolean skipElement(Object element){return presentation.skipElement(element);}
     static void rejectWorkshopRows(){rejectWorkshop();presentation.clear();}
@@ -157,7 +186,18 @@ public final class StartupRuntime {
     public static boolean skipQueue(Object element){return presentation.skipQueue(element);}
     public static boolean skipTexture(Object element,Object texture,String kind){return presentation.skipTexture(element,texture,NativeConnectionPresentation.Kind.valueOf(kind));}
     /** Queue place=-1/immediate never call renderBackground; this runs after their black clear. */
-    public static void endFrameUI(Object core){if("QUEUE".equals(frame.get()))background(core);}
+    public static void endFrameUI(Object core){
+        if("QUEUE".equals(frame.get()))background(core);
+        NativeConnectionPresentation.BootMenu pending=bootHandoff;LoadingModel m=model;
+        NativeConnectionPresentation.BootMenu current=pending==null?null:presentation.bootMenu(pending.loader());
+        if(pending!=null&&m!=null&&"MENU".equals(frame.get())&&pending.same(current))try{
+            LoadingModel.Snapshot s=m.snapshot();if(s.active&&s.context==LoadingModel.Context.BOOT){
+                if(!QueuedBackdrop.enqueue(pending.loader(),QueuedBackdrop.Ticket.boot(s,m)))menuReady();
+                // Even a mod disabling OnRenderTick gets only one eligible frame.
+                else if(current.delay()<=0)bootAwaitedTick=true;
+            }
+        }catch(Throwable failure){menuReady();}
+    }
     public static void background(Object state){
         LoadingModel.Snapshot s=snapshot();String scope=frame.get();if(s==null||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||scope==null||scope.isEmpty()||state==null)return;
         long[] cpu=cpuFrame.get();if(cpu==null||cpu[1]!=0)return;
@@ -175,12 +215,17 @@ public final class StartupRuntime {
     private static boolean currentContext(){try{return GameDisplay.created()&&GL.getCapabilities()!=null;}catch(Throwable notCurrent){return false;}}
     /** Called by the fixed generated drawer; exceptions cannot escape into native UI commands. */
     public static void queuedDraw(QueuedBackdrop.Ticket ticket){
-        try{LoadingModel.Snapshot current=snapshot();if(ticket==null||current==null||!current.active||current.generation!=ticket.state.generation||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE"))||drawing||!currentContext())return;
+        try{LoadingModel.Snapshot current=snapshot();if(ticket==null||current==null||!current.active||drawing||!currentContext())return;
+            if(ticket.scope.equals("BOOT")){
+                // The native bridge runs after CPU menu drawing. Cover only that
+                // already-validated boot frame even if its one connect has begun.
+                if(ticket.bootOwner!=model||ticket.state.context!=LoadingModel.Context.BOOT||!(current.context==LoadingModel.Context.BOOT&&current.generation==ticket.state.generation&&current.epoch==ticket.state.epoch||current.context==LoadingModel.Context.SERVER&&current.route==LoadingModel.Route.BEHIND_UI&&current.generation==ticket.state.generation+1&&current.epoch==ticket.state.epoch+1))return;
+            }else if(current.generation!=ticket.state.generation||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE")))return;
             if(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING)!=0){if(ticket.state.downloadPage)workshopRestorePending=true;return;}
             draw(ticket.state,ticket.statusBottom,ticket.cancelTop);
         }catch(Throwable error){failed(error);}
     }
-    private static void draw(LoadingModel.Snapshot state)throws Exception{draw(state,0,0);}
+    private static void draw(LoadingModel.Snapshot state)throws Exception{draw(state,state.fullStatusBottom,state.fullCancelTop);}
     private static void draw(LoadingModel.Snapshot state,double statusBottom,double cancelTop)throws Exception{
         drawing=true;try{LoadingModel m=model;long now=System.currentTimeMillis();if(now-lastIssueRead>=250){lastIssueRead=now;m.issue(session.readIssue(now,issueFloor));}
             if(renderer==null)renderer=new GameRenderer();java.lang.Runtime memory=java.lang.Runtime.getRuntime();renderer.draw(state,session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory(),statusBottom,cancelTop);

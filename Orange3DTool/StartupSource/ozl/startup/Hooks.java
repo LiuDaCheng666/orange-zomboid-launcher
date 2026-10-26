@@ -88,7 +88,7 @@ public final class Hooks {
     public static final class Translation {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Argument(0)String key,@Advice.Return String label){StartupRuntime.translation(key,label);}}
     public static final class Mod {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Argument(0)String value){StartupRuntime.mod(value);}}
     public static final class Script {@Advice.OnMethodEnter(suppress=Throwable.class)public static void enter(@Advice.Argument(0)String value){StartupRuntime.script(value);}}
-    public static final class Menu {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.menuReady();}}
+    public static final class Menu {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.This Object state){StartupRuntime.menuReady(state);}}
     public static final class WorldBegin {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.This Object value){StartupRuntime.worldBegin(value);}}
     public static final class WorldEnd {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(){StartupRuntime.worldEnd();}}
     public static final class WorldSent {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Origin Class<?> type){StartupRuntime.worldSent(type);}}
@@ -130,7 +130,7 @@ public final class Hooks {
     public static final class QueueRedirect {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.Return(typing=net.bytebuddy.implementation.bytecode.assign.Assigner.Typing.DYNAMIC)Object next){StartupRuntime.queueRedirect(next);}}
     public static final class FrameScope {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static String enter(@Advice.Origin("#t")String type){return StartupRuntime.enterFrame(type);}
-        @Advice.OnMethodExit(onThrowable=Throwable.class,suppress=Throwable.class)public static void exit(@Advice.Enter String prior){StartupRuntime.exitFrame(prior);}
+        @Advice.OnMethodExit(onThrowable=Throwable.class,suppress=Throwable.class)public static void exit(@Advice.Enter String prior,@Advice.Thrown Throwable error){StartupRuntime.exitFrame(prior,error);}
     }
     public static final class Background {@Advice.OnMethodExit(suppress=Throwable.class)public static void exit(@Advice.This Object state){StartupRuntime.background(state);}}
     public static final class ElementDraw {@Advice.OnMethodEnter(skipOn=Advice.OnNonDefaultValue.class,suppress=Throwable.class)public static boolean enter(@Advice.This Object element){return StartupRuntime.skipElement(element);}}
@@ -149,6 +149,7 @@ public final class Hooks {
     }
     public static final class Event {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.Origin Class<?> eventType,@Advice.Argument(0)String event,@Advice.Argument(value=1,optional=true)Object a,@Advice.Argument(value=2,optional=true)Object b,@Advice.Argument(value=3,optional=true)Object c,@Advice.Argument(value=4,optional=true)Object d){
+            if("OnRenderTick".equals(event))return StartupRuntime.bootTickBefore(eventType);
             // Branch before touching payloads; failure/auth text never enters public progress.
             if("OnGoogleAuthRequest".equals(event)||"OnQRReceived".equals(event)||"OnConnected".equals(event)){StartupRuntime.handoff(true);return null;}
             if("OnConnectFailed".equals(event)||"OnDisconnect".equals(event)){StartupRuntime.handoff(false);return null;}

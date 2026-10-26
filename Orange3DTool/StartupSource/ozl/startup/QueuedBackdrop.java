@@ -13,9 +13,12 @@ public final class QueuedBackdrop {
     public static final class Ticket {
         public final LoadingModel.Snapshot state;
         public final String scope;
+        public final Object bootOwner;
         public final double statusBottom,cancelTop;
         public Ticket(LoadingModel.Snapshot state,String scope){this(state,scope,null);}
-        public Ticket(LoadingModel.Snapshot state,String scope,NativeConnectionPresentation.Lease lease){this.state=state;this.scope=scope;statusBottom=lease==null||lease.queueScope?0:lease.statusBottom;cancelTop=lease==null||lease.queueScope?0:lease.cancelTop;}
+        public Ticket(LoadingModel.Snapshot state,String scope,NativeConnectionPresentation.Lease lease){this(state,scope,lease,null);}
+        private Ticket(LoadingModel.Snapshot state,String scope,NativeConnectionPresentation.Lease lease,Object bootOwner){this.state=state;this.scope=scope;this.bootOwner=bootOwner;statusBottom=lease==null||lease.queueScope?0:lease.statusBottom;cancelTop=lease==null||lease.queueScope?0:lease.cancelTop;}
+        public static Ticket boot(LoadingModel.Snapshot state,LoadingModel owner){return new Ticket(state,"BOOT",null,owner);}
     }
     private static ClassLoader parent;
     private static Constructor<?> constructor;

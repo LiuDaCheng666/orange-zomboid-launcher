@@ -96,7 +96,7 @@ public final class LoadingScene {
             centered(c,metadata,infoCx,labelY+25*s,small,muted,infoWidth);
             if(state.context==LoadingModel.Context.SAVE)centered(c,state.detail,infoCx,labelY+56*s,small,muted,infoWidth);
         }
-        LoadingHumor.Caption caption=LoadingHumor.at(seconds,state.epoch,state.context,reduced);
+        LoadingHumor.Caption caption=LoadingHumor.at(seconds,state.generation,state.context,reduced);
         double humorY=nativeControls?Math.min(cy+150*visualScale,cancelTop*h-15*s):state.context==LoadingModel.Context.BOOT?labelY+28*s:cy+153*s;
         centered(c,caption.text(),cx,humorY,Math.max(10,12*s),alpha(muted,caption.opacity()),Math.min(w*.52,300*s));
         double line=Math.max(16,23*s),bottom=h-Math.max(23,45*s),body=font(13*s),leftWidth=w*.46-margin,rightWidth=w*.42-margin;

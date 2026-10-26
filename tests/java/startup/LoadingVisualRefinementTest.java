@@ -38,14 +38,14 @@ public final class LoadingVisualRefinementTest {
     }
     static void humor(){
         Set<String> phrases=new HashSet<>();String previous="",last="";double entered=0,exited=0;
-        for(int i=0;i<3600;i++){
+        for(int i=0;i<10000;i++){
             double t=i*.1;String current=LoadingHumor.at(t,1,LoadingModel.Context.BOOT,false).text();
-            check(current.equals(LoadingHumor.at(t,1,LoadingModel.Context.BOOT,false).text()),"caption order is deterministic");
+            check(current.equals(LoadingHumor.at(t,1,LoadingModel.Context.BOOT,false).text()),"repainting the same session time keeps the shuffled caption stable");
             if(!current.isEmpty()&&previous.isEmpty()){check(!current.equals(last),"consecutive captions do not repeat");if(exited>0)check(t-exited>=1&&t-exited<=4,"short quiet gap keeps the waiting sequence alive");entered=t;phrases.add(current);last=current;}
             if(current.isEmpty()&&!previous.isEmpty()){check(t-entered>=4.5&&t-entered<=5.2,"caption remains readable for about five seconds");exited=t;}
             previous=current;
         }
-        check(phrases.size()>=25&&phrases.size()<=35,"long wait offers 25–35 distinct PZ captions");
+        check(phrases.size()>=80&&phrases.size()<=110,"long wait offers an expanded deck of short PZ captions");
         for(String required:new String[]{"狗正在跨越栅栏","正在摧毁模组","正在添加bug","正在鞭策浣熊"})check(phrases.contains(required),"requested joke appears: "+required);
     }
     static void layout(){

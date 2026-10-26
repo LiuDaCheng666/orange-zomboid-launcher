@@ -10,8 +10,9 @@ public final class Session {
     public final String nonce, theme;
     public final boolean reducedMotion;
     public final Path folder, issues;
-    private Session(String nonce,String theme,boolean reducedMotion,Path folder,Path issues) {
-        this.nonce=nonce;this.theme=theme;this.reducedMotion=reducedMotion;this.folder=folder;this.issues=issues;
+    private final Path user;
+    private Session(String nonce,String theme,boolean reducedMotion,Path folder,Path issues,Path user) {
+        this.nonce=nonce;this.theme=theme;this.reducedMotion=reducedMotion;this.folder=folder;this.issues=issues;this.user=user;
     }
     private static String decode(Properties p,String key) {
         return new String(Base64.getDecoder().decode(p.getProperty(key,"")),StandardCharsets.UTF_8);
@@ -47,8 +48,27 @@ public final class Session {
             if(!canonical(recordedGame)||!recordedGame.equals(game)||!canonical(user)||!canonical(issues))return null;
             if(!issues.equals(folder.resolve("issues.txt")))return null;
             if(Files.exists(issues)&&!issues.toRealPath().equals(issues))return null;
-            return new Session(nonce,theme,Boolean.parseBoolean(reduced),folder,issues);
+            return new Session(nonce,theme,Boolean.parseBoolean(reduced),folder,issues,user);
         } catch(Exception invalid){return null;}
+    }
+    /** Intent only. The existing Lua bridge alone consumes and executes the request.
+     * Stop at the endpoint header; usernames and passwords are never inspected. */
+    public boolean pendingDirectServer(long nowSeconds){
+        try{
+            Path request=user.resolve("Lua/OrangeLauncherSession.request.txt");
+            if(!canonical(request)||!Files.isRegularFile(request)||Files.size(request)>16384)return false;
+            String[] header=new String[8];
+            try(Reader reader=Files.newBufferedReader(request,StandardCharsets.UTF_8)){
+                for(int i=0;i<header.length;i++){
+                    StringBuilder line=new StringBuilder();int ch;
+                    while((ch=reader.read())!=-1&&ch!='\n'){if(line.length()>=1024)return false;line.append((char)ch);}
+                    if(ch==-1)return false;header[i]=line.toString().replaceFirst("\r$","");
+                }
+            }
+            if(!"ORANGE1".equals(header[0])||!nonce.equals(header[1])||!"server".equals(header[3]))return false;
+            long timestamp=Long.parseLong(header[2]);int port=Integer.parseInt(header[7]);
+            return timestamp<=nowSeconds&&nowSeconds-timestamp<=600&&port>=1&&port<=65535&&!header[6].isBlank()&&header[6].length()<=256&&!header[6].matches(".*[\\p{Cntrl}].*");
+        }catch(Exception unavailable){return false;}
     }
     public String[] readIssue(long nowMillis) {return readIssue(nowMillis,0);}
     public String[] readIssue(long nowMillis,long newerThan) {

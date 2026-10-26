@@ -19,6 +19,7 @@ public final class LoadingModel {
     private String downloadPhase="download";
     private boolean downloadPage;private String downloadID="",downloadTitle="";private int workshopReady=-1;private double downloadRate=-1;
     private long generation=1;
+    private double luaStatusBottom,luaCancelTop;
     private boolean serverOperation;
     private ServerInfo server=new ServerInfo();
     private static final class ServerInfo {
@@ -118,8 +119,9 @@ public final class LoadingModel {
     }
     private void reset(Context next,Route target){lastNativeStatus="";downloadPage=false;downloadID=downloadTitle="";workshopReady=-1;downloadRate=-1;epoch++;boot=next==Context.BOOT;world=false;waiting=false;nativeInteraction=false;reloadingLua=false;context=next;route=target;name="";mode="";map="";detail="";lastWorldStatus=lastConversion="";stageIndex=0;scannedResources=0;lastResourceLabel=0;workshopProjects=requestedMods=queuePosition=-1;downloaded=downloadTotal=-1;mods.clear();scripts.clear();activity.clear();issue=new String[0];began=System.nanoTime();}
     /** ResetLua stops CPU sprite production while replacing the native Lua UI. */
-    synchronized long serverLuaReloadBegin(){
+    synchronized long serverLuaReloadBegin(double statusBottom,double cancelTop){
         if(disabled||!serverOperation||context!=Context.SERVER||route!=Route.BEHIND_UI)return 0;
+        luaStatusBottom=statusBottom;luaCancelTop=cancelTop;
         reloadingLua=true;route=Route.FULL;waiting=false;nativeInteraction=false;downloadPage=false;epoch++;
         title="正在重新加载 Lua";stage="界面";detail="";append(title);return epoch;
     }
@@ -168,9 +170,10 @@ public final class LoadingModel {
     }
     public synchronized void disable(){disabled=true;}
     synchronized boolean presentationCurrent(long operation,long expectedEpoch){return route==Route.BEHIND_UI&&context==Context.SERVER&&!waiting&&!disabled&&!nativeInteraction&&generation==operation&&epoch==expectedEpoch&&downloadPage;}
-    public synchronized Snapshot snapshot(){return new Snapshot(route!=Route.NONE&&!waiting&&!disabled&&!nativeInteraction,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9,context,route,epoch,scannedResources,name,mode,map,workshopProjects,requestedMods,queuePosition,downloaded,downloadTotal,generation,server,downloadPage,downloadID,downloadTitle,workshopReady,downloadRate,downloadPhase);}
+    public synchronized Snapshot snapshot(){return new Snapshot(route!=Route.NONE&&!waiting&&!disabled&&!nativeInteraction,world,title,detail,stage,stageIndex,mods.size(),scripts.size(),activity.toArray(String[]::new),issue.clone(),(System.nanoTime()-began)/1e9,context,route,epoch,scannedResources,name,mode,map,workshopProjects,requestedMods,queuePosition,downloaded,downloadTotal,generation,server,downloadPage,downloadID,downloadTitle,workshopReady,downloadRate,downloadPhase,reloadingLua?luaStatusBottom:0,reloadingLua?luaCancelTop:0);}
     public static final class Snapshot {
         public final boolean active,world;
+        public final double fullStatusBottom,fullCancelTop;
         public final boolean downloadPage;public final String downloadID,downloadTitle,downloadPhase;public final int workshopReady;public final double downloadRate;
         public final String title,detail,stage;
         public final int stageIndex,processedMods,processedScripts;
@@ -179,6 +182,6 @@ public final class LoadingModel {
         public final Context context;public final Route route;public final long epoch,scannedResources,downloaded,downloadTotal;
         public final String name,mode,map;public final int workshopProjects,requestedMods,queuePosition;
         public final long generation,worldDay;public final String endpoint,gameClock,gameDate;public final int online,maxPlayers;public final boolean clockObserved;
-        Snapshot(boolean active,boolean world,String title,String detail,String stage,int index,int mods,int scripts,String[] activity,String[] issue,double elapsed,Context context,Route route,long epoch,long scanned,String name,String mode,String map,int projects,int requested,int queue,long downloaded,long total,long generation,ServerInfo server,boolean downloadPage,String downloadID,String downloadTitle,int workshopReady,double downloadRate,String downloadPhase){this.downloadPhase=downloadPhase;this.downloadPage=downloadPage;this.downloadID=downloadID;this.downloadTitle=downloadTitle;this.workshopReady=workshopReady;this.downloadRate=downloadRate;this.active=active;this.world=world;this.title=title;this.detail=detail;this.stage=stage;stageIndex=index;processedMods=mods;processedScripts=scripts;this.activity=activity;this.issue=issue;this.elapsed=elapsed;this.context=context;this.route=route;this.epoch=epoch;scannedResources=scanned;this.name=name;this.mode=mode;this.map=map;workshopProjects=projects;requestedMods=requested;queuePosition=queue;this.downloaded=downloaded;downloadTotal=total;this.generation=generation;endpoint=server.endpoint();online=server.online;maxPlayers=server.maximum;gameClock=server.clock;gameDate=server.date;worldDay=server.day;clockObserved=server.clockObserved;}
+        Snapshot(boolean active,boolean world,String title,String detail,String stage,int index,int mods,int scripts,String[] activity,String[] issue,double elapsed,Context context,Route route,long epoch,long scanned,String name,String mode,String map,int projects,int requested,int queue,long downloaded,long total,long generation,ServerInfo server,boolean downloadPage,String downloadID,String downloadTitle,int workshopReady,double downloadRate,String downloadPhase,double fullStatusBottom,double fullCancelTop){this.fullStatusBottom=fullStatusBottom;this.fullCancelTop=fullCancelTop;this.downloadPhase=downloadPhase;this.downloadPage=downloadPage;this.downloadID=downloadID;this.downloadTitle=downloadTitle;this.workshopReady=workshopReady;this.downloadRate=downloadRate;this.active=active;this.world=world;this.title=title;this.detail=detail;this.stage=stage;stageIndex=index;processedMods=mods;processedScripts=scripts;this.activity=activity;this.issue=issue;this.elapsed=elapsed;this.context=context;this.route=route;this.epoch=epoch;scannedResources=scanned;this.name=name;this.mode=mode;this.map=map;workshopProjects=projects;requestedMods=requested;queuePosition=queue;this.downloaded=downloaded;downloadTotal=total;this.generation=generation;endpoint=server.endpoint();online=server.online;maxPlayers=server.maximum;gameClock=server.clock;gameDate=server.date;worldDay=server.day;clockObserved=server.clockObserved;}
     }
 }

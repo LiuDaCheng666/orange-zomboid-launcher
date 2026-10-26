@@ -22,7 +22,7 @@ public final class HumorSceneTest {
         LoadingModel boot=new LoadingModel();boot.phase("Loading Mods");boot.mod("ActualViewpointMod");
         String stage=boot.snapshot().stage;int activity=boot.snapshot().activity.length;
         Set<String> phrases=new HashSet<>();String previous="";double entered=-1,exited=-1;int appearances=0;
-        for(int tick=0;tick<=2400;tick++){
+        for(int tick=0;tick<=10000;tick++){
             double time=tick/10d;String current=joke(frame(boot,1280,720,time,false,false));
             if(tick==0)check(current.isEmpty(),"short loads do not immediately show a joke");
             if(!current.isEmpty()&&previous.isEmpty()){
@@ -35,7 +35,8 @@ public final class HumorSceneTest {
             }
             previous=current;
         }
-        check(appearances>=30&&appearances<=33,"jokes are occasional during a long quiet wait");
+        check(appearances>=133&&appearances<=135,"jokes remain occasional while a full expanded deck reaches the scene");
+        check(phrases.size()>=80,"long real-scene waits use the expanded humor repertoire");
         for(String phrase:new String[]{"狗正在跨越栅栏","正在摧毁模组","正在添加bug","正在鞭策浣熊"})check(phrases.stream().anyMatch(v->v.contains(phrase)),"requested phrase reaches the actual scene: "+phrase);
         check(boot.snapshot().stage.equals(stage)&&boot.snapshot().activity.length==activity,"humor never fabricates phase or activity observations");
         LoadingModel save=new LoadingModel(),server=new LoadingModel();save.worldBegin(false,"Rosewood — Day 48","Sandbox","Rosewood");server.serverBegin("橙子社区服务器","203.0.113.7",16261);

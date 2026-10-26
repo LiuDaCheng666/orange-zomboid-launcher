@@ -35,6 +35,24 @@ public final class NativeConnectionPresentation {
         Object actual=type("zombie.ui.UIManager",loader).getMethod("tableget",kahlua,Object.class).invoke(null,table,"Type");
         if(!expected.equals(actual))throw new IllegalStateException("native page type");
     }
+    /** The launch bridge waits for this native delay. Unknown pages/dialogs veto
+     * the short boot cover; this observation never changes visibility or input. */
+    public record BootMenu(ClassLoader loader,Object environment,Object table,Object main,double delay){
+        boolean same(BootMenu next){return next!=null&&loader==next.loader&&environment==next.environment&&table==next.table&&main==next.main;}
+    }
+    public BootMenu bootMenu(ClassLoader loader){try{
+        Object env=field(type("zombie.Lua.LuaManager",loader),"env"),table=raw(raw(env,"MainScreen"),"instance"),main=element(table);
+        namedType(loader,table,"MainScreen");if(main==null||!visible(main)||!Boolean.FALSE.equals(raw(table,"inGame")))return null;
+        Object dialog=element(raw(table,"termsOfServiceDialog"));if(dialog!=null&&visible(dialog))return null;
+        Object bottom=element(raw(table,"bottomPanel")),connect=element(raw(table,"connectToServer"));if(bottom==null||!visible(bottom)||connect==null||visible(connect))return null;
+        Set<Object> allowed=identities();allowed.add(bottom);allowed.add(connect);
+        for(String name:CHROME){Object child=element(raw(table,name));if(child!=null)allowed.add(child);}
+        for(String name:PAGES){if(name.equals("bottomPanel"))continue;Object child=element(raw(table,name));if(child!=null){if(visible(child))return null;allowed.add(child);}}
+        exactChildren(main,allowed,false);
+        Object roots=type("zombie.ui.UIManager",loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(main))return null;for(Object root:list)if(root!=main&&visible(root))return null;
+        double delay=number(table,"delay");if(delay>500)return null;
+        return new BootMenu(loader,env,table,main,delay);
+    }catch(Throwable unavailable){return null;}}
     /** Resolve on the game CPU thread, before enqueue. Missing/modified contracts simply decline. */
     public Lease resolve(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean queueScope){
         return resolve(loader,state,frame,queueScope,true);
