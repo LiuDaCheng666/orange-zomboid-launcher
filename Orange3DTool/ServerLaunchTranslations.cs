@@ -12,7 +12,9 @@ namespace PZ3D {
   internal static IEnumerable<string> GeneratedIds(Engine e,IEnumerable<string> selected,Dictionary<string,byte[]> files){return selected.Where(Ids.Contains).Distinct().Where(id=>files.ContainsKey(Path.Combine(Root(e,id),"42","mod.info"))).Select(OverlayId);}
   internal static string[] OwnedIds(Engine e,IEnumerable<string> files){var paths=new HashSet<string>(files.Select(Path.GetFullPath),StringComparer.OrdinalIgnoreCase);return Ids.Where(id=>paths.Contains(Path.Combine(Root(e,id),"42","mod.info"))).Select(OverlayId).ToArray();}
   internal static bool IsOverlay(string id){return Ids.Any(source=>OverlayId(source)==id);}
-  const int MaxFiles=4089,MaxFileBytes=4194304,MaxBytes=67108864;
+  // Unified translation JSON legitimately exceeds 4 MiB. Bound each file
+  // without rejecting current packs; the combined in-memory budget stays 64 MiB.
+  const int MaxFiles=4089,MaxFileBytes=16*1024*1024,MaxBytes=64*1024*1024;
   static Version Normal(Version v){return new Version(v.Major,v.Minor,Math.Max(0,v.Build),Math.Max(0,v.Revision));}
   internal static bool OwnedPath(Engine e,string file){
    string path=Path.GetFullPath(file),ext=Path.GetExtension(path);
