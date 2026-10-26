@@ -1,5 +1,6 @@
 """Release-only publication safety tests; no network access or executable payloads."""
 import hashlib
+import inspect
 import json
 from pathlib import Path
 import stat
@@ -81,6 +82,29 @@ class PublishSoftwareTests(fixtures.VelopackReleaseTests):
         self.assertEqual(result['protected_before'], result['protected_after'])
         for operation,path in self.remote.writes:
             self.assertTrue(path.startswith('/var/www/ozl/test-runs/') or path.startswith('/var/www/ozl/releases/') or path in changed, (operation,path))
+
+    def test_bytes_changed_after_windows_verification_are_rejected_before_ssh(self):
+        self.assertIn('verified_artifacts', inspect.signature(publisher.publish).parameters,
+                      'Publisher must bind actual uploads to Windows-verified bytes')
+        verified = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in self.source.iterdir()}
+        verified['OrangeZomboidLauncher-win-Setup.exe'] = '0' * 64
+        def must_not_connect():
+            self.fail('Changed signing inputs must fail before SSH')
+        with self.assertRaisesRegex(ValueError, 'Windows-verified'):
+            publisher.publish(self.source, self.legacy, self.public.read_bytes(),
+                              self.remote.current, self.evidence, remote_factory=must_not_connect,
+                              health_check=lambda *_: None, verified_artifacts=verified)
+        self.assertEqual(self.remote.writes, [])
+
+    def test_exact_windows_verified_bytes_are_the_bytes_uploaded(self):
+        self.assertIn('verified_artifacts', inspect.signature(publisher.publish).parameters,
+                      'Publisher must preserve the Windows-verified inventory')
+        verified = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in self.source.iterdir()}
+        result = publisher.publish(self.source, self.legacy, self.public.read_bytes(),
+                                   self.remote.current, self.evidence, remote_factory=lambda: self.remote,
+                                   health_check=lambda *_: None, verified_artifacts=verified)
+        self.assertEqual(result['status'], 'published')
+        self.assertEqual({p.rsplit('/', 1)[1]: value for p, value in result['immutable'].items()}, verified)
 
     def test_setup_and_portable_custom_nested_metadata_survives_release_merge(self):
         path=self.remote.current+'/release.json'

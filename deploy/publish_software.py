@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shlex
 import stat
+import subprocess
 import sys
 import tempfile
 import uuid
@@ -173,7 +174,8 @@ def http_health(origin, mutable, display):
                 raise RuntimeError('Public artifact health verification failed: ' + name)
 
 
-def publish(source, legacy, public_key, expected_current, evidence, *, remote_factory=SftpRemote, health_check=None):
+def publish(source, legacy, public_key, expected_current, evidence, *, remote_factory=SftpRemote, health_check=None,
+            verified_artifacts=None):
     """Authenticate before connecting; replace exactly four existing mutable files."""
     expected_current = validate_current(expected_current)
     evidence = Path(evidence).resolve()
@@ -185,6 +187,11 @@ def publish(source, legacy, public_key, expected_current, evidence, *, remote_fa
         artifact_root = mirror / 'releases' / ('v' + version)
         artifacts = {p.name:p.read_bytes() for p in artifact_root.iterdir()}
         if len(artifacts) != 10: raise ValueError('Expected exactly ten immutable files')
+        if verified_artifacts is not None:
+            actual_hashes = {name: sha(content) for name, content in artifacts.items()}
+            frozen_hashes = {name: value.lower() for name, value in verified_artifacts.items()}
+            if actual_hashes != frozen_hashes:
+                raise ValueError('Publication bytes differ from the Windows-verified release; verify the frozen candidate again')
         mutable = {'updates/velopack/latest/' + n:(mirror/'updates/velopack/latest'/n).read_bytes() for n in FEED_NAMES}
         final = BASE + '/releases/v' + version
         token = uuid.uuid4().hex
@@ -303,10 +310,24 @@ def main():
     parser.add_argument('--expected-current', required=True, help='Previously verified physical current site path')
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--health-origin', default='https://orangezl.com')
+    parser.add_argument('--authenticode-config', type=Path, required=True,
+                        help='Local exact Windows publisher identity; no certificate key is uploaded')
     args = parser.parse_args()
     try:
+        # Verify the actual bytes before opening SSH. RSA update-feed signatures
+        # do not establish a Windows publisher or prevent unsigned regressions.
+        signing_receipt = args.evidence.resolve().with_suffix('.authenticode.json')
+        signing_receipt.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File',
+                        str(Path(__file__).resolve().parents[1] / 'build' / 'Verify-WindowsRelease.ps1'),
+                        '-ReleaseDirectory', str(args.source.resolve()),
+                        '-AuthenticodeConfig', str(args.authenticode_config.resolve()),
+                        '-EvidencePath', str(signing_receipt)], check=True)
+        windows_verified = load_json(signing_receipt.read_bytes())
+        verified_hashes = {item['name']: item['sha256'] for item in windows_verified['artifacts']}
         result = publish(args.source, args.preserved_legacy, args.public_key.read_bytes(), args.expected_current,
-                         args.evidence, health_check=lambda mutable,display:http_health(args.health_origin, mutable, display))
+                         args.evidence, health_check=lambda mutable,display:http_health(args.health_origin, mutable, display),
+                         verified_artifacts=verified_hashes)
     except Exception as error:
         print('Software publication failed: ' + str(error), file=sys.stderr); return 1
     print(json.dumps({'status':result['status'], 'version':result['version'], 'evidence':str(args.evidence.resolve())}))

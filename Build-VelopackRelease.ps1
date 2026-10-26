@@ -1,20 +1,24 @@
-﻿param([Parameter(Mandatory=$true)][string]$SigningKey,[Parameter(Mandatory=$true)][string]$OutputDirectory)
+﻿param([Parameter(Mandatory=$true)][string]$SigningKey,[Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$AuthenticodeConfig=(Join-Path $PSScriptRoot 'private/authenticode.json'))
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'build/VelopackDependencies.ps1')
 . (Join-Path $PSScriptRoot 'build/Verify-VelopackArchives.ps1')
 . (Join-Path $PSScriptRoot 'build/Verify-VelopackIcons.ps1')
+. (Join-Path $PSScriptRoot 'build/Authenticode.ps1')
 $destination=[IO.Path]::GetFullPath($OutputDirectory)
 if(Test-Path -LiteralPath $destination){throw 'Output already exists; choose a fresh release directory.'}
+$windowsSigning=Get-OzlAuthenticodeContext $AuthenticodeConfig
 $rsa=[Security.Cryptography.RSACryptoServiceProvider]::new()
 try {
  $rsa.PersistKeyInCsp=$false; $rsa.FromXmlString([IO.File]::ReadAllText($SigningKey))
  if($rsa.PublicOnly -or $rsa.ToXmlString($false) -cne [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'release-public-key.xml')).Trim()){throw 'Signing key must match the existing publication identity.'}
  $deps=Get-OzlVelopackDependencies
  New-Item -ItemType Directory $destination | Out-Null
- $build=& (Join-Path $PSScriptRoot 'Build-VelopackLauncher.ps1') -SigningKey $SigningKey -OutputDirectory (Join-Path $destination 'app')
+ $build=& (Join-Path $PSScriptRoot 'Build-VelopackLauncher.ps1') -SigningKey $SigningKey -OutputDirectory (Join-Path $destination 'app') -AuthenticodeConfig $AuthenticodeConfig
  $release=Join-Path $destination 'release'
  $exe=$deps.VpkExecutable; $prefix=@($deps.VpkArguments)
- & $exe @prefix pack --packId $build.PackageId --packTitle '橙子启动器' --packVersion $build.Version --packDir $build.PackDirectory --outputDir $release --channel win --runtime win-x64 --mainExe $build.MainExecutable --icon (Join-Path $PSScriptRoot 'Orange3DTool/Assets/orange-app.ico') --aumid OrangeZomboidLauncher.Launcher --framework net48 --delta None --shortcuts Desktop,StartMenuRoot --skip-updates --legacyConsole --yes | Out-Host
+ $signParams=(@(Get-OzlSignToolArguments $windowsSigning.Config) | ForEach-Object {if($_ -match '\s'){'"'+$_+'"'}else{$_}}) -join ' '
+ $frozenPeExclude=Get-OzlFrozenPeSignExclude
+ & $exe @prefix pack --packId $build.PackageId --packTitle '橙子启动器' --packVersion $build.Version --packDir $build.PackDirectory --outputDir $release --channel win --runtime win-x64 --mainExe $build.MainExecutable --icon (Join-Path $PSScriptRoot 'Orange3DTool/Assets/orange-app.ico') --aumid OrangeZomboidLauncher.Launcher --framework net48 --delta None --shortcuts Desktop,StartMenuRoot --signParams $signParams --signExclude $frozenPeExclude --skip-updates --legacyConsole --yes | Out-Host
  if($LASTEXITCODE){throw 'Pinned Velopack packaging failed'}
  $package="$($build.PackageId)-$($build.Version)-full.nupkg"
  $names=@($package,'OrangeZomboidLauncher-win-Setup.exe','OrangeZomboidLauncher-win-Portable.zip','releases.win.json','assets.win.json','RELEASES')
@@ -25,7 +29,9 @@ try {
  $official=Join-Path $destination 'official-Setup.exe'
  Move-Item -LiteralPath (Join-Path $release 'OrangeZomboidLauncher-win-Setup.exe') -Destination $official
  & (Join-Path $PSScriptRoot 'build/Build-VelopackSetup.ps1') -OfficialSetup $official -OutputPath (Join-Path $release 'OrangeZomboidLauncher-win-Setup.exe') -VersionFile (Join-Path $PSScriptRoot 'VERSION') -PublicKey (Join-Path $PSScriptRoot 'release-public-key.xml')
+ Invoke-OzlAuthenticodeSigning -Context $windowsSigning -Path (Join-Path $release 'OrangeZomboidLauncher-win-Setup.exe')
  Test-OzlVelopackIcons -ReleaseDirectory $release -Icon (Join-Path $PSScriptRoot 'Orange3DTool/Assets/orange-app.ico') -Version $build.Version | Out-Null
+ Assert-OzlSignedRelease -Context $windowsSigning -ReleaseDirectory $release -Version $build.Version -OfficialSetup $official -EvidencePath (Join-Path $destination 'authenticode-verification.json') | Out-Null
  $payload=Get-Item -LiteralPath (Join-Path $release $package)
  $feed=[ordered]@{schema=1;appId=$build.PackageId;channel='win';version=$build.Version;fileName=$package;length=$payload.Length;sha256=(Get-FileHash -LiteralPath $payload.FullName -Algorithm SHA256).Hash;notes=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'CHANGELOG.md'))}
  $writeSigned={param($name,$value) $raw=[Text.UTF8Encoding]::new($false).GetBytes(($value|ConvertTo-Json -Depth 6 -Compress)); [IO.File]::WriteAllBytes((Join-Path $release ($name+'.json')),$raw); [IO.File]::WriteAllBytes((Join-Path $release ($name+'.sig')),$rsa.SignData($raw,[Security.Cryptography.CryptoConfig]::MapNameToOID('SHA256')))}

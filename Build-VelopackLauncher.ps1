@@ -1,8 +1,11 @@
-﻿param([Parameter(Mandatory=$true)][string]$SigningKey,[Parameter(Mandatory=$true)][string]$OutputDirectory,[switch]$LocalPreview)
+﻿param([Parameter(Mandatory=$true)][string]$SigningKey,[Parameter(Mandatory=$true)][string]$OutputDirectory,[switch]$LocalPreview,[string]$AuthenticodeConfig='')
 $ErrorActionPreference='Stop'
 $buildRoot=$PSScriptRoot
 . (Join-Path $buildRoot 'build/ProductionSources.ps1')
 . (Join-Path $buildRoot 'build/VelopackDependencies.ps1')
+. (Join-Path $buildRoot 'build/Authenticode.ps1')
+$windowsSigning=$null
+if($AuthenticodeConfig){$windowsSigning=Get-OzlAuthenticodeContext $AuthenticodeConfig}
 $deps=Get-OzlVelopackDependencies
 $destination=[IO.Path]::GetFullPath($OutputDirectory)
 if(Test-Path -LiteralPath $destination){throw 'Output already exists; choose a fresh directory.'}
@@ -39,6 +42,7 @@ try {
  Copy-Item -LiteralPath (Join-Path $buildRoot 'docs/licenses/Velopack.txt') -Destination (Join-Path $destination 'ThirdPartyNotices/Velopack.txt')
  Copy-Item -LiteralPath (Join-Path $deps.DependencyRoot 'newtonsoft/LICENSE.md') -Destination (Join-Path $destination 'ThirdPartyNotices/Newtonsoft.Json.txt')
  & (Join-Path $buildRoot 'Build-Guide.ps1') -OutputPath (Join-Path $destination '使用说明.txt') | Out-Null
+ if($windowsSigning){Invoke-OzlAuthenticodeSigning -Context $windowsSigning -Path $launcher}
  $files=@(Get-ChildItem -LiteralPath $destination -File -Recurse | Sort-Object FullName | ForEach-Object {[ordered]@{path=$_.FullName.Substring($destination.Length+1).Replace('\','/');sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash;url='';length=$_.Length}})
  $raw=[Text.UTF8Encoding]::new($false).GetBytes(([ordered]@{schema=1;version=$version;files=$files} | ConvertTo-Json -Depth 5 -Compress))
  [IO.File]::WriteAllBytes((Join-Path $destination 'velopack-bootstrap.json'),$raw)

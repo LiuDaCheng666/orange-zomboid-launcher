@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "certificateThumbprint": "REPLACE_WITH_40_HEX_CERTIFICATE_THUMBPRINT",
+  "certificateSubject": "REPLACE_WITH_EXACT_TRUSTED_PUBLISHER_SUBJECT",
+  "certificateStore": "CurrentUser",
+  "timestampUrl": "http://time.certum.pl",
+  "signToolPath": ""
+}
