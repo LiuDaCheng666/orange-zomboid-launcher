@@ -4,6 +4,8 @@
 
 Version 1.2.24 adds loading-screen enable/remove controls under Help, occasional themed waiting captions, explicit opt-in feedback to the first-party endpoint, a pending Steam submission guard, and reuse of unchanged mod-catalog display data. Feedback has its own sidebar route. The previous 1.2.23 session recovery remains in place.
 
+The final central animation visibly cycles through a 24% seed, elastic fruit growth, hinged leaf unfolding, a settled breathing interval and smooth return. The actual production GL silhouette varies from 29 to 127 pixels in the fixed-clock fixture. The final loading JAR SHA-256 is `60F8D62965CB47BF654EE450770BA50F65C51D290568DD713EDA94535C8FD5EE`. Additional focused motion checks cover 62 model/raster/native-lane cases and 8 actual GL cases; reduced-motion output remains static in all three contexts.
+
 Tests operate on synthetic temporary profiles, inert process identities, headless browsers and hidden rendering contexts. No foreground game/Steam operation or real player feedback upload was used. Only changed and affected functions were tested.
 
 ## Findings fixed during integration
@@ -36,4 +38,15 @@ On the read-only local 668-Workshop-directory sample, stable full catalog discov
 
 ## Publication boundary
 
-The feedback feature uses a new private loopback service and exact additive API location in the existing Nginx guard. It preserves Caddy, current site, website content, software releases, existing guard rules and SSH authentication. Software publication uses the separate scoped publisher. Final deployment/publication receipts belong in `artifacts/publication-1.2.24/`; this record alone does not assert successful live publication.
+The feedback feature uses a new private loopback service and exact additive API location in the existing Nginx guard. It preserves Caddy, current site, website content, software releases, existing guard rules and SSH authentication. Software publication uses the separate scoped publisher.
+
+## Final live verification
+
+- The repaired first install completed with state `/var/backups/ozl-feedback/20261026T093247Z-e34cf1fa/state.json`, phase `verified`. The failed attempt's four exact owned paths were preserved under its original backup before retry; none were deleted.
+- The service is active as `ozl-feedback`, loopback health responds, and private directories/files have 0700/0600 modes. Website, Caddy and `current` hashes match the pre-install baseline.
+- The packaged production `FeedbackUpload.Send` successfully sent synthetic description-only bytes through the real HTTPS endpoint; an identical retry returned the same receipt/time. SSH read confirmed the exact synthetic body, then that one test report was deleted. No player logs, hardware information or real feedback were uploaded during verification.
+- Version 1.2.24 was published to the first-party source, then the 1.2.23 production updater checked and downloaded it to `Ready` before GitHub activation. The 1.2.24 production updater reports `Latest`. Both checks authenticated all 21 bootstrap files and used isolated locators without applying an update, invoking the program entry point or starting a game.
+- GitHub public latest is `v1.2.24` (release ID `424060281`), with ten uploaded assets. All twenty anonymous full downloads across both origins matched local size and SHA-256; current feed metadata also matched.
+- Final candidate archive/signature/icon checks passed; Defender reported no threats. Post-publication pinned-key SSH and SFTP checks passed. Scoped software publication's protected before/after snapshots match; `current` remains `/var/www/ozl/sites/20261024T195630Z-d3f3c044`.
+
+Publication evidence: ignored `artifacts/publication-1.2.24/`, with `primary-receipt.json`, `old-client-ready.json`, `new-client-latest.json`, `public-download-proof.json`, `feedback-public-proof.json`, `feedback-live-audit.json`, `github-published.json` and `ssh-after.json`. Final package directory: `E:/Projects/OrangeLauncher/dist/1.2.24-animation-feedback-20261026-final`.
