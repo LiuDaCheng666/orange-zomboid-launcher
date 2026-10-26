@@ -128,6 +128,21 @@ class RecommendationTests(unittest.TestCase):
         self.assertEqual(409, self.save(self.row("过期编辑"), revision)[0])
         self.assertEqual(["橙子生存服"], [r["name"] for r in self.document()["servers"]])
 
+    def test_optional_extended_text_and_screenshots_preserve_old_records(self):
+        self.login()
+        row = self.row(published=True)
+        row.update(extendedDescription="长介绍\n<b>普通文字</b>", screenshots=["https://orangezl.com/screens/example.png", "https://images.steamusercontent.com/example.jpg"])
+        status, _, saved = self.save(row)
+        self.assertEqual(200, status)
+        public = self.read_json("GET", "/api/recommended-servers")[2]["servers"][0]
+        self.assertEqual(row["screenshots"], public["screenshots"])
+        self.assertEqual(row["extendedDescription"], public["extendedDescription"])
+        self.assertEqual(200, self.save(self.row("legacy", published=True))[0])
+        row["screenshots"] = ["javascript:alert(1)"]
+        self.assertEqual(400, self.save(row)[0])
+        row["screenshots"] = ["https://foreign.example.invalid/image.png"]
+        self.assertEqual(400, self.save(row)[0])
+
     def test_export_failure_returns_saved_revision_and_retry_requires_authentication(self):
         self.stop_server()
         public = self.private / "public-fixture"

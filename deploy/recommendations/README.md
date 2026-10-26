@@ -24,7 +24,7 @@ powershell -ExecutionPolicy Bypass -File deploy/recommendations/start-local.ps1
 
 ```powershell
 python -m unittest tests.test_recommendations -v
-python -m unittest tests.test_recommendations_export tests.test_recommendations_operations -v
+python -m unittest tests.test_recommendations_export tests.test_recommendations_operations tests.test_recommendations_update -v
 node deploy/recommendations/ui-tests.cjs
 ```
 
@@ -44,7 +44,7 @@ node deploy/recommendations/ui-tests.cjs
 | `/etc/systemd/system/ozl-recommendations.service` | root 所有 0644；兼容 systemd 219 |
 | 当前实际站点的 `api/recommended-servers` | 新符号链接，指向上述 `feed.json`；`api` 不存在时新建 0755 |
 
-服务使用 Python 3.6 标准库，仅监听 `127.0.0.1:18083`。不增加公网 HTTP 端口，不改 Caddy/Nginx 配置，不 reload Web 服务，不切换 `current`，不改既有网页、发行文件或反馈服务。systemd 使用 `MemoryLimit` / `ReadWriteDirectories`，不依赖 `StateDirectory`。只有首次安装；路径或服务账号已经存在时拒绝覆盖，需要单独检查迁移。
+服务使用 Python 3.6 标准库，仅监听 `127.0.0.1:18083`。不增加公网 HTTP 端口，不改 Caddy/Nginx 配置，不 reload Web 服务，不切换 `current`，不改既有网页、发行文件或反馈服务。systemd 使用 `MemoryLimit` / `ReadWriteDirectories`，不依赖 `StateDirectory`。`install` 只用于首次安装；已有安装使用下方独立的精确代码更新流程。
 
 先运行只读审计，保存返回的 `current` 和 `protectedSha256`。审计覆盖现有网站、发行文件、根文件、Caddy/Nginx 配置和有效 include，检查路由未被截取、符号链接未禁用。`check` 还在服务器实际 Python 中验证导入兼容性。示例中的 SHA256 必须替换为**当次审计结果**；不要从旧日志复制。
 
@@ -54,7 +54,7 @@ python deploy/recommendations/remote.py check --expected-current /var/www/ozl/si
 python deploy/recommendations/remote.py install --expected-current /var/www/ozl/sites/20261024T195630Z-d3f3c044 --expected-protected-sha256 <同一次审计的64位SHA256>
 ```
 
-安装前再次核对精确站点、物理身份和保护文件哈希；只向新的 `/root/ozl-recommendations-<随机标识>` 上传固定六个代码/静态文件。创建专用无登录账号后安装 systemd 服务，验证管理员服务只在回环监听、Nginx worker 能读取公开文件，再创建唯一新链接，检查现有 18080/18081 静态入口并再次比较保护文件。完成后删除本次固定上传文件及空目录。不要在此过程并行发布网站或发行文件，否则保护哈希检查会拒绝继续。
+安装前再次核对精确站点、物理身份和保护文件哈希；只向新的 `/root/ozl-recommendations-<随机标识>` 上传固定代码/静态文件及独立更新器。创建专用无登录账号后安装 systemd 服务，验证管理员服务只在回环监听、Nginx worker 能读取公开文件，再创建唯一新链接，检查现有 18080/18081 静态入口并再次比较保护文件。完成后删除本次固定上传文件及空目录。不要在此过程并行发布网站或发行文件，否则保护哈希检查会拒绝继续。
 
 安装后的公开地址保持为 `https://orangezl.com/api/recommended-servers`，发行版客户端无需更改。公开响应沿用现有静态 MIME/缓存及 Web 防护规则；原生客户端按 UTF-8 JSON 内容解析，不依赖扩展名或 MIME。初次列表为空，不会代替管理员发布任何真实游戏服务器。
 
@@ -87,3 +87,30 @@ python deploy/recommendations/remote.py rollback
 回滚在内存执行本地已审阅的安装器，读取 root 所有的固定安装记录，先核对代码/单元哈希、物理身份和链接归属。只停止/禁用本服务、移除仍属于本次安装的符号链接、单元和代码文件；只移除本次创建且仍为空的 `api` 目录。保留私有数据库、凭据、公开快照、专用账号和安装记录供恢复，保留任何额外或改变的文件。不会递归删除目录，不改 Web 配置或既有页面。中断安装同样保留记录，检查后使用该明确回滚命令；不要直接重复安装或清空目录。
 
 Windows 测试覆盖临时文件审计、保护哈希/占用/路由拒绝、精确回滚及假 SSH 的本机 socket 转发；实际 Linux 账号/systemd/站点符号链接安装须由执行者在 `check` 和审阅后验证，本机测试不会执行生产安装。
+
+
+### 已安装后端的精确代码更新
+
+管理员可设置 `extendedDescription`（最多 8000 字普通文字）和 `screenshots`（最多 8 个图片地址）。截图只允许本站及上述两个 Steam 图片域名的 HTTPS URL，暂不提供文件上传接口。公开 `schema` 仍为 1；这两个可选字段不会使已发布的 1.2.28 客户端拒绝推荐列表。旧数据库记录缺省为空，新程序启动不会替换、重新命名或重新发布现有服务器。
+
+更新器只替换四个已归属本功能的文件：`server.py`、`static/admin.html`、`static/admin.css`、`static/admin.js`。原安装器、systemd 单元、公开链接、数据库、认证、初始凭据、现有公开快照均不由更新器写入。服务正常启动及管理员后续保存仍沿用原有 outbox 发布机制。
+
+先取得本次**已安装代码**和现有网站/配置的精确审计值：
+
+```powershell
+python deploy/recommendations/remote.py update-audit
+python deploy/recommendations/remote.py check-update --expected-current <本次current> --expected-protected-sha256 <本次protectedSha256> --expected-installed-sha256 <本次installedSha256>
+python deploy/recommendations/remote.py update --expected-current <同次current> --expected-protected-sha256 <同次protectedSha256> --expected-installed-sha256 <同次installedSha256>
+```
+
+只读审计和检查在远端匿名内存执行本地已审阅的程序，使用 `python3 -B`，不导入或执行远端未知的安装器。更新再次核对 root 安装记录、所有六个原安装文件的哈希、站点/代码物理身份和唯一链接，任一外部改动即拒绝覆盖。不要在更新过程中并行发布其他网站或发行文件。
+
+更新前将四个原文件及原安装记录保存到 `/opt/ozl-recommendations/update-backups/<32位更新ID>`（root 专有目录 0700、备份/记录 0600），持久化恢复记录后才停止本服务。每个文件原子替换，更新安装记录，再启动本服务并验证就绪及受保护文件哈希。服务停止后再次核对代码，避免覆盖停止过程中出现的外部改动。Web 服务不 reload。
+
+新服务就绪失败时只恢复哈希仍属于该操作的原文件和原安装记录，保留数据库/凭据/公开列表。进程中断产生的 `prepared` / `applying` 记录会阻止新的更新，须先检查并明确恢复：
+
+```powershell
+python deploy/recommendations/remote.py rollback-update --update-id <本次返回或保留目录中的32位更新ID>
+```
+
+恢复可以处理四个文件仅替换一部分的中断；后来安装状态或代码已变化时拒绝回滚，保留现场，不覆盖其他人的修改。恢复前和停止本服务后都再次核对文件。备份、记录和上传失败目录保留供检查；不递归删除、不回滚服务器推荐内容，不触碰 Web 配置、current 或已有页面。`rollback` 是原有整项后端卸载入口，正常代码退回应使用 `rollback-update`。

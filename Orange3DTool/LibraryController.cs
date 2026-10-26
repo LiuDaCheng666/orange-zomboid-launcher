@@ -5,9 +5,11 @@ using System.Linq;
 using System.Threading;
 namespace PZ3D {
  sealed partial class ModernController {
-  VersionLibrary versions;SteamVersionWorkflow versionInstall;RecommendedServers recommendations;SafehouseTransfer houseTransfer;JavaComponents javaComponents;
-  void ResetContentLibrary(){DisposeContentLibrary();houseTransfer=new SafehouseTransfer(engine);javaComponents=new JavaComponents(engine,Report);}
-  void DisposeContentLibrary(){if(houseTransfer!=null)houseTransfer.Dispose();if(javaComponents!=null)javaComponents.Dispose();}
+  VersionLibrary versions;SteamVersionWorkflow versionInstall;RecommendedServers recommendations;SafehouseTransfer houseTransfer;JavaComponents javaComponents;ForceTakeover forceTakeover;
+  sealed class AutomaticHouseBinding {internal string SourceId,CatalogStamp,HouseId,NativeStamp;}
+  readonly Dictionary<string,AutomaticHouseBinding> automaticHousePreviews=new Dictionary<string,AutomaticHouseBinding>();
+  void ResetContentLibrary(){DisposeContentLibrary();lock(automaticHousePreviews)automaticHousePreviews.Clear();houseTransfer=new SafehouseTransfer(engine);javaComponents=new JavaComponents(engine,Report);forceTakeover=new ForceTakeover(engine,Report);}
+  void DisposeContentLibrary(){if(houseTransfer!=null)houseTransfer.Dispose();if(javaComponents!=null)javaComponents.Dispose();if(forceTakeover!=null)forceTakeover.Dispose();}
   string legacyGame,defaultUser;
   internal static bool LibraryWebAction(string action){return LibraryActions.Contains(action)&&action!="versionImport"&&action!="versionPreserve"&&action!="versionInstallBegin";}
   internal static void ValidateLibraryWebPayload(string action,Dictionary<string,object> payload){
@@ -15,8 +17,8 @@ namespace PZ3D {
    string mapped,key;switch(action){case "versionChooseImport":mapped="versionImport";key="path";break;case "versionChoosePreserve":mapped="versionPreserve";key="destination";break;case "versionChooseInstall":mapped="versionInstallBegin";key="destination";break;case "backupChooseDirectory":mapped="backupSettingsSave";key="directory";break;default:return;}
    if(payload.ContainsKey(key))throw new IOException("请使用文件夹选择器。");var selected=new Dictionary<string,object>(payload);selected[key]="preview";ValidateLibraryPayload(mapped,selected);
   }
-  internal static readonly HashSet<string> LibraryActions=new HashSet<string>{"versionList","versionSelect","versionImport","versionPreserve","versionInstallBegin","versionInstallState","versionInstallComplete","versionInstallCancel","versionOpenSteam","recommendedServers","recommendedQuery","recommendedAdmin","backupInventory","backupList","backupCreate","backupRestore","backupDelete","backupSettings","backupSettingsSave","houseTransferPreview","houseTransferApply","javaComponentsList","javaComponentsPreview","javaComponentsApply","javaComponentsRecovery","javaComponentsRecover","javaComponentsInspectDownloaded","worldEditRecovery","worldEditRecover"};
-  static readonly string[] LibraryReads={"versionList","versionInstallState","backupInventory","backupList","backupSettings","houseTransferPreview","javaComponentsList","javaComponentsPreview","javaComponentsRecovery","javaComponentsInspectDownloaded","worldEditRecovery"};
+  internal static readonly HashSet<string> LibraryActions=new HashSet<string>{"versionList","versionSelect","versionImport","versionPreserve","versionInstallBegin","versionInstallState","versionInstallComplete","versionInstallCancel","versionOpenSteam","recommendedServers","recommendedQuery","recommendedAdmin","backupInventory","backupList","backupCreate","backupRestore","backupDelete","backupSettings","backupSettingsSave","houseCatalogList","forceTakeoverPreview","forceTakeoverApply","forceTakeoverRecovery","forceTakeoverRecover","houseTransferPreview","houseTransferApply","javaComponentsList","javaComponentsPreview","javaComponentsApply","javaComponentsRecovery","javaComponentsRecover","javaComponentsInspectDownloaded","worldEditRecovery","worldEditRecover"};
+  static readonly string[] LibraryReads={"versionList","versionInstallState","backupInventory","backupList","backupSettings","houseCatalogList","forceTakeoverPreview","forceTakeoverRecovery","houseTransferPreview","javaComponentsList","javaComponentsPreview","javaComponentsRecovery","javaComponentsInspectDownloaded","worldEditRecovery"};
   void InitializeLibrary(string game,string originalUser){
    legacyGame=string.IsNullOrWhiteSpace(game)?Path.Combine(data,"unselected-game"):game;defaultUser=originalUser;versions=new VersionLibrary(data,legacyGame,defaultUser);versionInstall=new SteamVersionWorkflow(data,legacyGame,defaultUser);
    try{var selected=versions.Selected();SetEngine(selected.GamePath,selected.UserPath,selected.Managed);}catch(Exception error){journal.Diagnostic("版本库读取失败："+error.Message);SetEngine(legacyGame,defaultUser,false);}
@@ -53,8 +55,13 @@ namespace PZ3D {
     case "backupDelete":Confirm(p);return SaveBackups.Delete(engine,Text(p,"id"),Text(p,"backupId"),true);
     case "backupSettings":return SaveBackups.Settings(engine);
     case "backupSettingsSave":return SaveBackups.SaveSettings(engine,p.ContainsKey("directory")?Text(p,"directory"):SaveBackups.Settings(engine).directory,Convert.ToInt32(p["retention"]),Flag(p,"afterExit"));
-    case "houseTransferPreview":return houseTransfer.Preview(Text(p,"sourceId"),Text(p,"targetId"),(int)p["minX"],(int)p["minY"],(int)p["maxX"],(int)p["maxY"],(int)p["marginChunks"],cancel.Token);
-    case "houseTransferApply":Confirm(p);return houseTransfer.Apply(Text(p,"previewStamp"),true,cancel.Token);
+    case "houseCatalogList":return SafehouseCatalog.List(engine,Text(p,"sourceId"));
+    case "forceTakeoverPreview":return forceTakeover.Preview();
+    case "forceTakeoverApply":Confirm(p);return forceTakeover.Apply(Text(p,"stamp"),true,cancel.Token);
+    case "forceTakeoverRecovery":return forceTakeover.Recovery();
+    case "forceTakeoverRecover":Confirm(p);return forceTakeover.Recover(Text(p,"stamp"),true,cancel.Token);
+    case "houseTransferPreview":return PreviewHouse(p);
+    case "houseTransferApply":Confirm(p);return ApplyHouse(Text(p,"previewStamp"));
     case "javaComponentsList":return javaComponents.List();
     case "javaComponentsPreview":return javaComponents.Preview(Text(p,"token"),Text(p,"operation"),Text(p,"stamp"),Text(p,"receiptId"));
     case "javaComponentsApply":Confirm(p);return javaComponents.Apply(Text(p,"previewStamp"),true,cancel.Token);
@@ -65,6 +72,17 @@ namespace PZ3D {
     case "worldEditRecover":Confirm(p);return SaveBackups.RecoverEdit(engine,Text(p,"id"),Text(p,"stamp"),true,cancel.Token);
     default:throw new IOException("未知版本或备份操作。");
    }
+  }
+  object PreviewHouse(Dictionary<string,object> p){
+   string source=Text(p,"sourceId"),target=Text(p,"targetId");bool automatic=p.ContainsKey("houseId");
+   var bounds=automatic?SafehouseCatalog.Resolve(engine,source,Text(p,"catalogStamp"),Text(p,"houseId")):new SafehouseTransferBounds{minX=(int)p["minX"],minY=(int)p["minY"],maxX=(int)p["maxX"],maxY=(int)p["maxY"]};
+   var view=houseTransfer.Preview(source,target,bounds.minX,bounds.minY,bounds.maxX,bounds.maxY,(int)p["marginChunks"],cancel.Token);
+   if(automatic&&view.canTransfer){string issued="autoHouse:"+Guid.NewGuid().ToString("N");lock(automaticHousePreviews){if(automaticHousePreviews.Count>=16)automaticHousePreviews.Clear();automaticHousePreviews[issued]=new AutomaticHouseBinding{SourceId=source,CatalogStamp=Text(p,"catalogStamp"),HouseId=Text(p,"houseId"),NativeStamp=view.previewStamp};}view.previewStamp=issued;}
+   return view;
+  }
+  object ApplyHouse(string stamp){
+   if((stamp??"").StartsWith("autoHouse:",StringComparison.Ordinal)){AutomaticHouseBinding binding;lock(automaticHousePreviews){if(!automaticHousePreviews.TryGetValue(stamp,out binding))throw new IOException("安全屋预览已失效，请重新预览。");automaticHousePreviews.Remove(stamp);}using(SafehouseCatalog.WithSelectionLease(engine,binding.SourceId,binding.CatalogStamp,binding.HouseId))return houseTransfer.Apply(binding.NativeStamp,true,cancel.Token);}
+   return houseTransfer.Apply(stamp,true,cancel.Token);
   }
   void CopyProgress(VersionCopyProgress value){Report(value.TotalBytes<=0?-1:(int)Math.Min(99,value.BytesCopied*100d/value.TotalBytes),"正在保存版本 · "+Path.GetFileName(value.File));}
   internal static void ValidateLibraryPayload(string action,Dictionary<string,object> p){
@@ -78,11 +96,13 @@ namespace PZ3D {
     case "backupCreate":keys=new[]{"id","label"};break;
     case "backupRestore":case "backupDelete":keys=new[]{"id","backupId","confirmed"};break;
     case "backupSettingsSave":keys=new[]{"directory","retention","afterExit"};break;
-    case "houseTransferPreview":keys=new[]{"sourceId","targetId","minX","minY","maxX","maxY","marginChunks"};break;
+    case "houseCatalogList":keys=new[]{"sourceId"};break;
+    case "houseTransferPreview":if(p.ContainsKey("houseId")||p.ContainsKey("catalogStamp"))keys=new[]{"sourceId","targetId","houseId","catalogStamp","marginChunks"};else keys=new[]{"sourceId","targetId","minX","minY","maxX","maxY","marginChunks"};break;
     case "houseTransferApply":keys=new[]{"previewStamp","confirmed"};break;
     case "javaComponentsPreview":keys=new[]{"token","operation","stamp","receiptId"};break;
     case "javaComponentsApply":keys=new[]{"previewStamp","confirmed"};break;
     case "javaComponentsRecover":keys=new[]{"stamp","confirmed"};break;
+    case "forceTakeoverApply":case "forceTakeoverRecover":keys=new[]{"stamp","confirmed"};break;
     case "javaComponentsInspectDownloaded":keys=new[]{"id"};break;
     case "worldEditRecover":keys=new[]{"id","stamp","confirmed"};break;
     default:keys=new string[0];break;

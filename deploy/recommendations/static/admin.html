@@ -19,6 +19,8 @@
       <div class="form-row"><label>游戏端口 <em>*</em><input name="port" type="number" min="1" max="65535" value="16261" required></label><label>查询端口<input name="queryPort" type="number" min="0" max="65535" value="0" required><small>留 0 时使用游戏端口</small></label></div>
       <label>游戏版本<input name="version" maxlength="80" placeholder="例如：42.13"></label>
       <label>服务器介绍<textarea name="description" rows="4" maxlength="2000" placeholder="介绍玩法、规则，以及适合什么样的玩家"></textarea></label>
+      <label>详细介绍<textarea name="extendedDescription" rows="6" maxlength="8000" placeholder="补充玩法、加入方式、活动和规则，按普通文字展示"></textarea></label>
+      <label>服务器截图<textarea name="screenshots" rows="4" maxlength="16400" placeholder="每行一个 HTTPS 图片地址，最多 8 张"></textarea><small>支持 orangezl.com、images.steamusercontent.com 和 steamuserimages-a.akamaihd.net；图片将出现在推荐卡片中。</small></label>
       <label>标签<input name="tags" maxlength="400" placeholder="合作，新手友好，长期运营"><small>用逗号分隔，最多 12 个标签</small></label>
       <label>封面图片<input name="cover" type="url" maxlength="2048" placeholder="https://…"><small>可选，填写 HTTPS 图片地址</small></label>
       <label class="check"><input name="useSteamRelay" type="checkbox"><span>通过 Steam 中继连接</span></label>

@@ -30,7 +30,10 @@ MAX_DOCUMENT = 1048576
 MAX_ROWS = 200
 ITERATIONS = 310000
 COOKIE = "ozl_recommendations_session"
-FIELDS = {"id", "name", "host", "port", "queryPort", "version", "description", "cover", "tags", "order", "useSteamRelay", "published"}
+BASE_FIELDS = {"id", "name", "host", "port", "queryPort", "version", "description", "cover", "tags", "order", "useSteamRelay", "published"}
+OPTIONAL_FIELDS = {"extendedDescription", "screenshots"}
+FIELDS = BASE_FIELDS | OPTIONAL_FIELDS
+IMAGE_HOSTS = {"orangezl.com", "images.steamusercontent.com", "steamuserimages-a.akamaihd.net"}
 
 
 class Rejected(Exception):
@@ -122,8 +125,25 @@ def identity(value):
 
 
 def record(value):
-    exact(value, FIELDS)
+    if not isinstance(value, dict) or not BASE_FIELDS.issubset(value) or set(value) - FIELDS:
+        raise Rejected(400, "请求字段不完整，请刷新后重试。")
     result = dict(value)
+    result["extendedDescription"] = text(value.get("extendedDescription", ""), 8000, multiline=True)
+    screenshots = value.get("screenshots", [])
+    if not isinstance(screenshots, list) or len(screenshots) > 8:
+        raise Rejected(400, "最多添加 8 张服务器截图。")
+    images = []
+    for source in screenshots:
+        source = text(source, 2048, True)
+        try:
+            image = urlsplit(source)
+            valid = image.scheme == "https" and image.hostname in IMAGE_HOSTS and not image.username and not image.password and image.port in (None, 443)
+        except ValueError:
+            valid = False
+        if not valid:
+            raise Rejected(400, "截图请使用本站或 Steam 图片域名的 HTTPS 图片地址。")
+        images.append(source)
+    result["screenshots"] = list(dict.fromkeys(images))
     result["id"] = "" if value["id"] == "" else identity(value["id"])
     result["name"] = text(value["name"], 120, True)
     result["description"] = text(value["description"], 2000, multiline=True)
@@ -277,7 +297,7 @@ class Application:
     @staticmethod
     def project(document):
         document = dict(document)
-        document["servers"] = [{key: row[key] for key in FIELDS - {"published"}} for row in document["servers"] if row["published"]]
+        document["servers"] = [{key: row.get(key, [] if key == "screenshots" else "") for key in FIELDS - {"published"}} for row in document["servers"] if row["published"]]
         return document
 
     def queue(self, db, document):

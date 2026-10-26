@@ -14,6 +14,8 @@ using System.Web.Script.Serialization;
 namespace PZ3D {
  public sealed class RecommendedServer {
   public string id,name,host,version,description,cover;
+  public string extendedDescription="";
+  public string[] screenshots=new string[0];
   public int port,queryPort,order;
   public string[] tags;
   public bool useSteamRelay;
@@ -59,7 +61,8 @@ namespace PZ3D {
    string id=Text(value,"id",128,true);if(!Regex.IsMatch(id,@"^[a-zA-Z0-9_-]+$"))throw new FormatException();
    string cover=Text(value,"cover",2048);Uri image;if(cover.Length>0&&(!Uri.TryCreate(cover,UriKind.Absolute,out image)||image.Scheme!="https"||image.Host.Length==0||image.UserInfo.Length>0))throw new FormatException();
    object[] rawTags=Required(value,"tags") as object[];if(rawTags==null||rawTags.Length>12||rawTags.Any(tag=>!(tag is string)||((string)tag).Length>32||string.IsNullOrWhiteSpace((string)tag)||((string)tag).Any(char.IsControl)))throw new FormatException();
-   return new RecommendedServer{id=id,name=Text(value,"name",120,true),host=Host(Text(value,"host",253,true)),port=Number(value,"port",1,65535),queryPort=Number(value,"queryPort",0,65535),version=Text(value,"version",80),description=Text(value,"description",2000,false,true),cover=cover,tags=rawTags.Cast<string>().Distinct().ToArray(),order=Number(value,"order",0,1000000),useSteamRelay=Boolean(value,"useSteamRelay")};
+   string extended=value.ContainsKey("extendedDescription")?Text(value,"extendedDescription",8000,false,true):"";object[] screenshots=value.ContainsKey("screenshots")?Required(value,"screenshots") as object[]:new object[0];if(screenshots==null||screenshots.Length>8||screenshots.Any(item=>!(item is string)||((string)item).Length>2048||!ModernHostPolicy.IsWorkshopImage((string)item)))throw new FormatException();
+   return new RecommendedServer{id=id,name=Text(value,"name",120,true),host=Host(Text(value,"host",253,true)),port=Number(value,"port",1,65535),queryPort=Number(value,"queryPort",0,65535),version=Text(value,"version",80),description=Text(value,"description",2000,false,true),cover=cover,extendedDescription=extended,screenshots=screenshots.Cast<string>().Distinct().ToArray(),tags=rawTags.Cast<string>().Distinct().ToArray(),order=Number(value,"order",0,1000000),useSteamRelay=Boolean(value,"useSteamRelay")};
   }
   static RecommendedServerSnapshot Parse(string content){
    if(content==null||Encoding.UTF8.GetByteCount(content)>MaxBytes)throw new FormatException();
@@ -96,7 +99,7 @@ namespace PZ3D {
     var watch=Stopwatch.StartNew();IPAddress address;
     if(!IPAddress.TryParse(row.host,out address)){var dns=Task.Factory.StartNew(()=>Dns.GetHostAddresses(row.host));while(!dns.IsCompleted&&watch.ElapsedMilliseconds<2500){token.ThrowIfCancellationRequested();Thread.Sleep(25);}if(!dns.IsCompleted)throw new TimeoutException();address=dns.Result.FirstOrDefault(item=>item.AddressFamily==AddressFamily.InterNetwork||item.AddressFamily==AddressFamily.InterNetworkV6);if(address==null)throw new IOException("无法解析服务器地址。");}
     using(var udp=new UdpClient(address.AddressFamily)){udp.Connect(address,row.queryPort==0?row.port:row.queryPort);udp.Send(queryRequest,queryRequest.Length);bool challenged=false;
-     while(true){token.ThrowIfCancellationRequested();if(watch.ElapsedMilliseconds>=2500)throw new TimeoutException();if(!udp.Client.Poll(50000,SelectMode.SelectRead))continue;IPEndPoint peer=null;byte[] packet=udp.Receive(ref peer);if(packet.Length==9&&packet.Take(5).SequenceEqual(new byte[]{255,255,255,255,65})&&!challenged){challenged=true;byte[] retry=queryRequest.Concat(packet.Skip(5)).ToArray();udp.Send(retry,retry.Length);continue;}result=ServerProfiles.ParseInfo(packet,row.id,(int)watch.ElapsedMilliseconds,row.description);break;}
+     while(true){token.ThrowIfCancellationRequested();if(watch.ElapsedMilliseconds>=2500)throw new TimeoutException();if(!udp.Client.Poll(50000,SelectMode.SelectRead))continue;IPEndPoint peer=null;byte[] packet=udp.Receive(ref peer);if(packet.Length==9&&packet.Take(5).SequenceEqual(new byte[]{255,255,255,255,65})&&!challenged){challenged=true;byte[] retry=queryRequest.Concat(packet.Skip(5)).ToArray();udp.Send(retry,retry.Length);continue;}result=ServerProfiles.ParseInfo(packet,row.id,(int)watch.ElapsedMilliseconds,row.description);var info=Json().Deserialize<Dictionary<string,object>>(Json().Serialize(result));if(Convert.ToString(info["status"])=="online"){string warning="",description=null;using(var deadline=CancellationTokenSource.CreateLinkedTokenSource(token)){deadline.CancelAfter(Math.Max(1,2500-(int)watch.ElapsedMilliseconds));try{description=ServerPublicRules.Query(udp,deadline.Token,out warning);}catch(OperationCanceledException){token.ThrowIfCancellationRequested();warning="人数已读取，公开介绍查询超时。";}}info["description"]=description??row.description;info["descriptionSource"]=description==null?"admin":"server";info["descriptionWarning"]=warning;result=info;}break;}
     }
    }catch(OperationCanceledException){throw;}catch{result=Unknown(row.id,row.description,"公开查询无响应或失败；服务器状态未知。");}finally{querySlots.Release();}
    token.ThrowIfCancellationRequested();

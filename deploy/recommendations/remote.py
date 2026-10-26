@@ -12,7 +12,32 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ssh_connection import connect
 
-BUNDLE = ("server.py", "install.py", "ozl-recommendations.service", "static/admin.html", "static/admin.css", "static/admin.js")
+BUNDLE = ("server.py", "install.py", "ozl-recommendations.service", "static/admin.html", "static/admin.css", "static/admin.js", "update.py")
+
+
+def update_source(action, expected_current=None, expected_hash=None, expected_installed=None, update_id=None):
+    if action not in ("audit", "check", "rollback"):
+        raise ValueError("Unknown update operation")
+    folder = Path(__file__).resolve().parent
+    sources = {name: (folder / name).read_text(encoding="utf-8") for name in ("install.py", "update.py", "server.py")}
+    operation = "result=tool.audit()"
+    if action == "check":
+        operation = "result=tool.preflight_update(" + ",".join(repr(item) for item in (expected_current, expected_hash, expected_installed)) + ")"
+    elif action == "rollback":
+        if not re.fullmatch(r"[a-f0-9]{32}", update_id or ""):
+            raise ValueError("Expected the exact update receipt ID")
+        operation = "result=tool.rollback_update(" + repr(update_id) + ")"
+    return ("import json,sys,types\n"
+            "sources=json.loads(" + repr(json.dumps(sources)) + ")\n"
+            "for name,source in sources.items(): compile(source,name,'exec')\n"
+            "installer=types.ModuleType('install');installer.__file__='/opt/ozl-recommendations/install.py'\n"
+            "exec(compile(sources['install.py'],'reviewed-install.py','exec'),installer.__dict__);sys.modules['install']=installer\n"
+            "namespace={'__name__':'recommendations_reviewed_update','__file__':'/opt/ozl-recommendations/update.py'}\n"
+            "exec(compile(sources['update.py'],'reviewed-update.py','exec'),namespace)\n"
+            "service={'__name__':'recommendations_readonly','__file__':'/opt/ozl-recommendations/server.py'}\n"
+            "exec(compile(sources['server.py'],'reviewed-server.py','exec'),service)\n"
+            "tool=namespace['Updater']()\n" + operation + "\n"
+            "result['runtimeImportVerified']=True;print(json.dumps(result,sort_keys=True),flush=True)\n")
 
 
 def readonly_source(expected_current=None, expected_hash=None, check=False):
@@ -88,34 +113,48 @@ def cleanup_upload(transport, staging):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("audit", "check", "install", "rollback"))
+    parser.add_argument("command", choices=("audit", "check", "install", "rollback", "update-audit", "check-update", "update", "rollback-update"))
     parser.add_argument("--expected-current")
     parser.add_argument("--expected-protected-sha256")
+    parser.add_argument("--expected-installed-sha256")
+    parser.add_argument("--update-id")
     args = parser.parse_args()
-    if args.command in ("check", "install"):
+    if args.command in ("check", "install", "check-update", "update"):
         if not re.fullmatch(r"/var/www/ozl/sites/[a-zA-Z0-9_.-]+", args.expected_current or "") or not re.fullmatch(r"[a-f0-9]{64}", args.expected_protected_sha256 or ""):
             parser.error("check/install requires the exact audited current site and protected SHA256")
+    if args.command in ("check-update", "update") and not re.fullmatch(r"[a-f0-9]{64}", args.expected_installed_sha256 or ""):
+        parser.error("check-update/update requires the exact audited installed SHA256")
+    if args.command == "rollback-update" and not re.fullmatch(r"[a-f0-9]{32}", args.update_id or ""):
+        parser.error("rollback-update requires the exact retained update ID")
     transport = connect()
     try:
         if args.command in ("audit", "check"):
-            return session(transport, ["/usr/bin/python3", "-u", "-"], readonly_source(args.expected_current, args.expected_protected_sha256, args.command == "check"))
+            return session(transport, ["/usr/bin/python3", "-B", "-u", "-"], readonly_source(args.expected_current, args.expected_protected_sha256, args.command == "check"))
         if args.command == "rollback":
-            return session(transport, ["/usr/bin/python3", "-u", "-"], rollback_source())
+            return session(transport, ["/usr/bin/python3", "-B", "-u", "-"], rollback_source())
+        if args.command in ("update-audit", "check-update", "rollback-update"):
+            action = {"update-audit": "audit", "check-update": "check", "rollback-update": "rollback"}[args.command]
+            return session(transport, ["/usr/bin/python3", "-B", "-u", "-"], update_source(action, args.expected_current, args.expected_protected_sha256, args.expected_installed_sha256, args.update_id))
         # Recheck anonymous memory before creating the one owned upload directory.
-        checked = session(transport, ["/usr/bin/python3", "-u", "-"], readonly_source(args.expected_current, args.expected_protected_sha256, True))
+        checking = (update_source("check", args.expected_current, args.expected_protected_sha256, args.expected_installed_sha256)
+                    if args.command == "update" else readonly_source(args.expected_current, args.expected_protected_sha256, True))
+        checked = session(transport, ["/usr/bin/python3", "-B", "-u", "-"], checking)
         if checked:
             return checked
         staging = upload(transport)
-        status = session(transport, ["/usr/bin/python3", staging + "/install.py", "--expected-current", args.expected_current,
-                                     "--expected-protected-sha256", args.expected_protected_sha256])
+        command = ["/usr/bin/python3", "-B", staging + ("/update.py" if args.command == "update" else "/install.py"), "--expected-current", args.expected_current,
+                   "--expected-protected-sha256", args.expected_protected_sha256]
+        if args.command == "update":
+            command += ["--expected-installed-sha256", args.expected_installed_sha256]
+        status = session(transport, command)
         if status == 0:
             try:
                 cleanup_upload(transport, staging)
             except OSError:
-                print("Installation succeeded; upload directory retained: " + staging, file=sys.stderr)
+                print("Operation succeeded; upload directory retained: " + staging, file=sys.stderr)
         else:
-            print("Installation interrupted; retained operator source: " + staging + "/install.py", file=sys.stderr)
-            print("Inspect /opt/ozl-recommendations/install-state.json before an explicit rollback.", file=sys.stderr)
+            print("Operation interrupted; retained reviewed operator source: " + staging, file=sys.stderr)
+            print("Inspect /opt/ozl-recommendations/install-state.json and update-backups before an explicit rollback.", file=sys.stderr)
         return status
     finally:
         transport.close()

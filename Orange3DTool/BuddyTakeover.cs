@@ -88,6 +88,14 @@ namespace PZ3D {
    }
    return true;
   }
+  internal virtual bool RetireOwned(string target,string retired,byte[] expected){
+   foreach(string path in new[]{target,retired})LauncherMaintenance.NoReparse(path);if(File.Exists(retired))return false;
+   using(var owned=new FileStream(target,FileMode.Open,FileSystemRights.Read|FileSystemRights.Delete,FileShare.None,4096,FileOptions.None)){
+    if(owned.Length!=expected.Length)return false;var current=new byte[expected.Length];int at=0,n;while(at<current.Length&&(n=owned.Read(current,at,current.Length-at))>0)at+=n;if(at!=current.Length||!current.SequenceEqual(expected))return false;
+    byte[] name=Encoding.Unicode.GetBytes(Path.GetFullPath(retired));int offset=Marshal.OffsetOf(typeof(RenameInformation),"FileName").ToInt32(),length=checked(offset+name.Length+2);IntPtr buffer=Marshal.AllocHGlobal(length);
+    try{Marshal.Copy(new byte[length],0,buffer,length);Marshal.WriteInt32(buffer,Marshal.OffsetOf(typeof(RenameInformation),"FileNameLength").ToInt32(),name.Length);Marshal.Copy(name,0,IntPtr.Add(buffer,offset),name.Length);if(!SetFileInformationByHandle(owned.SafeFileHandle,3,buffer,(uint)length))throw new Win32Exception(Marshal.GetLastWin32Error());}finally{Marshal.FreeHGlobal(buffer);}
+   }return true;
+  }
  }
  // This boundary is never selected in Engine.TestMode. No process termination API is used.
  internal sealed class NativeBuddyTakeoverEnvironment:BuddyTakeoverEnvironment {
@@ -187,8 +195,16 @@ namespace PZ3D {
     }
     if(!Read(target).SequenceEqual(after))throw new IOException();safe=true;
    }finally{if(safe)CleanStage(stage,before,after);}}
+  internal static void ReplaceForTakeover(BuddyTakeoverEnvironment env,string target,byte[] before,byte[] after,string transaction){if(!Regex.IsMatch(transaction??"","^[a-f0-9]{32}$"))throw new InvalidDataException();Replace(env,target,before,after,new Record{id=transaction});}
   static string TargetPath(Engine e,Record r,Entry entry){if(Names.Contains(entry.target))return Path.Combine(e.Game,entry.target);if(entry.target!="steam"||r.account==0||string.IsNullOrWhiteSpace(r.root)||!Path.IsPathRooted(r.root)||!Same(r.exe,Path.Combine(r.root,"steam.exe")))throw new InvalidDataException();return Path.Combine(r.root,"userdata",r.account.ToString(System.Globalization.CultureInfo.InvariantCulture),"config","localconfig.vdf");}
   static Record Load(Engine e){var r=Serializer().Deserialize<Record>(Encoding.UTF8.GetString(Read(JournalPath(e),32768)));if(r==null||r.version!=1||!Same(r.game,e.Game)||r.key!=Key(e)||!Regex.IsMatch(r.id??"","^[a-f0-9]{32}$")||r.entries==null||r.entries.Count>5||r.entries.Select(x=>x.target).Distinct().Count()!=r.entries.Count)throw new InvalidDataException();LauncherMaintenance.NoReparse(Transaction(e,r));for(int i=0;i<r.entries.Count;i++){var entry=r.entries[i];LauncherMaintenance.NoReparse(TargetPath(e,r,entry));if(!Regex.IsMatch(entry.before??"","^[A-F0-9]{64}$")||!Regex.IsMatch(entry.after??"","^[A-F0-9]{64}$")||Hash(Read(Backup(e,r,i,false)))!=entry.before||Hash(Read(Backup(e,r,i,true)))!=entry.after)throw new InvalidDataException();}return r;}
+  internal static string PendingForForce(Engine e){return JournalPath(e);}
+  internal static byte[] ReadForForce(Engine e,BuddySteamIdentity bound){
+   byte[] original=Read(JournalPath(e),32768);var r=Load(e);if(r.entries.Count==0||!new[]{"prepared","exiting","preparedAfterExit","writing","rollingBack","recoveryConflict","completed","rolledBack"}.Contains(r.stage))throw new IOException("旧接管恢复记录来源无法核实，未迁移。");
+   if(r.entries.Any(entry=>entry.target=="steam")&&(bound==null||!bound.Options.KnownIdentity||bound.Options.Account!=r.account||!Same(bound.Options.Root,r.root)))throw new IOException("旧接管属于其他 Steam 账号或安装目录，未迁移。");
+   foreach(var entry in r.entries){string actual=Hash(Read(TargetPath(e,r,entry)));if(actual!=entry.before&&actual!=entry.after)throw new IOException("旧接管目标已有其他来源的修改，未迁移。");}
+   if(!Read(JournalPath(e),32768).SequenceEqual(original))throw new IOException("旧接管记录已变化，请刷新。");return original;
+  }
   static bool Rollback(Engine e,Record r,BuddyTakeoverEnvironment env,BuddySteamIdentity id,bool exited){bool okay=true;Save(e,r,"rollingBack");for(int i=r.entries.Count-1;i>=0;i--){var entry=r.entries[i];if(!entry.attempted)continue;try{string path=TargetPath(e,r,entry);string hash=Hash(Read(path));if(hash==entry.before){CleanStage(StageDirectory(path,r),Read(Backup(e,r,i,false)),Read(Backup(e,r,i,true)));continue;}if(hash!=entry.after){okay=false;continue;}Preflight(e,env,true);if(entry.target=="steam"&&(!exited||env.Inspect(id)!=BuddySteamState.Exited)){okay=false;continue;}Replace(env,path,Read(Backup(e,r,i,true)),Read(Backup(e,r,i,false)),r);}catch{okay=false;}}if(okay)Finish(e,r,"rolledBack");else Save(e,r,"recoveryConflict");return okay;}
   static void Exit(Engine e,Record r,BuddySteamIdentity id,BuddyTakeoverEnvironment env,Action<int,string> progress,CancellationToken cancel,BuddyTakeoverResult result){cancel.ThrowIfCancellationRequested();Preflight(e,env,true);if(env.Inspect(id)!=BuddySteamState.Running)throw new Refusal("Steam 身份已改变，请重新预览。");Save(e,r,"exiting");result.phase="exiting";cancel.ThrowIfCancellationRequested();env.Shutdown(id);result.steamExitRequested=true;r.exitRequested=true;Save(e,r,"exiting");if(progress!=null)progress(-1,"正在等待已确认的 Steam 客户端正常退出");long begin=env.Milliseconds;for(;;){cancel.ThrowIfCancellationRequested();var state=env.Inspect(id);if(state==BuddySteamState.Exited){result.phase="revalidating";return;}if(state==BuddySteamState.Changed)throw new Refusal("Steam 账号或进程已改变，未修改配置。");long elapsed=env.Milliseconds-begin;if(elapsed<0||elapsed>=30000)throw new Refusal("Steam 在 30 秒内未退出，未修改配置。");env.Wait((int)Math.Min(100,30000-elapsed));}}
   static BuddyTakeoverResult Result(string status,string message){return new BuddyTakeoverResult{status=status,phase="preflight",message=message,componentInstallCompleted=false};}

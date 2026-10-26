@@ -43,6 +43,10 @@ async function feed(page, url) { return await page.evaluate(async endpoint => aw
   await page.locator('#server-form [name=host]').fill('127.0.0.1');
   await page.locator('#server-form [name=version]').fill('42.13');
   await page.locator('#server-form [name=description]').fill('长期合作生存\n欢迎新玩家，友好交流。');
+  const extended = '服务器长期活动和完整玩法介绍\n<b>按普通文字显示</b>';
+  const screenshots = ['https://orangezl.com/fixture-one.png', 'https://images.steamusercontent.com/fixture-two.jpg'];
+  await page.locator('#server-form [name=extendedDescription]').fill(extended);
+  await page.locator('#server-form [name=screenshots]').fill(screenshots.join('\n'));
   await page.locator('#server-form [name=tags]').fill('合作，新手友好');
   await page.locator('#server-form button[type=submit]').click();
   await page.waitForFunction(() => document.querySelector('#total-count').textContent === '1');
@@ -61,7 +65,11 @@ async function feed(page, url) { return await page.evaluate(async endpoint => aw
   await page.waitForFunction(() => document.querySelector('#publication-panel').hidden);
   assert.equal(JSON.parse(fs.readFileSync(path.join(publicPath, 'feed.json'), 'utf8')).servers.length, 1, 'explicit retry publishes committed revision');
   assert.equal((await feed(page, url)).servers[0].name, hostile);
+  assert.equal((await feed(page, url)).servers[0].extendedDescription, extended);
+  assert.deepEqual((await feed(page, url)).servers[0].screenshots, screenshots);
   await page.getByRole('button', { name: '编辑', exact: true }).click();
+  assert.equal(await page.locator('#server-form [name=extendedDescription]').inputValue(), extended);
+  assert.equal(await page.locator('#server-form [name=screenshots]').inputValue(), screenshots.join('\n'));
   await page.locator('#server-form [name=name]').fill('橙子合作生存服');
   await page.locator('#server-form button[type=submit]').click();
   await page.waitForFunction(() => document.querySelector('.server-name').textContent === '橙子合作生存服');

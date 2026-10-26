@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict');
+const {setup,route,chromium}=require('../Orange3DTool/Web/experience-ui-tests.cjs');
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{const {page,errors}=await setup(browser);try{
+ await page.evaluate(()=>{const original=chrome.webview.postMessage;window.forceCalls=[];window.forceStatus='completed';chrome.webview.postMessage=m=>{if(m.action.startsWith('forceTakeover')){forceCalls.push(m);const data=m.action==='forceTakeoverPreview'?{supported:true,stamp:'force-preview-1',requiresSteamExit:true,locations:['当前游戏 Steam 全部启动选项','本地旧 Java 组件'],unresolved:[],message:'清空游戏启动选项并接管 Java 组件'}:m.action==='forceTakeoverRecovery'?{pending:false}:{status:forceStatus,message:forceStatus==='partial'?'仍有独立来源需要检查':'接管完成',steamCleared:true,cleanupCompleted:forceStatus==='completed',unresolved:forceStatus==='partial'?['外部独立加载器']:[],recoveryPending:false};queueMicrotask(()=>emitNative({id:m.id,ok:true,data}));return;}original(m);};});
+ await route(page,'javaMods');await page.locator('[data-force-takeover]').click();await page.locator('#force-takeover-dialog[open]').waitFor();assert.match(await page.locator('#force-takeover-dialog').innerText(),/Steam/);
+ await page.locator('[data-force-cancel]').click();assert.equal(await page.evaluate(()=>forceCalls.filter(m=>m.action==='forceTakeoverApply').length),0,'cancelled preview performs no mutation');
+ await page.locator('[data-force-takeover]').click();await page.locator('[data-force-confirm]').click();await page.waitForFunction(()=>forceCalls.some(m=>m.action==='forceTakeoverApply'));
+ assert.deepEqual(await page.evaluate(()=>forceCalls.find(m=>m.action==='forceTakeoverApply').payload),{stamp:'force-preview-1',confirmed:true},'single explicit consent is bound to native preview');
+ await page.waitForFunction(()=>!orange.library.model.working);assert.match(await page.locator('[data-force-result]').innerText(),/接管完成/);
+ await page.evaluate(()=>forceStatus='partial');await page.locator('[data-force-takeover]').click();await page.locator('[data-force-confirm]').click();await page.waitForFunction(()=>!orange.library.model.working);assert.match(await page.locator('[data-force-result]').innerText(),/外部独立加载器/,'partial result exposes remaining actionable source');
+ assert.deepEqual(errors,[]);console.log('PASS force takeover preview/cancel/one explicit consent/partial result');
+ }finally{await page.close();}}finally{await browser.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -12,7 +12,7 @@ const {setup,route,chromium}=require('../Orange3DTool/Web/experience-ui-tests.cj
   await page.screenshot({path:path.join(out,'versions-dark.png'),fullPage:true});assert.equal(await page.locator('[data-version-select]').count(),1,'only inactive versions offer switch');
   await page.locator('[data-version-select]').click();await page.waitForFunction(()=>libraryCalls.some(x=>x.a==='versionSelect'));
   await route(page,'servers');await page.locator('[data-server-tab=recommended]').click();await page.getByRole('heading',{name:'推荐测试服'}).waitFor();
-  await page.screenshot({path:path.join(out,'recommended-dark.png'),fullPage:true});assert.equal(await page.locator('[data-recommended-connect]').count(),1,'recommendation has a connection action');
+  await page.screenshot({path:path.join(out,'recommended-dark.png'),fullPage:true});assert.equal(await page.locator('[data-recommended-import]').count(),1,'recommendation offers save-only import');
   assert.equal(await page.locator('#page').innerText().then(t=>t.includes('203.0.113.10:16261')),true);
   await route(page,'saves');await page.locator('[data-save-backups]').first().waitFor();await page.locator('[data-save-backups]').first().click();
   await page.getByRole('heading',{name:'存档备份',exact:true}).waitFor();await page.getByText('出发前',{exact:true}).waitFor();
