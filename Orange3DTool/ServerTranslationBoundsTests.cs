@@ -35,10 +35,17 @@ namespace PZ3D {
    LaunchProfiles.Recover(e,true);
    Check(File.ReadAllBytes(e.Mods).SequenceEqual(original)&&!File.Exists(overlay)&&!LaunchProfiles.Pending(e),"recovery restores original selections and clears only owned translation files");
    Check(File.ReadAllBytes(file).SequenceEqual(content),"source translation pack remains unchanged");
-   byte[] limit=new byte[16*1024*1024];Put(file,limit);var built=ServerLaunchTranslations.Build(e,new[]{"B42ModTrans_CN"});
-   Check(built[overlay].Length==limit.Length,"bounded 16 MiB source file is accepted completely");
-   Put(file,new byte[limit.Length+1]);bool refused=false;try{LaunchProfiles.Stage(e,request);}catch(IOException){refused=true;}
-   Check(refused&&File.ReadAllBytes(e.Mods).SequenceEqual(original)&&!LaunchProfiles.Pending(e)&&!Directory.Exists(ServerLaunchTranslations.Root(e,"B42ModTrans_CN")),"oversized input is refused before changing player selections or creating a launch session");
+   byte[] larger=new byte[16*1024*1024+1];Put(file,larger);var built=ServerLaunchTranslations.Build(e,new[]{"B42ModTrans_CN"});
+   Check(built[overlay].Length==larger.Length,"a source larger than 16 MiB is still copied completely");
+   using(var huge=new FileStream(file,FileMode.Create,FileAccess.Write)){huge.SetLength(64L*1024*1024+1);}
+   LaunchProfiles.Stage(e,request);
+   Check(LaunchProfiles.Pending(e)&&SaveProfiles.DefaultMods(File.ReadAllBytes(e.Mods)).Contains("B42ModTrans_CN"),"large optional translation still stages the server request with its original enabled mod");
+   Check(!Directory.Exists(ServerLaunchTranslations.Root(e,"B42ModTrans_CN"))&&!File.ReadAllText(e.Mods).Contains("OZLServerTranslations_"),"capacity fallback never creates an incomplete derived translation mod");
+   LaunchProfiles.Recover(e,true);Check(File.ReadAllBytes(e.Mods).SequenceEqual(original)&&!LaunchProfiles.Pending(e),"native-mod fallback recovers the exact original defaults");
+   Put(file,content);
+   string second=Path.Combine(e.Workshop,"3556544454","mods","B42Trans_CN_As1","42");Text(Path.Combine(second,"mod.info"),"id=B42Trans_CN\n");
+   string hugeFile=Path.Combine(second,"media","lua","shared","Translate","CN","UI.json");Directory.CreateDirectory(Path.GetDirectoryName(hugeFile));using(var huge=new FileStream(hugeFile,FileMode.Create,FileAccess.Write)){huge.SetLength(64L*1024*1024+1);}
+   Check(ServerLaunchTranslations.Build(e,ServerLaunchTranslations.Ids).Count==0,"a later large source cannot leave an earlier partial overlay set");
    Console.WriteLine("PASS "+checks+" translation size/staging/recovery checks");return 0;
   }catch(Exception error){Console.WriteLine(error);return 1;}finally{if(Directory.Exists(root))Directory.Delete(root,true);}}
  }

@@ -12,9 +12,10 @@ namespace PZ3D {
   internal static IEnumerable<string> GeneratedIds(Engine e,IEnumerable<string> selected,Dictionary<string,byte[]> files){return selected.Where(Ids.Contains).Distinct().Where(id=>files.ContainsKey(Path.Combine(Root(e,id),"42","mod.info"))).Select(OverlayId);}
   internal static string[] OwnedIds(Engine e,IEnumerable<string> files){var paths=new HashSet<string>(files.Select(Path.GetFullPath),StringComparer.OrdinalIgnoreCase);return Ids.Where(id=>paths.Contains(Path.Combine(Root(e,id),"42","mod.info"))).Select(OverlayId).ToArray();}
   internal static bool IsOverlay(string id){return Ids.Any(source=>OverlayId(source)==id);}
-  // Unified translation JSON legitimately exceeds 4 MiB. Bound each file
-  // without rejecting current packs; the combined in-memory budget stays 64 MiB.
-  const int MaxFiles=4089,MaxFileBytes=16*1024*1024,MaxBytes=64*1024*1024;
+  // This budget bounds optional derived overlays, never server admission.
+  // On capacity exhaustion the original selected translation mods remain enabled.
+  const int MaxFiles=4089,MaxBytes=64*1024*1024;
+  sealed class TextCapacityExceeded:Exception {}
   static Version Normal(Version v){return new Version(v.Major,v.Minor,Math.Max(0,v.Build),Math.Max(0,v.Revision));}
   internal static bool OwnedPath(Engine e,string file){
    string path=Path.GetFullPath(file),ext=Path.GetExtension(path);
@@ -35,7 +36,7 @@ namespace PZ3D {
     byte[] content;
     using(var stream=new FileStream(file,FileMode.Open,FileAccess.Read,FileShare.Read)){
      long size=stream.Length;
-     if(size>MaxFileBytes||bytes+size>MaxBytes||output.Count>=MaxFiles)throw new IOException("联机汉化文本超出读取范围。");
+     if(size>MaxBytes-bytes||output.Count>=MaxFiles)throw new TextCapacityExceeded();
      content=new byte[(int)size];int offset=0;
      while(offset<content.Length){int read=stream.Read(content,offset,content.Length-offset);if(read==0)throw new IOException("联机汉化文本在读取期间改变。");offset+=read;}
      if(stream.ReadByte()!=-1)throw new IOException("联机汉化文本在读取期间改变。");
@@ -47,6 +48,7 @@ namespace PZ3D {
   internal static Dictionary<string,byte[]> Build(Engine e,IEnumerable<string> selected){
    var output=new Dictionary<string,byte[]>(StringComparer.OrdinalIgnoreCase);long bytes=0;
    Version current=Normal(GameVersionProbe.Read(e.Game)??new Version(42,0));
+   try {
    foreach(string id in selected.Where(Ids.Contains).Distinct()){
     ulong item=id==Ids[0]?3556540080UL:3556544454UL;AddonFiles files;
     try{files=ViewpointAddons.Resolve(e,new ViewpointAddon("translation",item,id,id,""),current);}
@@ -65,6 +67,11 @@ namespace PZ3D {
      byte[] info=Encoding.UTF8.GetBytes("name=OZL 联机中文文本 · "+id+"\nid="+OverlayId(id)+"\ndescription=仅本次联机使用已启用汉化的翻译文本，不含脚本或地图。\n");
      output.Add(Path.Combine(root,"common","mod.info"),info);output.Add(Path.Combine(root,"42","mod.info"),info);
     }
+   }
+   }catch(TextCapacityExceeded){
+    // Do not publish a partial overlay set. Normal mod loading handles the
+    // selected sources; ownership, I/O and source-change failures still propagate.
+    return new Dictionary<string,byte[]>(StringComparer.OrdinalIgnoreCase);
    }
    return output;
   }
