@@ -1,0 +1,3 @@
+package zombie.modding;
+import java.util.*;
+public final class ActiveMods {public String source="";private final String id;private final ArrayList<String> mods=new ArrayList<String>();private static final Map<String,ActiveMods> registry=new HashMap<String,ActiveMods>();public static final ActiveMods loaded=new ActiveMods("loaded");public ActiveMods(String id){this.id=id;}public static ActiveMods getById(String id){if(!registry.containsKey(id))registry.put(id,new ActiveMods(id));return registry.get(id);}public ArrayList<String> getMods(){return mods;}public void copyFrom(ActiveMods source){mods.clear();mods.addAll(source.mods);this.source=source.source;}public static void setLoadedMods(ActiveMods source){loaded.copyFrom(source);}}
