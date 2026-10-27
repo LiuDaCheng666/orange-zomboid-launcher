@@ -13,9 +13,10 @@ public final class EnvironmentManifest {
     public final Path game,user,home,mods,bridge,snapshot;
     public final List<Path> roots;
     public final Map<String,String> choices;
-    private EnvironmentManifest(String id,Path game,Path user,Path home,Path mods,Path bridge,List<Path> roots,Map<String,String> choices){
+    public final boolean activeConfigured;private final List<String> managed,components,order;
+    private EnvironmentManifest(String id,Path game,Path user,Path home,Path mods,Path bridge,List<Path> roots,Map<String,String> choices,List<String> managed,List<String> components,List<String> order){
         this.id=id;this.game=game;this.user=user;this.home=home;this.mods=mods;this.bridge=bridge;this.snapshot=game.getParent();this.roots=Collections.unmodifiableList(new ArrayList<Path>(roots));
-        this.choices=Collections.unmodifiableMap(new LinkedHashMap<String,String>(choices));
+        this.choices=Collections.unmodifiableMap(new LinkedHashMap<String,String>(choices));this.activeConfigured=managed!=null;this.managed=managed;this.components=components;this.order=order;
     }
     private static IllegalArgumentException invalid(String reason){return new IllegalArgumentException(reason);}
     private static byte[] expectedHash(String text){
@@ -47,13 +48,32 @@ public final class EnvironmentManifest {
         for(Map.Entry<String,String> entry:result.entrySet())if(!entry.getKey().equals(entry.getValue())&&result.containsKey(entry.getValue())&&!result.get(entry.getValue()).equals(entry.getValue()))throw invalid("chained mod choice is not idempotent");
         return result;
     }
+    private static List<String> ids(String value)throws IOException{
+        if(value==null)return null;List<String> result=new ArrayList<String>();if(value.length()==0)return result;
+        String[] entries=value.split(",",-1);if(entries.length>2000)throw invalid("too many active identities");
+        for(String entry:entries){String id=choiceId(entry,false);if(result.contains(id))throw invalid("duplicate active identity");result.add(id);}return result;
+    }
+    public void normalizeActive(List<String> ids,List<String> ordinaryOverride){
+        List<String> input=new ArrayList<String>(ordinaryOverride==null?ids:ordinaryOverride);normalizeMods(input);
+        List<String> result=new ArrayList<String>();Set<String> seen=new HashSet<String>();
+        for(String value:input){String id=canonicalId(value);if(!managed.contains(id)&&!id.equals("OrangeLauncherSession")&&seen.add(id))result.add(value);}
+        int cursor=0;for(String component:order){int existing=-1;for(int i=0;i<result.size();i++)if(canonicalId(result.get(i)).equals(component)){existing=i;break;}
+            if(existing>=0)cursor=Math.max(cursor,existing+1);else if(components.contains(component))result.add(cursor++,component);}
+        try{if(bridgePresent())result.add("OrangeLauncherSession");}catch(IOException failure){throw new IllegalStateException(failure);}
+        ids.clear();ids.addAll(result);
+    }
+    public void mergeClient(List<String> ids){
+        Set<String> present=new HashSet<String>();for(String id:ids)present.add(canonicalId(id));
+        for(String id:order)if(components.contains(id)&&present.add(id))ids.add(id);
+        try{if(bridgePresent()&&present.add("OrangeLauncherSession"))ids.add("OrangeLauncherSession");}catch(IOException failure){throw new IllegalStateException(failure);}
+    }
     public static EnvironmentManifest read(Path file,String sha256,Path cwd,Path actualHome)throws IOException {
         byte[] expected=expectedHash(sha256),bytes=SafePaths.bytes(file,4*1024*1024);
         try{if(!MessageDigest.isEqual(expected,MessageDigest.getInstance("SHA-256").digest(bytes)))throw invalid("manifest SHA-256 mismatch");}catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
         for(byte b:bytes)if((b&255)>127||(b<32&&b!='\n'&&b!='\r'))throw invalid("manifest must be plain ASCII properties");
         Map<String,String> values=new HashMap<String,String>();
         Set<String> required=new HashSet<String>(Arrays.asList("version","id","game","user","home","mods","roots","bridge"));
-        Set<String> allowed=new HashSet<String>(required);allowed.add("choices");
+        Set<String> allowed=new HashSet<String>(required);allowed.addAll(Arrays.asList("choices","activeManaged","activeComponents","activeOrder"));
         for(String line:new String(bytes,StandardCharsets.US_ASCII).split("\\r?\\n",-1)){
             if(line.length()==0||line.startsWith("#")||line.startsWith("!"))continue;
             int equals=line.indexOf('=');if(equals<1)throw invalid("invalid manifest property");String key=line.substring(0,equals);
@@ -70,7 +90,7 @@ public final class EnvironmentManifest {
         if(encodedRoots.length()>0){String[] entries=encodedRoots.split(",",-1);if(entries.length>4096)throw invalid("too many frozen mod roots");
             for(String entry:entries){Path root=SafePaths.canonical(path(entry),true,true);if(!root.startsWith(snapshot)||root.equals(snapshot)||root.equals(game)||root.startsWith(home)||!unique.add(root))throw invalid("invalid, duplicate or unfrozen mod root");SafePaths.tree(root);roots.add(root);}
         }
-        EnvironmentManifest manifest=new EnvironmentManifest(values.get("id"),game,user,home,mods,bridge,roots,choices(values.get("choices")));manifest.bridgePresent();return manifest;
+        EnvironmentManifest manifest=new EnvironmentManifest(values.get("id"),game,user,home,mods,bridge,roots,choices(values.get("choices")),ids(values.get("activeManaged")),ids(values.get("activeComponents")),ids(values.get("activeOrder")));if(manifest.activeConfigured!=(manifest.components!=null)||manifest.activeConfigured!=(manifest.order!=null))throw invalid("partial active policy");if(manifest.activeConfigured&&!manifest.order.containsAll(manifest.components))throw invalid("component missing from active order");manifest.bridgePresent();return manifest;
     }
     /** The sole permitted live mod root is the launcher's journal-owned bridge. */
     public boolean bridgePresent()throws IOException {

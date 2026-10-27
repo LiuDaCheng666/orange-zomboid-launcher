@@ -17,13 +17,13 @@ public final class EnvironmentAgent {
         try{
             String file=System.getProperty("ozl.environment");if(file==null||file.length()==0)throw new IllegalArgumentException("environment manifest is required");
             final EnvironmentManifest accepted=EnvironmentManifest.read(Paths.get(file),System.getProperty("ozl.environment.sha256"),Paths.get(System.getProperty("user.dir")),Paths.get(System.getProperty("user.home")));
-            TargetContract.verifyJar(accepted.game);
-            for(Class<?> loaded:instrumentation.getAllLoadedClasses())if(TargetContract.target(loaded.getName().replace('.','/')))throw new IllegalStateException("mod discovery loaded before mandatory agent");
-            environment=accepted;
+            if(accepted.activeConfigured)ActiveTargetContract.verifyJar(accepted.game);else TargetContract.verifyJar(accepted.game);
+            for(Class<?> loaded:instrumentation.getAllLoadedClasses())if((accepted.activeConfigured?ActiveTargetContract.target(loaded.getName().replace('.','/')):TargetContract.target(loaded.getName().replace('.','/'))))throw new IllegalStateException("mod discovery loaded before mandatory agent");
+            environment=accepted;if(accepted.activeConfigured)ActiveSelectionHooks.configure(accepted.game,accepted.user,accepted.mods.getParent(),true,accepted::normalizeActive,accepted::mergeClient);
             final java.lang.reflect.Method modUserFolder=EnvironmentAgent.class.getMethod("modUserFolder");
             instrumentation.addTransformer(new ClassFileTransformer(){
                 @Override public byte[] transform(ClassLoader loader,String name,Class<?> previous,ProtectionDomain domain,byte[] bytes){
-                    if(TargetContract.target(name))try{guardSource(loader,domain);TargetContract.verify(name,bytes);}catch(Throwable failure){stop("discovery input contract failed",failure);}return null;
+                    if(accepted.activeConfigured?ActiveTargetContract.target(name):TargetContract.target(name))try{guardSource(loader,domain);if(accepted.activeConfigured)ActiveTargetContract.verify(name,bytes);else TargetContract.verify(name,bytes);}catch(Throwable failure){stop("discovery input contract failed",failure);}return null;
                 }
             });
             new AgentBuilder.Default().disableClassFormatChanges()
@@ -32,9 +32,13 @@ public final class EnvironmentAgent {
                     @Override public void onError(String name,ClassLoader loader,net.bytebuddy.utility.JavaModule module,boolean loaded,Throwable failure){stop("required discovery transformation failed",failure);}
                     @Override public void onTransformation(TypeDescription type,ClassLoader loader,net.bytebuddy.utility.JavaModule module,boolean loaded,net.bytebuddy.dynamic.DynamicType dynamicType){System.out.println("[OZL-ENVIRONMENT] mod discovery isolated");}
                 })
-                .type(namedOneOf("zombie.ZomboidFileSystem","zombie.modding.ActiveMods","zombie.gameStates.ChooseGameInfo$Mod"))
+                .type(namedOneOf("zombie.ZomboidFileSystem","zombie.modding.ActiveMods","zombie.modding.ActiveModsFile","zombie.gameStates.ChooseGameInfo$Mod"))
                 .transform((builder,type,loader,module,domain)->{
+                    if(accepted.activeConfigured)builder=ActiveSelectionHooks.apply(builder,type.getName());
+                    if(type.getName().equals("zombie.modding.ActiveModsFile"))return builder;
+                    if(type.getName().equals("zombie.modding.ActiveMods")&&accepted.activeConfigured)return builder;
                     if(type.getName().equals("zombie.modding.ActiveMods"))return builder.visit(Advice.to(ModChoices.class).on(named("getMods").and(takesArguments(0)).and(returns(ArrayList.class)).and(not(isStatic()))));
+                    if(type.getName().equals("zombie.gameStates.ChooseGameInfo$Mod")&&accepted.activeConfigured)return builder.visit(Advice.to(ScopedRequirements.class).on(named("getRequire").and(takesArguments(0)).and(returns(ArrayList.class)).and(not(isStatic()))));
                     if(type.getName().equals("zombie.gameStates.ChooseGameInfo$Mod"))return builder
                         .visit(Advice.to(ModChoices.class).on(named("getRequire").and(takesArguments(0)).and(returns(ArrayList.class)).and(not(isStatic()))))
                         .visit(Advice.to(ParsedRequirements.class).on(named("setRequire").and(takesArguments(ArrayList.class)).and(returns(void.class)).and(not(isStatic()))));
@@ -75,6 +79,13 @@ public final class EnvironmentAgent {
     }
     public static final class ModChoices {
         @Advice.OnMethodExit public static void exit(@Advice.Return ArrayList<String> mods){if(mods!=null)EnvironmentAgent.normalizeMods(mods);}
+    }
+    public static ArrayList<String> requirements(Object owner,ArrayList<String> original){
+        try{if(original==null||ActiveSelectionHooks.client(owner.getClass().getClassLoader()))return original;ArrayList<String> copy=new ArrayList<String>(original);environment.normalizeMods(copy);return copy;}
+        catch(Throwable failure){stop("scoped dependency choice failed",failure);return original;}
+    }
+    public static final class ScopedRequirements {
+        @Advice.OnMethodExit public static void exit(@Advice.This Object owner,@Advice.Return(readOnly=false) ArrayList<String> mods){mods=EnvironmentAgent.requirements(owner,mods);}
     }
     public static final class ParsedRequirements {
         @Advice.OnMethodEnter public static void enter(@Advice.Argument(0) ArrayList<String> mods){if(mods!=null)EnvironmentAgent.normalizeMods(mods);}

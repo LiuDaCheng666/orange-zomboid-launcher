@@ -36,6 +36,11 @@ public final class EnvironmentManifestTest {
   invalid(file,text+"choices=T2xkTW9k:TmV3TW9k,TmV3TW9k:TGF0ZXJNb2Q=\n",game,home,"chained replacements are rejected before a non-idempotent getter can run");
   invalid(file,text+"choices=T2xkTW9k:TmV3TW9k,TmV3TW9k:T2xkTW9k\n",game,home,"cyclic replacements are rejected");
   invalid(file,text+"choices=T3JhbmdlTGF1bmNoZXJTZXNzaW9u:\n",game,home,"choices cannot remove the owned launcher bridge");
+  String activePolicy="activeManaged=RGlzYWJsZWQ=,Q29tcG9uZW50\nactiveComponents=Q29tcG9uZW50\nactiveOrder=Q29tcG9uZW50,TmV3TW9k\n";
+  Object scoped=load(file,text+choice+activePolicy,game,home);
+  List<String> local=new ArrayList<String>(Arrays.asList("OldMod","Disabled","SkippedMod"));type.getMethod("normalizeActive",List.class,List.class).invoke(scoped,local,null);check(local.equals(Arrays.asList("Component","NewMod")),"frozen active policy merges components after explicit ordinary choices");
+  List<String> server=new ArrayList<String>(Arrays.asList("OldMod","Disabled","SkippedMod"));type.getMethod("mergeClient",List.class).invoke(scoped,server);check(server.equals(Arrays.asList("OldMod","Disabled","SkippedMod","Component")),"frozen server list never receives local choice replacements or removals");
+  invalid(file,text+"activeManaged=\n",game,home,"partial active policy rejected");
   check(load(file,text.replace("\n","\r\n"),game,home)!=null,"ASCII Windows line endings accepted");
   invalid(file,text+"id=1234567890abcdef1234567890abcdef\n",game,home,"duplicate properties rejected");
   invalid(file,text+"expiry=0\n",game,home,"unrecognized contract fields rejected");
