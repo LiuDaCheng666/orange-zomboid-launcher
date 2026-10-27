@@ -95,6 +95,7 @@ function Get-OzlProductionSources {
         'SafehouseTransferFormat.cs',
         'SafehouseTransfer.cs',
         'JavaComponents.cs',
+        'JavaComponentWorkflow.cs',
         'VersionLibrary.cs',
         'SteamVersionWorkflow.cs',
         'ModernDispatchQueue.cs',

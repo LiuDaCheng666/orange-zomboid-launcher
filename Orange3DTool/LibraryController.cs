@@ -9,6 +9,7 @@ namespace PZ3D {
   sealed class AutomaticHouseBinding {internal string SourceId,CatalogStamp,HouseId,NativeStamp;}
   readonly Dictionary<string,AutomaticHouseBinding> automaticHousePreviews=new Dictionary<string,AutomaticHouseBinding>();
   void ResetContentLibrary(){DisposeContentLibrary();lock(automaticHousePreviews)automaticHousePreviews.Clear();houseTransfer=new SafehouseTransfer(engine);javaComponents=new JavaComponents(engine,Report);forceTakeover=new ForceTakeover(engine,Report);}
+  JavaComponentWorkflow JavaWorkflow(){return new JavaComponentWorkflow(engine,javaComponents,(id,report,token)=>{DownloadSnapshotWorkshop(engine,id,report,token);},(id,report,token)=>ResolveSnapshotWorkshop(engine,new SaveEnvironmentMissing{modId=id},report,token),key=>Components(key,"install",new Dictionary<string,object>{{"confirmed",true}}),Report);}
   void DisposeContentLibrary(){if(houseTransfer!=null)houseTransfer.Dispose();if(javaComponents!=null)javaComponents.Dispose();if(forceTakeover!=null)forceTakeover.Dispose();}
   string legacyGame,defaultUser;
   internal static bool LibraryWebAction(string action){return LibraryActions.Contains(action)&&action!="versionImport"&&action!="versionPreserve"&&action!="versionInstallBegin";}
@@ -17,7 +18,7 @@ namespace PZ3D {
    string mapped,key;switch(action){case "versionChooseImport":mapped="versionImport";key="path";break;case "versionChoosePreserve":mapped="versionPreserve";key="destination";break;case "versionChooseInstall":mapped="versionInstallBegin";key="destination";break;case "backupChooseDirectory":mapped="backupSettingsSave";key="directory";break;default:return;}
    if(payload.ContainsKey(key))throw new IOException("请使用文件夹选择器。");var selected=new Dictionary<string,object>(payload);selected[key]="preview";ValidateLibraryPayload(mapped,selected);
   }
-  internal static readonly HashSet<string> LibraryActions=new HashSet<string>{"versionList","versionSelect","versionImport","versionPreserve","versionInstallBegin","versionInstallState","versionInstallComplete","versionInstallCancel","versionOpenSteam","recommendedServers","recommendedQuery","recommendedAdmin","backupInventory","backupList","backupCreate","backupRestore","backupDelete","backupSettings","backupSettingsSave","houseCatalogList","forceTakeoverPreview","forceTakeoverApply","forceTakeoverRecovery","forceTakeoverRecover","houseTransferPreview","houseTransferApply","javaComponentsList","javaComponentsPreview","javaComponentsApply","javaComponentsRecovery","javaComponentsRecover","javaComponentsInspectDownloaded","worldEditRecovery","worldEditRecover"};
+  internal static readonly HashSet<string> LibraryActions=new HashSet<string>{"javaComponentsInstall","javaComponentsEnable","javaComponentsReconcile","versionList","versionSelect","versionImport","versionPreserve","versionInstallBegin","versionInstallState","versionInstallComplete","versionInstallCancel","versionOpenSteam","recommendedServers","recommendedQuery","recommendedAdmin","backupInventory","backupList","backupCreate","backupRestore","backupDelete","backupSettings","backupSettingsSave","houseCatalogList","forceTakeoverPreview","forceTakeoverApply","forceTakeoverRecovery","forceTakeoverRecover","houseTransferPreview","houseTransferApply","javaComponentsList","javaComponentsPreview","javaComponentsApply","javaComponentsRecovery","javaComponentsRecover","javaComponentsInspectDownloaded","worldEditRecovery","worldEditRecover"};
   static readonly string[] LibraryReads={"versionList","versionInstallState","backupInventory","backupList","backupSettings","houseCatalogList","forceTakeoverPreview","forceTakeoverRecovery","houseTransferPreview","javaComponentsList","javaComponentsPreview","javaComponentsRecovery","javaComponentsInspectDownloaded","worldEditRecovery"};
   void InitializeLibrary(string game,string originalUser){
    legacyGame=string.IsNullOrWhiteSpace(game)?Path.Combine(data,"unselected-game"):game;defaultUser=originalUser;versions=new VersionLibrary(data,legacyGame,defaultUser);versionInstall=new SteamVersionWorkflow(data,legacyGame,defaultUser);
@@ -63,6 +64,9 @@ namespace PZ3D {
     case "houseTransferPreview":return PreviewHouse(p);
     case "houseTransferApply":Confirm(p);return ApplyHouse(Text(p,"previewStamp"));
     case "javaComponentsList":return javaComponents.List();
+    case "javaComponentsInstall":Confirm(p);return JavaWorkflow().Install(Text(p,"id"),true,cancel.Token);
+    case "javaComponentsEnable":Confirm(p);return JavaWorkflow().Enable(Text(p,"token"),true,cancel.Token);
+    case "javaComponentsReconcile":Confirm(p);return JavaWorkflow().Reconcile(true,cancel.Token);
     case "javaComponentsPreview":return javaComponents.Preview(Text(p,"token"),Text(p,"operation"),Text(p,"stamp"),Text(p,"receiptId"));
     case "javaComponentsApply":Confirm(p);return javaComponents.Apply(Text(p,"previewStamp"),true,cancel.Token);
     case "javaComponentsRecovery":return javaComponents.Recovery();
@@ -101,6 +105,9 @@ namespace PZ3D {
     case "houseTransferApply":keys=new[]{"previewStamp","confirmed"};break;
     case "javaComponentsPreview":keys=new[]{"token","operation","stamp","receiptId"};break;
     case "javaComponentsApply":keys=new[]{"previewStamp","confirmed"};break;
+    case "javaComponentsInstall":keys=new[]{"id","confirmed"};break;
+    case "javaComponentsEnable":keys=new[]{"token","confirmed"};break;
+    case "javaComponentsReconcile":keys=new[]{"confirmed"};break;
     case "javaComponentsRecover":keys=new[]{"stamp","confirmed"};break;
     case "forceTakeoverApply":case "forceTakeoverRecover":keys=new[]{"stamp","confirmed"};break;
     case "javaComponentsInspectDownloaded":keys=new[]{"id"};break;
