@@ -31,21 +31,21 @@
 
 **Files:** New focused live-context Java agent/manifest alongside EnvironmentSource; new owned-component storage class; JavaComponents/JavaComponentWorkflow/CoreComponents/JavaApprovals and dedicated adapters only at context boundaries; build agent packaging/tests.
 
-**Interface:** consume Task1 context; return owned effective roots, component enable list and VM arguments. Preserve original metadata and don't overload FrozenEnvironment. Document context APIs for controller/launch consumers.
+**Interface:** consume Task1 LauncherConfiguration instance; return effective selected current roots, component enable list and VM arguments. API is instance-scoped so later named configurations can supply their own Root. Preserve original metadata and don't overload FrozenEnvironment. Document context APIs for controller/launch consumers.
 
-- [ ] RED file/JVM fixtures with two original Viewpoint roots, a staged selected component, unrelated Lua, unknown Java, exact-hash allow/deny, update, disable/uninstall/cancel; originals remain byte-identical. Ordinary default list save cannot enable/add/reorder components.
-- [ ] Implement staged roots only on explicit component writes, owned state/config/approval directory, generic and known-component routing. Reuse existing dependency planning and exact Workshop resolution. No arbitrary title guess or automatic all-alternative enable.
+- [ ] RED file/JVM fixtures with two original Viewpoint roots, an explicitly selected component, unrelated Lua, unknown Java, exact-hash allow/deny, update, disable/uninstall/cancel; originals remain byte-identical. Ordinary default list save cannot enable/add/reorder components.
+- [ ] Implement owned source selection/state/config/approval directory. Normal configurations reference selected current roots read-only, following current source updates; do not copy full component payloads in normal mode. Snapshot-only copies are Task5. Only small runtime/Buddy files are deployed to owned runtime. Supply generic and known-component backend APIs consumed by Task3 routing before legacy mutations. Reuse existing dependency planning/metadata parsing and exact Workshop resolution; avoid duplicated full resolver. No arbitrary title guess or automatic all-alternative enable.
 - [ ] Add separate live discovery contract selecting owned Java roots and retaining Lua, owned default/loaded file routing and vanilla exclusion. Keep frozen parser/requirements intact. Initialize Buddy deny-new/no blanket trusts and include enabled components via explicit lists/approvals.
 - [ ] Execute isolated Java contract probes and native component lifecycle with real copied package bytes; source hashes unchanged. Review/commit with exact unsupported boundaries.
 
-### Task 3: Production launch, status, memory and recovery integration
+### Task 3: Named profiles, production launch, status, memory and recovery integration
 
 **Files:** Program.cs Engine, ModernController/LibraryController/ModernHostPolicy, LaunchProfiles/LauncherLaunch/LaunchPreflight/GameStartupComponent, process/recovery tests.
 
 **Interface:** selected mode persisted from Task1; components/discovery from Task2; new strict host read/change action for homepage. All mode-aware consumers share the bound context, including controller restart.
 
 - [ ] RED fixtures: polluted original config doesn't block launcher/vanilla normal/save/server; Steam still reads its settings; owned memory/config status correct; PID/birth journal/restart/forced-stop preserves selected game classification; no unrelated process killed.
-- [ ] Bind production default launcher configuration on engine selection; route explicit launches and preparation to owned assets. No original JSON/BAT component install side effects. Keep snapshot paths unchanged. Adjust actual evidence/preflight to selected mode rather than unused files.
+- [ ] Add named normal configuration store choosing installed version, independent ordinary mod order and component state. Extend Task1 context identity/root for profile ID without changing existing default context. Bind production selected configuration on engine selection; route explicit launches/preparation to owned assets. No original JSON/BAT component install side effects. Snapshot selection can use its pinned game/mod context for normal/menu, save and server targets without silently changing original mod files. Adjust evidence/preflight to selected configuration rather than unused files.
 - [ ] Keep Steam takeover optional with single confirmation; force clears this account/game full options and reports unhandled cleanup truthfully. Mode change remains usable during unrelated reads; actual conflicting writes only serialized. Release failure/cancel recovery correctly.
 - [ ] Run affected native/host/process tests, produce actual generated args/settings preservation proof, review and commit.
 
@@ -53,7 +53,16 @@
 
 **Files:** Web/app.js/app.css, focused mode UI suite and production native harness, usage/quality docs.
 
-- [ ] RED actual DOM cases show 启动配置 with 启动器配置(default)/Steam 配置/原版配置. Existing ordinary mod profile remains separate. Only selected-mode description and actual memory/components appear; Steam takeover/force actions only in its mode.
+- [ ] RED actual DOM cases show 启动配置 with 启动器配置(default)/Steam 配置/原版配置 plus named normal and snapshot configurations. Create/edit uses one configuration workflow for version/components/mod list/order; keep existing ordinary named mod-list compatibility without merging their storage semantics silently. Only selected-mode description and actual memory/components appear; Steam takeover/force actions only in its mode.
 - [ ] Wire strict native actions, persisted selection and single force confirmation. All targets use selection; no hollow selector, raw JSON, duplicate progress or irrelevant old-parameter gate in launcher mode.
 - [ ] Actual clicks -> production controller -> real owned files for select/install/enable/approval/launch preparation, failure/cancel/retry and Steam confirmation; inspect desktop/narrow dark/light and final statuses. Tests may not claim injected ProcessStart results are actual game entry.
 - [ ] Build local immutable candidate, verify bootstrap RSA/file hashes and NotSigned status. Review code; perform production-entry actual game acceptance if feasible within foreground constraint. If foreground required, preserve candidate and report concrete unverified paths, no publication/completion claim until accepted.
+
+### Task 5: Editable frozen configuration contents
+
+**Files:** SaveEnvironments/SaveEnvironmentRuntime transaction boundary, focused snapshot configuration editor service, controller/host and shared configuration UI, affected native/file/JVM tests.
+
+- [ ] RED creation with original reverse order then edit order/add/remove: only chosen snapshot changes, original save/default/Workshop/other snapshot/gameversion bytes unchanged. Adding current source copies exact files and records hashes/source ID, then source update leaves copied mod unchanged. Explicit order/conflict warning never blocks save/start.
+- [ ] Add atomic snapshot revision transaction under same per-snapshot resource lease. Use manifest/index hash publication with recoverable rollback on failure/cancel; do not copy whole game again, auto backup user saves or introduce unrelated global tasks. Keep existing identity/manifest invariants and active-process file ownership. Copied new root remains inside chosen snapshot; removal only drops selected IDs and unreferenced owned root. Existing IDs/order untouched except user's explicit edits.
+- [ ] Rebuild effective discovery/default/preload/approval configuration for that snapshot from current revised copied roots; list edits consistent through next launch/save/exit/reopen. Apply explicit replacement/skips consistently. Original source metadata warnings may inform but never gate unchanged available content.
+- [ ] Actual shared editor DOM clicks→production native edit→real copied files/manifest/runtime; inspect progress/count/cancel, reorder animation and post-error retry. Verify source changes do not alter copy and exact gameversion stays pinned. Actual production-entry game acceptance for edited snapshot remains required before publication.
