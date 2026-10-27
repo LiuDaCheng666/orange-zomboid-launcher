@@ -22,10 +22,10 @@
 
 **Interface:** `LauncherConfiguration` represents mode/key/owned paths plus real game/user. Provide parse/default/persist selection and bind/resolve methods without writing original files. Provide stock argument generation/ProcessStartInfo independent of original JSON/BAT/Steam options; signatures finalized in the task report before consumers. Engine binding occurs in Task 3.
 
-- [ ] RED fixtures for three exact modes launcher/steam/vanilla; default launcher; persistence per real game/user; malformed/unknown original agents irrelevant; Chinese path Windows quoting; stock B41/B42 main/classpath/options; child JAVA_TOOL_OPTIONS/_JAVA_OPTIONS/JDK_JAVA_OPTIONS removed, parent unchanged.
-- [ ] Implement explicit owned paths and durable local selection/config initialization, no source mutations or global Steam lookup. Required runtime assets must be resolved concretely; missing files name their problem. Use real game's JRE/native resources with explicit main and Steam IDs, memory from owned preferences.
-- [ ] Probe actual Buddy JAR through a Chinese owned path and config via system property, background tiny main only; preserve original source hashes. Register production source and run focused native suite.
-- [ ] Commit owned files and report exact APIs, RED/GREEN results, residual actual-game boundaries for review.
+- [x] RED fixtures for three exact modes launcher/steam/vanilla; default launcher; persistence per real game/user; malformed/unknown original agents irrelevant; Chinese path Windows quoting; stock B41/B42 main/classpath/options; child JAVA_TOOL_OPTIONS/_JAVA_OPTIONS/JDK_JAVA_OPTIONS removed, parent unchanged.
+- [x] Implement explicit owned paths and durable local selection/config initialization, no source mutations or global Steam lookup. Required runtime assets must be resolved concretely; missing files name their problem. Use real game's JRE/native resources with explicit main and Steam IDs, memory from owned preferences.
+- [x] Probe actual Buddy JAR through a Chinese owned path and config via system property, background tiny main only; preserve original source hashes. Register production source and run focused native suite.
+- [x] Commit owned files and report exact APIs, RED/GREEN results, residual actual-game boundaries for review.
 
 ### Task 2: Live discovery, independent component state and approvals
 
@@ -63,12 +63,12 @@
 
 ### Task 5: Editable frozen configuration contents
 
-**Files:** SaveEnvironments/SaveEnvironmentRuntime transaction boundary, focused snapshot configuration editor service, controller/host and shared configuration UI, affected native/file/JVM tests.
+**Files:** SaveEnvironments/SaveEnvironmentRuntime transaction boundary, focused snapshot configuration editor service, controller/host backend actions, affected native/file/JVM tests. Shared editor UI/click acceptance follows Task6.
 
 - [ ] RED creation with original reverse order then edit order/add/remove: only chosen snapshot changes, original save/default/Workshop/other snapshot/gameversion bytes unchanged. Adding current source copies exact files and records hashes/source ID, then source update leaves copied mod unchanged. Explicit order/conflict warning never blocks save/start.
 - [ ] Add atomic snapshot revision transaction under same per-snapshot resource lease. Use manifest/index hash publication with recoverable rollback on failure/cancel; do not copy whole game again, auto backup user saves or introduce unrelated global tasks. Keep existing identity/manifest invariants and active-process file ownership. Copied new root remains inside chosen snapshot; removal only drops selected IDs and unreferenced owned root. Existing IDs/order untouched except user's explicit edits.
 - [ ] Rebuild effective discovery/default/preload/approval configuration for that snapshot from current revised copied roots; list edits consistent through next launch/save/exit/reopen. Apply explicit replacement/skips consistently. Original source metadata warnings may inform but never gate unchanged available content.
-- [ ] Actual shared editor DOM clicks→production native edit→real copied files/manifest/runtime; inspect progress/count/cancel, reorder animation and post-error retry. Verify source changes do not alter copy and exact gameversion stays pinned. Actual production-entry game acceptance for edited snapshot remains required before publication.
+- [ ] Native backend edit→real copied files/manifest/runtime; verify progress/count/cancel and retry final files. Verify source changes do not alter copy and exact gameversion stays pinned. Shared editor DOM clicks and reorder animation are Task6; actual production-entry game acceptance is Task7 and remains required before publication.
 
 ### Task 6: Homepage choices and native click/visual acceptance
 
