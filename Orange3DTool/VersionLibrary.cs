@@ -29,16 +29,18 @@ namespace PZ3D {
   static string Detect(string path){var version=GameVersionProbe.Read(path);return version==null?"未知":version.ToString();}
   LocalGameVersion Legacy(){return new LocalGameVersion{Id="steam",Name="当前 Steam 安装",Version=Detect(game),GamePath=game,UserPath=user,DataPath=data,Managed=false,Installed=GameDiscovery.IsGameFolder(game)};}
   static LocalGameVersion Clone(LocalGameVersion row){return new LocalGameVersion{Id=row.Id,Name=row.Name,Version=row.Version,GamePath=row.GamePath,UserPath=row.UserPath,DataPath=row.DataPath,Managed=row.Managed,Installed=row.Installed};}
-  Document Load(){
+  Document Load(bool allowMissingSelection=false){
    Safe(state);if(!File.Exists(state))return new Document();if(new FileInfo(state).Length>1048576)throw new IOException("版本库记录过大，请检查备份。");Document doc;
    try{doc=Json().Deserialize<Document>(File.ReadAllText(state,Encoding.UTF8));}catch(Exception x){throw new IOException("版本库记录损坏，已保留原文件。",x);}
    if(doc==null||doc.Schema!=1||doc.Versions==null||doc.Versions.Count>128)throw new IOException("版本库格式无效。");
    var ids=new HashSet<string>(StringComparer.Ordinal);var paths=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
    foreach(var row in doc.Versions){if(row==null||!Regex.IsMatch(row.Id??"",@"^[a-f0-9]{32}$")||!ids.Add(row.Id)||!row.Managed||!Same(row.UserPath,UserPath(row.Id))||!Same(row.DataPath,data)||!paths.Add(Full(row.GamePath))||string.IsNullOrWhiteSpace(row.Name)||row.Name.Length>80||row.Name.Any(char.IsControl)||Within(row.GamePath,data)||Within(data,row.GamePath)||Within(row.GamePath,user)||Within(user,row.GamePath))throw new IOException("版本记录包含无效或交叉的目录。");Safe(row.GamePath);Safe(row.UserPath);}
-   if(doc.SelectedId!="steam"&&!ids.Contains(doc.SelectedId??""))throw new IOException("已选版本不存在。");return doc;
+   if(doc.SelectedId!="steam"&&!ids.Contains(doc.SelectedId??"")&&(!allowMissingSelection||!Regex.IsMatch(doc.SelectedId??"",@"\A[a-f0-9]{32}\z")))throw new IOException("已选版本不存在。");return doc;
   }
   void Save(Document doc){Safe(data);Directory.CreateDirectory(data);Safe(state);string temporary=state+".new-"+Guid.NewGuid().ToString("N");try{byte[] bytes=Encoding.UTF8.GetBytes(Json().Serialize(doc));using(var stream=new FileStream(temporary,FileMode.CreateNew,FileAccess.Write,FileShare.None)){stream.Write(bytes,0,bytes.Length);stream.Flush(true);}Safe(state);if(File.Exists(state))File.Replace(temporary,state,null);else File.Move(temporary,state);}finally{if(File.Exists(temporary))File.Delete(temporary);}}
   LocalGameVersion Refresh(LocalGameVersion row){var copy=Clone(row);copy.Installed=GameDiscovery.IsGameFolder(copy.GamePath);copy.Version=Detect(copy.GamePath);return copy;}
+  // Atomic publication permits independent page reads without taking the copy/publish mutex.
+  internal IList<LocalGameVersion> ListReadOnly(out string selectedId){var doc=Load(true);selectedId=doc.SelectedId;return new[]{Legacy()}.Concat(doc.Versions.Select(Refresh)).ToList();}
   public IList<LocalGameVersion> List(){return Locked(()=>{var doc=Load();return (IList<LocalGameVersion>)new[]{Legacy()}.Concat(doc.Versions.Select(Refresh)).ToList();});}
   public LocalGameVersion Selected(){return Locked(()=>{var doc=Load();return doc.SelectedId=="steam"?Legacy():Refresh(doc.Versions.Single(row=>row.Id==doc.SelectedId));});}
   public LocalGameVersion Select(string id){return Locked(()=>{var doc=Load();var row=id=="steam"?Legacy():doc.Versions.FirstOrDefault(item=>item.Id==id);if(row==null)throw new IOException("所选版本不在本地版本库。");Safe(row.GamePath);Safe(row.UserPath);if(!GameDiscovery.IsGameFolder(row.GamePath))throw new IOException("此版本的游戏文件已移动或不完整，请重新导入。");doc.SelectedId=id;Save(doc);return Refresh(row);});}

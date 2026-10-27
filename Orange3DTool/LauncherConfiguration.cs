@@ -9,7 +9,11 @@ using System.Web.Script.Serialization;
 namespace PZ3D {
  // A live context is deliberately separate from frozen snapshot manifests and Engine.Game/User.
  sealed class LauncherConfiguration {
-  static readonly object Gate=new object();
+  static readonly System.Collections.Concurrent.ConcurrentDictionary<string,object> Gates=new System.Collections.Concurrent.ConcurrentDictionary<string,object>(StringComparer.OrdinalIgnoreCase);
+  object Gate {get{return Gates.GetOrAdd(Root,ignored=>new object());}}
+  int initialMemoryMb=3072;
+  bool indexed;
+  public string ProfileId {get;private set;}
   static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
   public string Mode {get;private set;} public string Key {get;private set;}
   public string Game {get;private set;} public string User {get;private set;} public string Root {get;private set;}
@@ -19,7 +23,7 @@ namespace PZ3D {
   public string DefaultModsPath {get{return Path.Combine(Root,"mods","default.txt");}}
   public string PreferencesPath {get{return Path.Combine(Root,"preferences.json");}}
   public string SelectionPath {get{return Path.Combine(Root,"selection.txt");}}
-  public int MemoryMb {get{if(!File.Exists(PreferencesPath))return 3072;var p=ReadPreferences();object value;int mb;if(!p.TryGetValue("memoryMb",out value)||!int.TryParse(Convert.ToString(value),out mb)||mb<512||mb>262144)throw new IOException("启动器内存设置无效，请重新设置内存。");return mb;}}
+  public int MemoryMb {get{if(!File.Exists(PreferencesPath))return initialMemoryMb;var p=ReadPreferences();object value;int mb;if(!p.TryGetValue("memoryMb",out value)||!int.TryParse(Convert.ToString(value),out mb)||mb<512||mb>262144)throw new IOException("启动器内存设置无效，请重新设置内存。");return mb;}}
   public static string ParseMode(string value){if(string.IsNullOrEmpty(value))return "launcher";if(value=="launcher"||value=="steam"||value=="vanilla")return value;throw new ArgumentException("无法识别启动配置："+value);}
   static string Full(string path){if(string.IsNullOrWhiteSpace(path)||path.Any(char.IsControl))throw new ArgumentException("目录无效。");string full=Path.GetFullPath(path);return full.Length>Path.GetPathRoot(full).Length?full.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar):full;}
   public static LauncherConfiguration Resolve(string data,string game,string user){
@@ -28,14 +32,22 @@ namespace PZ3D {
    c.Root=Path.Combine(Full(data),"launcher-configurations",c.Key);
    c.Mode=File.Exists(c.SelectionPath)?ParseMode(File.ReadAllText(c.SelectionPath,Utf8).Trim()):"launcher";return c;
   }
-  public LauncherConfiguration Bind(string mode){return new LauncherConfiguration{Game=Game,User=User,Root=Root,Key=Key,Mode=ParseMode(mode)};}
-  public LauncherConfiguration Select(string mode){var selected=Bind(mode);lock(Gate){OwnWrites();Atomic(SelectionPath,Utf8.GetBytes(selected.Mode));}return selected;}
+  // Indexed inventory owns selection; resolution never reads or writes the legacy selection.txt.
+  internal static LauncherConfiguration ResolveIndexed(string data,string game,string user,string profileId,string ownerUser,int initialMemory){
+   if(initialMemory<512||initialMemory>262144)throw new ArgumentOutOfRangeException("initialMemory");
+   var c=new LauncherConfiguration{Game=Full(game),User=Full(user),Mode="launcher",ProfileId=profileId,indexed=true,initialMemoryMb=initialMemory};
+   string identity=profileId==null?c.Game.ToUpperInvariant()+"\n"+c.User.ToUpperInvariant():"profile\n"+Full(ownerUser).ToUpperInvariant()+"\n"+profileId;
+   using(var sha=SHA256.Create())c.Key=BitConverter.ToString(sha.ComputeHash(Utf8.GetBytes(identity))).Replace("-","").ToLowerInvariant();
+   c.Root=Path.Combine(Full(data),"launcher-configurations",c.Key);return c;
+  }
+  public LauncherConfiguration Bind(string mode){return new LauncherConfiguration{Game=Game,User=User,Root=Root,Key=Key,Mode=ParseMode(mode),ProfileId=ProfileId,indexed=indexed,initialMemoryMb=initialMemoryMb};}
+  public LauncherConfiguration Select(string mode){if(indexed)throw new InvalidOperationException("请使用启动配置目录选择配置。");var selected=Bind(mode);lock(Gate){OwnWrites();Atomic(SelectionPath,Utf8.GetBytes(selected.Mode));}return selected;}
   static bool Beneath(string file,string directory){return file.StartsWith(directory.TrimEnd('\\','/')+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)||string.Equals(file,directory,StringComparison.OrdinalIgnoreCase);}
   static void NoLinks(string path){for(string p=Path.GetFullPath(path);!string.IsNullOrEmpty(p);p=Path.GetDirectoryName(p)){if((File.Exists(p)||Directory.Exists(p))&&(File.GetAttributes(p)&FileAttributes.ReparsePoint)!=0)throw new IOException("启动配置目录不能使用链接："+p);}}
   void OwnWrites(){if(Beneath(Root,Game)||Beneath(Root,User))throw new IOException("启动器配置应保存在游戏和存档目录之外。");NoLinks(Root);}
   static void Atomic(string file,byte[] bytes){NoLinks(file);Directory.CreateDirectory(Path.GetDirectoryName(file));string temp=file+"."+Guid.NewGuid().ToString("N")+".tmp";try{File.WriteAllBytes(temp,bytes);if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);}finally{if(File.Exists(temp))File.Delete(temp);}}
   public void Initialize(){lock(Gate){OwnWrites();foreach(string dir in new[]{Root,ConfigDirectory,RuntimeDirectory,ComponentsDirectory,Path.GetDirectoryName(DefaultModsPath)}){NoLinks(dir);Directory.CreateDirectory(dir);}
-   if(!File.Exists(PreferencesPath))Atomic(PreferencesPath,Utf8.GetBytes("{\"memoryMb\":3072}"));
+   if(!File.Exists(PreferencesPath))Atomic(PreferencesPath,Utf8.GetBytes("{\"memoryMb\":"+initialMemoryMb+"}"));
    string buddy=Path.Combine(ConfigDirectory,"config.json");if(!File.Exists(buddy))Atomic(buddy,Utf8.GetBytes("{\"trusted_authors\":[],\"preload_mods\":{},\"auto_fix_mod_order\":false,\"fix_approval_dialog_cursor\":false}"));
    if(!File.Exists(DefaultModsPath)){string original=Path.Combine(User,"mods","default.txt");Atomic(DefaultModsPath,File.Exists(original)?File.ReadAllBytes(original):Utf8.GetBytes("VERSION = 1,\r\nmods\r\n{\r\n}\r\nmaps\r\n{\r\n}\r\n"));}
   }}

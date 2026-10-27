@@ -43,6 +43,7 @@ namespace PZ3D {
   [ScriptIgnore] public SaveEnvironmentFile[] Files;
   internal SaveEnvironmentRecord ShallowCopy(){return (SaveEnvironmentRecord)MemberwiseClone();}
  }
+ sealed class SaveEnvironmentRegistration {internal string Id,Error;internal SaveEnvironmentRecord Record;}
  sealed class SaveEnvironmentPlan {
   public string stamp,bindingStamp,saveId,gameVersion,activeSnapshotId="";public long gameBytes,modBytes;public int modCount;
   public string[] warnings;public bool ready,canPrepare,inventoryAvailable;public SaveEnvironmentMissing[] missing=new SaveEnvironmentMissing[0];
@@ -83,6 +84,12 @@ namespace PZ3D {
   internal static SaveEnvironmentRecord FindOwned(string dataRoot,string gamePath,string userPath){
    string game=Full(gamePath),selectedUser=Full(userPath);var reader=new SaveEnvironments(dataRoot);
    return reader.Locked(()=>{var catalog=reader.Load();var matches=catalog.Document.Records.Where(row=>Same(System.IO.Path.Combine(row.RootPath,"game"),game)&&Same(row.UserPath,selectedUser)).ToArray();if(matches.Length==0)return null;if(matches.Length!=1)throw new IOException("快照游戏与用户身份存在重复登记。");return reader.ReadRecord(matches[0],catalog.Stamp);});
+  }
+  // Inventory resolution is scoped to the trusted original/version-library user paths.
+  // It never opens the old source game, waits for a capture, or changes save bindings.
+  internal static SaveEnvironmentRegistration[] RegisteredForUsers(string dataRoot,IEnumerable<string> userPaths){
+   var reader=new SaveEnvironments(dataRoot);var users=new HashSet<string>(userPaths.Select(Full),StringComparer.OrdinalIgnoreCase);var catalog=reader.Load();var result=new List<SaveEnvironmentRegistration>();
+   foreach(var pointer in catalog.Document.Records.Where(row=>users.Contains(Full(row.UserPath)))){var row=new SaveEnvironmentRegistration{Id=pointer.Id};try{row.Record=reader.ReadRecord(pointer,catalog.Stamp);}catch(IOException error){row.Error=error.Message;}catch(UnauthorizedAccessException error){row.Error=error.Message;}result.Add(row);}return result.ToArray();
   }
   internal static bool OwnsUser(string dataRoot,string gamePath,string userPath){try{return FindOwned(dataRoot,gamePath,userPath)!=null;}catch{return false;}}
   static JavaScriptSerializer Json(){return new JavaScriptSerializer{MaxJsonLength=MaxManifest,RecursionLimit=32};}

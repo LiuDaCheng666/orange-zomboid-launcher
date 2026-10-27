@@ -57,6 +57,7 @@ function Get-OzlProductionSources {
         'JavaApprovals.cs',
         'LauncherContact.cs',
         'LauncherConfiguration.cs',
+        'LaunchConfigurationProfiles.cs',
         'LauncherComponents.cs',
         'LiveModDiscovery.cs',
         'LauncherDiagnostics.cs',
