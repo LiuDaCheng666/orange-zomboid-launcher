@@ -3,6 +3,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -18,6 +19,13 @@ from prepare_release import load_json, prepare_velopack_release
 BASE = '/var/www/ozl'
 FEED_NAMES = ('releases.win.json', 'velopack-manifest.json', 'velopack-manifest.sig')
 PUBLIC_KEY = Path(__file__).resolve().parents[1] / 'release-public-key.xml'
+
+
+def windows_verification_environment():
+    """WinPS must not autoload an incompatible PowerShell 7 utility module."""
+    environment = os.environ.copy()
+    environment['PSModulePath'] = str(Path(environment['WINDIR']) / 'System32' / 'WindowsPowerShell' / 'v1.0' / 'Modules')
+    return environment
 
 
 def sha(data):
@@ -328,7 +336,7 @@ def main():
             verification.append('-AllowUnsignedRelease')
         else:
             verification.extend(['-AuthenticodeConfig', str(args.authenticode_config.resolve())])
-        subprocess.run(verification, check=True)
+        subprocess.run(verification, check=True, env=windows_verification_environment())
         windows_verified = load_json(signing_receipt.read_bytes())
         verified_hashes = {item['name']: item['sha256'] for item in windows_verified['artifacts']}
         result = publish(args.source, args.preserved_legacy, args.public_key.read_bytes(), args.expected_current,

@@ -10,9 +10,26 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'deploy'))
+import publish_software as publisher
+
 
 @unittest.skipUnless(os.name == 'nt', 'Windows WinTrust/SignTool preflight')
 class PublisherSigningTests(unittest.TestCase):
+    def test_windows_verifier_uses_windows_modules_in_an_inherited_pwsh_environment(self):
+        self.assertTrue(hasattr(publisher, 'windows_verification_environment'),
+                        'Windows verifier must isolate inherited PowerShell 7 modules')
+        with tempfile.TemporaryDirectory(prefix='ozl-windows-module-') as name:
+            path = Path(name) / 'bytes.txt'
+            path.write_bytes(b'Windows verifier file hashing')
+            script = Path(name) / 'hash.ps1'
+            script.write_text('param([string]$p)\n(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash')
+            result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File', str(script), str(path)],
+                env=publisher.windows_verification_environment(), capture_output=True, text=True, errors='replace')
+            import hashlib
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(hashlib.sha256(path.read_bytes()).hexdigest().upper(), result.stdout)
+
     def test_standalone_unsigned_build_requires_rsa_without_a_windows_certificate(self):
         repo = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(prefix='ozl-build-entry-') as name:
