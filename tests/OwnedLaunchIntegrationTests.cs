@@ -34,6 +34,3 @@ var profiles=new LaunchConfigurationProfiles(data,game,user);var named=profiles.
  }
 
 }}
-
-
-

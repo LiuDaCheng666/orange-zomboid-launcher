@@ -14,4 +14,3 @@ $refs+="/reference:$sdk/Microsoft.Web.WebView2.Core.dll";$refs+="/reference:$sdk
 if($LASTEXITCODE -ne 0){throw 'Owned entry fixture compilation failed'}
 & "$out/Test.exe" @Groups | Tee-Object -FilePath "$out/results.log"
 if($LASTEXITCODE -ne 0){throw 'Affected owned launch regression failed'}
-

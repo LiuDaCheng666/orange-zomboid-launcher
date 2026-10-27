@@ -16,4 +16,3 @@ if($LASTEXITCODE -ne 0){throw 'Owned process fixture compilation failed'}
 $env:OZL_OWNED_PROCESS_FIXTURE=Join-Path $out 'OwnedNativeProcessFixture.exe'
 & "$out/Test.exe"
 if($LASTEXITCODE -ne 0){throw 'Owned entry fixture assertions failed'}
-
