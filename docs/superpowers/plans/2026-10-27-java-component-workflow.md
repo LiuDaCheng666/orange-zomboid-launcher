@@ -53,3 +53,12 @@ Files: JavaComponents.cs, JavaComponentsTests.cs; native UI acceptance harness a
 - [ ] Include effective uninstall intent in owned-root reconciliation. Refresh into metadata-only suppression using fresh author files/current hashes; never re-delete fresh downloaded JAR or restore obsolete payload bytes. Retire all contributing suppression intents transactionally, including disable then uninstall.
 - [ ] Cover normal update, JAR-only reinstall, disable/uninstall/update/enable chain, cancellation/recovery and repeated reconcile; verify fresh payload bytes stay unchanged after enable.
 - [ ] Native UI click acceptance covers uninstall/update/refresh/enable and exact file results. Review fixes before building local candidate.
+
+### Task 5: Stable task-center progress (user follow-up)
+
+Files: Web/app.js, focused task-center DOM tests; native cache fixture/harness if needed.
+
+- [ ] Reproduce rapid cleanup progress causing taskGet per file, loading placeholder flashes, whole task-list replacement, lost details/scroll.
+- [ ] Coalesce progress snapshot refresh with at most one request in flight; trailing final update cannot be lost. Render existing entries by stable task ID and patch progress/message/events without rebuilding unchanged history/details/window. Initial/error/retry loading states stay explicit.
+- [ ] Real DOM clicks open the task center during a progress burst, assert node identity/scroll/details stay stable and final status/count displayed. Cover request failure/retry and close/reopen during pending read. Native cache cleanup on isolated files verifies actual final file count; do not use real user caches.
+- [ ] Inspect screenshot, run affected UI/native regressions and review before local candidate build.
