@@ -31,7 +31,7 @@ All targeted UI tests pass. Native compile emits four existing CS0649 unused-fie
 
 ## Native click and file results
 
-Background headless Edge executes actual app.js DOM clicks → production `ModernHostPolicy.Validate` → production `ModernController.Execute` → isolated real files. Native evidence: `artifacts/java-workflow-ui/native-ui-result.json` (request/response history, stage events, file lengths/hashes, zero browser page errors). Latest isolated root: `E:\AppCaches\Temp\Java界面-6e9bcf48dd734966b8b965d5c911c4d3`.
+Background headless Edge executes actual app.js DOM clicks → production `ModernHostPolicy.Validate` → production `ModernController.Execute` → isolated real files. Native evidence: `artifacts/java-workflow-ui/native-ui-result.json` (request/response history, stage events, file lengths/hashes, zero browser page errors). Latest isolated root: `E:\AppCaches\Temp\Java界面-475130804ef4444b9c1ea2fe9ce3fcf6`.
 
 - Bundle download creates actual metadata/JAR files. Selection changes no default mods. Enabling AlternativeA adds LocalLua plus the selected Java mod; AlternativeB remains absent. Existing Unrelated mod, KeepMap, and custom fields remain.
 - MissingDependency returns unresolved with its concrete ID; NeedsMissing is absent from default mods. ManualOnly returns unsupported, without enabling it.
@@ -46,3 +46,11 @@ Manually opened through view_image: `artifacts/java-workflow-ui/dark-desktop.png
 ## Coverage boundaries
 
 External Steam download/search results, process/game/Buddy bytes are controlled fixtures; `TestMode=true` permits isolated Steam-library resolution. Production controller/workflow/metadata/file operations are real. ShadowZ package bytes are real. No live Steam subscription/download, real game mutation, foreground control, actual game startup, server multiplayer loading, publication build, VERSION change, deployment, or signing was performed. Existing real Workshop metadata/JAR survey is separate evidence (`artifacts/java-workflow/real-workshop-metadata.json`, `real-jar-proof.json`); this UI run does not imply every Java mod is supported. Parent will validate a local candidate and address uninstall/update reconciliation separately.
+
+## Task 3 review correction round 1
+
+- RED: `node tests/java-workflow-ui-tests.cjs` failed `conflicting install is unavailable during workflow` (`true !== false`). GREEN after disabling only conflicting install entry points during local writes, and guarding dialog submit before closing it. A dialog opened before work begins retains `999777` and shows a concrete busy reason; no second request is sent until the occupied operation ends. Retrying submits the retained link exactly once.
+- Java page shows one inline stage/count/cancel panel. Its global task display is hidden only while this Java workflow is active on the Java page; leaving for Home restores the global panel and returning hides the duplicate. Durable task-center records remain untouched. Search and navigation remain usable.
+- Browser bridge rejection (`下载连接中断，请重试`) now has explicit clicked regression evidence, with controls released for retry. A partial native result shows actual enabled DependencyDone, B write failure, downloaded item, and pending recovery, and does not claim complete success. The next successful operation clears old errors.
+- GREEN commands: `node tests/java-workflow-ui-tests.cjs`, `node tests/component-discovery-ui-tests.cjs`, `node tests/java-components-ui-tests.cjs`, `node tests/java-block-ui-tests.cjs`, `pwsh -NoProfile -File tests/JavaWorkflowNativeUi.test.ps1`, `node --check Orange3DTool/Web/app.js`, and targeted `git diff --check`. The native harness was rebuilt; its cancellation click also asserts one visible progress panel, disabled conflicting install, usable search, and restored global progress when navigating away. Four existing CS0649 warnings remain unchanged.
+- Reopened `artifacts/java-workflow-ui/cancel-progress.png` through view_image after the fix: one visible indeterminate bar with actual 128 B fixture count and one cancel action; navigation and search are visible and usable. No production C# was changed. Coverage boundaries above still apply.

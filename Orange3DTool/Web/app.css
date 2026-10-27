@@ -1087,3 +1087,5 @@ dialog.ozl-guide-dialog[open]{display:flex;flex-direction:column}
 @media(prefers-reduced-motion:reduce){.ozl-guide-dialog,.ozl-guide-dialog *{scroll-behavior:auto;animation:none;transition:none}}
 .java-workflow-result{padding:16px;border:1px solid var(--line);border-radius:12px;margin:14px 0;overflow-wrap:anywhere}.java-workflow-result p{margin:0 0 8px}.java-workflow-result progress{display:block;width:100%;margin:12px 0}.java-component-main .link-button{margin:0 0 8px}.java-component-main>p{overflow-wrap:anywhere}
 @media(max-width:550px){.java-component-main{flex-basis:100%;width:100%}.java-component-actions{width:100%;justify-content:flex-start;flex-wrap:wrap}}
+
+#task.java-inline-active{display:none}
