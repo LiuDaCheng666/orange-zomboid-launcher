@@ -44,3 +44,12 @@ Files: Web/app.js, Web/app.css if needed, tests/java-workflow-ui-tests.cjs, nati
 - [ ] Click real app UI into native controller operating isolated real files; inspect desktop/narrow dark/light screenshots and final files.
 - [ ] Read-only actual Workshop package verification and isolated production package build. Record real-game coverage separately; don't claim all Java mods supported.
 - [ ] Review final diff and commit implementation/evidence docs. Provide local candidate, no publish until acceptance evidence is sufficient.
+
+### Task 4: Preserve uninstall intent after Workshop restores files
+
+Files: JavaComponents.cs, JavaComponentsTests.cs; native UI acceptance harness as necessary.
+
+- [ ] Reproduce uninstall followed by metadata/JAR update: Java currently becomes loadable and stale receipt prevents enable.
+- [ ] Include effective uninstall intent in owned-root reconciliation. Refresh into metadata-only suppression using fresh author files/current hashes; never re-delete fresh downloaded JAR or restore obsolete payload bytes. Retire all contributing suppression intents transactionally, including disable then uninstall.
+- [ ] Cover normal update, JAR-only reinstall, disable/uninstall/update/enable chain, cancellation/recovery and repeated reconcile; verify fresh payload bytes stay unchanged after enable.
+- [ ] Native UI click acceptance covers uninstall/update/refresh/enable and exact file results. Review fixes before building local candidate.
