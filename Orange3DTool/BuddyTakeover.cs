@@ -19,10 +19,14 @@ namespace PZ3D {
   public BuddyRecoveryState recovery;
   public bool supported,knownIdentity,requiresSteamExit,hasConflicts;
   public string[] locations;
+  public string[] untouchedFiles=new string[0];
+  public Dictionary<string,string> untouchedReasons=new Dictionary<string,string>();
  }
  internal sealed class BuddyTakeoverResult {
   public string status,phase,message,scope;
   public bool cleanupCompleted,rollbackCompleted,steamVerified,steamExitRequested,steamReopenRequested,recoveryPending,componentInstallCompleted;
+  public string[] untouchedFiles=new string[0];
+  public Dictionary<string,string> untouchedReasons=new Dictionary<string,string>();
  }
  internal sealed class BuddyRecoveryState {
   public bool pending,supported,requiresSteamExit;
@@ -145,7 +149,7 @@ namespace PZ3D {
   internal sealed class Record {public int version=1;public string game,key,id,stage,root,exe;public uint account;public int pid;public long birth;public bool exitRequested;public List<Entry> entries=new List<Entry>();}
   internal sealed class Entry {public string target,before,after;public bool attempted;}
   sealed class Target {internal string Name,Path;internal byte[] Before,After;}
-  sealed class Plan {internal BuddySteamIdentity Identity;internal List<Target> Targets=new List<Target>();internal Dictionary<string,byte[]> GameFiles=new Dictionary<string,byte[]>();internal string Stamp,Game,User,Data;internal bool Exit;}
+  sealed class Plan {internal BuddySteamIdentity Identity;internal List<Target> Targets=new List<Target>();internal List<string> UntouchedFiles=new List<string>();internal Dictionary<string,string> UntouchedReasons=new Dictionary<string,string>();internal Dictionary<string,byte[]> GameFiles=new Dictionary<string,byte[]>();internal string Stamp,Game,User,Data;internal bool Exit;}
   sealed class Refusal:Exception {internal Refusal(string message):base(message){}}
   static JavaScriptSerializer Serializer(){return new JavaScriptSerializer{MaxJsonLength=32768,RecursionLimit=12};}
   static BuddyTakeoverEnvironment Env(Engine e,BuddyTakeoverEnvironment env){return env??(e.TestMode?(BuddyTakeoverEnvironment)new DisabledBuddyTakeoverEnvironment():new NativeBuddyTakeoverEnvironment(e));}
@@ -165,12 +169,29 @@ namespace PZ3D {
   static string IdentityKey(BuddySteamIdentity id){return id.Options.ScopedStamp+"|"+id.Pid+"|"+id.Birth+"|"+(id.Executable??"").ToUpperInvariant();}
   static void VerifyIdentity(BuddySteamIdentity id){if(id==null||id.Options==null)throw new Refusal("无法核实 Steam 身份。");if(id.Options.State!=SteamLaunchOptionsState.UnknownIdentity)id.Options.RequireReadable();if(id.Options.KnownIdentity){if(id.Options.State!=SteamLaunchOptionsState.Ready||id.Pid<=0||id.Birth<=0||!Same(id.Executable,Path.Combine(id.Options.Root,"steam.exe")))throw new Refusal("无法核实 Steam 客户端进程身份。");LauncherMaintenance.NoReparse(id.Executable);}}
   static Plan Scan(Engine e,BuddyTakeoverEnvironment env){Preflight(e,env,false);var plan=new Plan{Identity=env.Capture(),Game=Full(e.Game),User=Full(e.User),Data=Full(e.Data)};VerifyIdentity(plan.Identity);var stamps=new List<string>{Full(e.Game).ToUpperInvariant(),Full(e.Data).ToUpperInvariant(),Full(e.User).ToUpperInvariant(),IdentityKey(plan.Identity)};
-   foreach(string name in Names){string path=Path.Combine(e.Game,name);LauncherMaintenance.NoReparse(path);if(!File.Exists(path)){plan.GameFiles[name]=null;stamps.Add(name+":absent");continue;}byte[] before=Read(path,2097152),bom;plan.GameFiles[name]=before;Encoding encoding;string source=Text(before,out encoding,out bom);var clean=name.EndsWith(".json",StringComparison.Ordinal)?BuddyLaunchArguments.CleanJson(source):BuddyLaunchArguments.CleanBat(source);if(!clean.Safe)throw new Refusal("启动配置包含未知 Buddy 参数或复杂 BAT 语法，请人工检查。");stamps.Add(name+":"+Hash(before));if(clean.Changed)plan.Targets.Add(new Target{Name=name,Path=path,Before=before,After=bom.Concat(encoding.GetBytes(clean.Text)).ToArray()});}
+   foreach(string name in Names){
+    string path=Path.Combine(e.Game,name);bool script=name.EndsWith(".bat",StringComparison.Ordinal);
+    try{
+     LauncherMaintenance.NoReparse(path);
+     if(!File.Exists(path)){plan.GameFiles[name]=null;stamps.Add(name+":absent");continue;}
+     byte[] before=Read(path,2097152),bom;Encoding encoding;string source=Text(before,out encoding,out bom);
+     var clean=script?BuddyLaunchArguments.CleanBat(source):BuddyLaunchArguments.CleanJson(source);
+     if(!clean.Safe)throw new Refusal(name+" 的 Java 启动参数无法解析，请检查该文件。");
+     plan.GameFiles[name]=before;stamps.Add(name+":"+Hash(before));
+     if(clean.Changed)plan.Targets.Add(new Target{Name=name,Path=path,Before=before,After=bom.Concat(encoding.GetBytes(clean.Text)).ToArray()});
+    }catch(Exception error){
+     if(!script)throw;
+     // Optional scripts never run through the launcher's EXE/JSON entry point.
+     // Preserve unsupported bytes and continue only the independently readable targets.
+     plan.UntouchedFiles.Add(name);
+     plan.UntouchedReasons[name]=error is DecoderFallbackException?"使用其他文本编码，保留原文件":error is Refusal?"自定义备用脚本，保留原文件":"未读取或改写，保留原文件";
+    }
+   }
    var options=plan.Identity.Options;if(options.HasField){var clean=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!clean.Safe)throw new Refusal("Steam 启动项包含未知参数语法，请人工检查。");if(clean.Changed){plan.Exit=true;plan.Targets.Add(new Target{Name="steam",Path=options.ConfigPath,Before=options.RawBytes,After=SteamLaunchOptions.Replace(options,clean.Text)});}}
    plan.Stamp=Hash(Encoding.UTF8.GetBytes(string.Join("\n",stamps)));return plan;
   }
   static void CheckGame(Engine e,Plan plan){if(!Same(e.Game,plan.Game)||!Same(e.User,plan.User)||!Same(e.Data,plan.Data))throw new Refusal("选定游戏或数据目录已改变，请刷新。");foreach(var pair in plan.GameFiles){string path=Path.Combine(e.Game,pair.Key);LauncherMaintenance.NoReparse(path);if(pair.Value==null?File.Exists(path):!File.Exists(path)||!Read(path).SequenceEqual(pair.Value))throw new Refusal("游戏启动文件已改变，请刷新预览。");}}
-  internal static BuddyTakeoverPreview Preview(Engine e,BuddyTakeoverEnvironment environment=null){var p=new BuddyTakeoverPreview{stamp="",locations=new string[0],recoveryState="none",scope="localOnly",steamState="unverified",scanState="unsupported"};try{e=Bind(e);if(Pending(e)){var r=Recovery(e,environment);p.recovery=r;p.recoveryState=r.state;p.message=r.message;return p;}var plan=Scan(e,Env(e,environment));p.stamp=plan.Stamp;p.supported=true;p.knownIdentity=plan.Identity.Options.KnownIdentity;p.scope=p.knownIdentity?"localAndSteam":"localOnly";p.steamState=p.knownIdentity?"verified":"unverified";p.scanState=plan.Targets.Count>0?"conflicts":"clean";p.requiresSteamExit=plan.Exit;p.hasConflicts=plan.Targets.Count>0;p.locations=plan.Targets.Select(t=>Label(t.Name)).ToArray();p.message=p.hasConflicts?"发现可清理的旧 Buddy 启动参数。":p.knownIdentity?"启动参数正常。":"本机游戏启动参数正常。";if(!p.knownIdentity)p.message+=" Steam 启动参数未完成检查。";}
+  internal static BuddyTakeoverPreview Preview(Engine e,BuddyTakeoverEnvironment environment=null){var p=new BuddyTakeoverPreview{stamp="",locations=new string[0],recoveryState="none",scope="localOnly",steamState="unverified",scanState="unsupported"};try{e=Bind(e);if(Pending(e)){var r=Recovery(e,environment);p.recovery=r;p.recoveryState=r.state;p.message=r.message;return p;}var plan=Scan(e,Env(e,environment));p.stamp=plan.Stamp;p.untouchedFiles=plan.UntouchedFiles.ToArray();p.untouchedReasons=plan.UntouchedReasons;p.supported=true;p.knownIdentity=plan.Identity.Options.KnownIdentity;p.scope=p.knownIdentity?"localAndSteam":"localOnly";p.steamState=p.knownIdentity?"verified":"unverified";p.scanState=plan.Targets.Count>0?"conflicts":"clean";p.requiresSteamExit=plan.Exit;p.hasConflicts=plan.Targets.Count>0;p.locations=plan.Targets.Select(t=>Label(t.Name)).ToArray();p.message=p.hasConflicts?"发现可清理的旧 Buddy 启动参数。":p.knownIdentity?"启动参数正常。":"本机游戏启动参数正常。";if(!p.knownIdentity)p.message+=" Steam 启动参数未完成检查。";}
    catch(Refusal ex){p.message=ex.Message;}catch{p.message="无法安全预览，请检查当前账号与启动配置。";}return p;}
   internal static bool Pending(Engine e){try{LauncherMaintenance.NoReparse(JournalPath(e));return File.Exists(JournalPath(e));}catch{return true;}}
   internal static void Guard(Engine e){if(Pending(e))throw new Exception(PendingMessage);}
@@ -212,7 +233,7 @@ namespace PZ3D {
   static Mutex Lock(Engine e){var mutex=new Mutex(false,"Local\\OrangeBuddyTakeover-"+Key(e));bool held=false;try{try{held=mutex.WaitOne(0);}catch(AbandonedMutexException){held=true;}if(!held)throw new Refusal("另一项接管正在处理，请等待完成。");return mutex;}catch{mutex.Dispose();throw;}}
   internal static BuddyTakeoverResult Apply(Engine e,string stamp,bool confirmed,bool steamExitConfirmed,Action<int,string> progress,CancellationToken cancel,BuddyTakeoverEnvironment environment=null){
    e=Bind(e);if(!confirmed||cancel.IsCancellationRequested){var cancelled=Result("cancelled","已取消，未开始接管。");cancelled.recoveryPending=Pending(e);return cancelled;}var env=Env(e,environment);var result=Result("failed",FailureMessage);Record record=null;Plan plan=null;Mutex mutex=null;LauncherJournal log=null;bool exited=false;
-   try{mutex=Lock(e);plan=Scan(e,env);result.scope=plan.Identity.Options.KnownIdentity?"localAndSteam":"localOnly";if(string.IsNullOrEmpty(stamp)||stamp!=plan.Stamp)throw new Refusal("预览已过期，请重新扫描后确认。");if(plan.Exit&&!steamExitConfirmed)return Result("confirmationRequired","需要单独确认一次性正常退出 Steam。");cancel.ThrowIfCancellationRequested();if(plan.Targets.Count==0){result.status="unchanged";result.message=plan.Identity.Options.KnownIdentity?"启动参数正常。":"本机游戏启动参数正常；Steam 启动参数未完成检查。";result.steamVerified=plan.Identity.Options.KnownIdentity;return result;}
+   try{mutex=Lock(e);plan=Scan(e,env);result.untouchedFiles=plan.UntouchedFiles.ToArray();result.untouchedReasons=plan.UntouchedReasons;result.scope=plan.Identity.Options.KnownIdentity?"localAndSteam":"localOnly";if(string.IsNullOrEmpty(stamp)||stamp!=plan.Stamp)throw new Refusal("预览已过期，请重新扫描后确认。");if(plan.Exit&&!steamExitConfirmed)return Result("confirmationRequired","需要单独确认一次性正常退出 Steam。");cancel.ThrowIfCancellationRequested();if(plan.Targets.Count==0){result.status="unchanged";result.message=plan.Identity.Options.KnownIdentity?"启动参数正常。":"本机游戏启动参数正常；Steam 启动参数未完成检查。";result.steamVerified=plan.Identity.Options.KnownIdentity;return result;}
     record=Prepare(e,plan);log=new LauncherJournal(e.Data);log.Begin("buddyTakeover","接管旧 Buddy 参数");log.Update(-1,"已保留私人备份和接管恢复记录");result.phase="prepared";
     if(plan.Exit){Exit(e,record,plan.Identity,env,progress,cancel,result);exited=true;Preflight(e,env,true);var fresh=SteamLaunchOptions.Read(plan.Identity.Options.Root,plan.Identity.Options.Account);if(fresh.State!=SteamLaunchOptionsState.Ready||fresh.ScopedStamp!=plan.Identity.Options.ScopedStamp||env.Inspect(plan.Identity)!=BuddySteamState.Exited)throw new Refusal("Steam 退出时目标启动项已变化，请重新扫描。");int n=plan.Targets.FindIndex(t=>t.Name=="steam");var target=plan.Targets[n];target.Before=fresh.RawBytes;target.After=SteamLaunchOptions.Replace(fresh,BuddyLaunchArguments.CleanCommandLine(fresh.LaunchOptions).Text);Durable(Backup(e,record,n,false),target.Before);Durable(Backup(e,record,n,true),target.After);record.entries[n].before=Hash(target.Before);record.entries[n].after=Hash(target.After);Save(e,record,"preparedAfterExit");}
     cancel.ThrowIfCancellationRequested();Preflight(e,env,true);foreach(var t in plan.Targets)if(!Read(t.Path).SequenceEqual(t.Before))throw new Refusal("配置已改变，请刷新预览。");if(!plan.Exit&&IdentityKey(env.Capture())!=IdentityKey(plan.Identity))throw new Refusal("Steam 身份已改变，请刷新预览。");

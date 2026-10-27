@@ -107,7 +107,8 @@ namespace PZ3D {
    BuddyTakeover.Guard(this);
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
    if(launch&&!TestMode&&RuntimeRunning(true))throw new Exception("客户端或无法核实用途的游戏 Java 进程仍在运行，请退出后再启动。");
-   if(!launch&&!content)foreach(string name in new[]{"ProjectZomboid64.bat","ProjectZomboid32.bat"}){string bat=Path.Combine(Game,name);LauncherMaintenance.NoReparse(bat);if(File.Exists(bat)){if(new FileInfo(bat).Length>2097152)throw new Exception("备用启动 BAT 过大，无法核实。");var cleanup=BuddyLaunchArguments.CleanBat(File.ReadAllText(bat));if(!cleanup.Safe)throw new Exception("备用启动 BAT 参数不明确，请人工检查 Buddy 启动语法。");if(cleanup.Changed)throw new Exception("备用启动 BAT 有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
+   // Normal operations use the game's EXE/JSON, not its optional BAT entry points.
+   // Inspect spare scripts only in the explicit takeover scan; never execute them.
    if(checkSteam&&FrozenEnvironment==null){var options=ReadSteamOptions();if(!launch&&!TestMode&&options.State==SteamLaunchOptionsState.UnknownIdentity)options=SteamLaunchOptions.NativeCurrent(this).Options;if(!launch||options.State!=SteamLaunchOptionsState.UnknownIdentity)options.RequireReadable();if(options.HasField){var cleanup=BuddyLaunchArguments.CleanCommandLine(options.LaunchOptions);if(!cleanup.Safe)throw new Exception("当前游戏 Steam 启动选项不明确，请人工检查 Buddy 参数。");if(cleanup.Changed)throw new Exception("当前游戏 Steam 启动选项有旧 Buddy 参数，请先接管旧启动参数后继续。");}}
   }
   public static string FindSteam(){using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam")){return k==null?null:(k.GetValue("SteamPath") as string);}}

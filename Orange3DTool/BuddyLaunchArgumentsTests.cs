@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.IO;
 namespace PZ3D {
  static class BuddyLaunchArgumentsTests {
@@ -31,7 +32,7 @@ namespace PZ3D {
   }
   static void QuotedContext(bool continuation){
    string text=continuation?"echo continued ^\r\njava -agentlib:z\"bNative\" -jar game.jar":"if exist game.jar (\r\n java -agentlib:z\"bNative\" -jar game.jar\r\n)";var result=BuddyLaunchArguments.CleanBat(text);Check(!result.Safe&&!result.Changed&&result.RemovedCount==0&&result.Text==text,"normalized quoted Buddy refuses complete "+(continuation?"continued":"block")+" BAT");
-   string root=Path.Combine(LauncherTestPaths.Root,"quoted-bat-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");File.WriteAllText(Path.Combine(e.Game,"ProjectZomboid64.bat"),text);SteamLaunchOptionsTests.Reject(()=>e.Guard(),"Engine guard refuses normalized Buddy in ambiguous context");
+   string root=Path.Combine(LauncherTestPaths.Root,"quoted-bat-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");string bat=Path.Combine(e.Game,"ProjectZomboid64.bat");File.WriteAllText(bat,text);e.Guard();Check(File.ReadAllText(bat)==text,"EXE-based operation preserves ambiguous quoted Buddy BAT without using it");
   }
   static void BatLookalikes(){
    string root=Path.Combine(LauncherTestPaths.Root,"lookalike-bat-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");
@@ -40,7 +41,7 @@ namespace PZ3D {
   }
   static void ShellCommands(bool pipe,bool guardOnly=false){
    string text=pipe?"java -cp app.jar GameMain | java -agentlib:z\"bNative\" -jar other.jar":"java -jar game.jar & java -agentlib:zbNative -jar other.jar";var result=BuddyLaunchArguments.CleanBat(text);if(!guardOnly)Check(!result.Safe&&!result.Changed&&result.RemovedCount==0&&result.Text==text,"second Java command after "+(pipe?"pipe":"chain")+" refuses complete original BAT");
-   string root=Path.Combine(LauncherTestPaths.Root,"shell-bat-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");File.WriteAllText(Path.Combine(e.Game,"ProjectZomboid64.bat"),text);SteamLaunchOptionsTests.Reject(()=>e.Guard(),"Engine guard rejects independent chained or piped Buddy loader");
+   string root=Path.Combine(LauncherTestPaths.Root,"shell-bat-"+Guid.NewGuid().ToString("N"));var e=new Engine(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true);Directory.CreateDirectory(e.Game);File.WriteAllText(e.Config,"{\"vmArgs\":[\"-agentlib:zbNative\"]}");string bat=Path.Combine(e.Game,"ProjectZomboid64.bat");File.WriteAllText(bat,text);e.Guard();Check(File.ReadAllText(bat)==text,"EXE-based operations do not execute or rewrite independent chained or piped BAT loader");
   }
   static void ShellLiterals(){
    string pipedOutput="echo java -agentlib:zbNative -jar game.jar | cmd";var pipedResult=BuddyLaunchArguments.CleanBat(pipedOutput);Check(!pipedResult.Safe&&!pipedResult.Changed&&pipedResult.RemovedCount==0&&pipedResult.Text==pipedOutput,"Buddy output piped to a possible command evaluator requires manual review");
@@ -170,10 +171,10 @@ namespace PZ3D {
    string label="case "+number+" "+name;
    int failures=0;
    foreach(var check in new Action[]{
-    ()=>SteamLaunchOptionsTests.Reject(()=>e.Guard(),"real Guard refuses output loader "+label),
-    ()=>SteamLaunchOptionsTests.Reject(()=>e.Switch(false,false),"real ordinary disable refuses output loader "+label),
-    ()=>{var preview=BuddyTakeover.Preview(e,new BatOutputFixtureEnvironment(steam,e.Game));Check(!preview.supported&&preview.stamp==""&&preview.locations.Length==0&&!preview.hasConflicts&&!preview.requiresSteamExit&&preview.message.Contains("复杂 BAT"),"real takeover Preview refuses rather than omits output loader "+label);},
-    ()=>Check(!Directory.Exists(e.Data)&&Directory.GetFiles(root,"*",SearchOption.AllDirectories).Length==before.Count&&System.Linq.Enumerable.All(before,p=>File.Exists(p.Key)&&System.Linq.Enumerable.SequenceEqual(p.Value,File.ReadAllBytes(p.Key))),"refused callers preserve all fixture bytes and create no writes "+label)
+    ()=>{e.Guard();Check(true,"real EXE operation ignores unused output BAT loader "+label);},
+    ()=>{var preview=BuddyTakeover.Preview(e,new BatOutputFixtureEnvironment(steam,e.Game));Check(preview.supported&&preview.stamp!=""&&preview.untouchedFiles.Contains(name)&&!preview.hasConflicts&&!preview.requiresSteamExit,"real takeover Preview explicitly lists preserved output BAT "+label);},
+    ()=>Check(!Directory.Exists(e.Data)&&Directory.GetFiles(root,"*",SearchOption.AllDirectories).Length==before.Count&&System.Linq.Enumerable.All(before,p=>File.Exists(p.Key)&&System.Linq.Enumerable.SequenceEqual(p.Value,File.ReadAllBytes(p.Key))),"read-only guard and scan preserve all fixture bytes "+label),
+    ()=>{e.Switch(false,false);Check(!File.ReadAllText(e.Config).Contains("-agentlib:zbNative")&&File.ReadAllText(e.Mods).Contains("OtherMod"),"real ordinary disable completes actual configuration write "+label);foreach(string file in before.Keys.Where(p=>p.EndsWith(".bat",StringComparison.Ordinal)))Check(before[file].SequenceEqual(File.ReadAllBytes(file)),"ordinary disable preserves spare BAT bytes "+label);}
    })try{check();}catch(Exception ex){Console.WriteLine(ex.Message);failures++;}
    if(failures>0)throw new Exception("FAIL: output loader callers "+label+": "+failures);
   }
