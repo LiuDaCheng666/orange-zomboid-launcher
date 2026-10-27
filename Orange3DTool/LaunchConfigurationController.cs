@@ -27,7 +27,13 @@ namespace PZ3D {sealed partial class ModernController {
  }
  ModernController RuntimeConfigurationController(){
   ModernController remembered;lock(gate)remembered=lastConfigurationRuntime;if(remembered!=null){if(LaunchProfiles.Pending(remembered.engine))return remembered;lock(remembered.startupGate)if(remembered.startupAttempt!=null&&ActiveStartup(remembered.startupAttempt))return remembered;}
-  foreach(var resolution in ConfigurationProfiles().List().Where(r=>r.Available)){
+  // Runtime journals belong to catalog identities, not to surviving profile rows.
+  // A selected built-in can move to another version and named rows can be deleted.
+  var catalog=new VersionLibrary(data,legacyGame,defaultUser).List();
+  var trusted=new List<LaunchConfigurationResolution>();
+  foreach(var version in catalog.Where(v=>v.Installed))trusted.Add(new LaunchConfigurationResolution{Id="steam",Name=version.Name,Kind="builtin",VersionId=version.Id,Version=version,Available=true,Context=LauncherConfiguration.ResolveIndexed(data,version.GamePath,version.UserPath,null,defaultUser,3072).Bind("steam")});
+  foreach(var registered in SaveEnvironments.RegisteredForUsers(data,catalog.Select(v=>v.UserPath).Concat(new[]{defaultUser})).Where(r=>r.Record!=null)){var row=registered.Record;trusted.Add(new LaunchConfigurationResolution{Id="snapshot:"+row.Id,Name=row.Name,Kind="frozen",Available=true,Snapshot=row});}
+  foreach(var resolution in trusted){
    string game=resolution.Context==null?resolution.Snapshot.GamePath:resolution.Context.Game,userPath=resolution.Context==null?resolution.Snapshot.UserPath:resolution.Context.User;
    var known=new Engine(game,userPath,data,test);known.BindConfiguration(resolution);if(!LaunchProfiles.Pending(known))continue;
    var recovered=LaunchProfiles.RecoveryConfiguration(known);if(recovered==null)continue;var owner=BoundConfigurationController(recovered);lock(gate)lastConfigurationRuntime=owner;return owner;
