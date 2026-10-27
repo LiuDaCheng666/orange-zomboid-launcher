@@ -61,15 +61,6 @@
 - [ ] Keep Steam takeover optional with single confirmation; force clears this account/game full options and reports unhandled cleanup truthfully. Mode change remains usable during unrelated reads; actual conflicting writes only serialized. Release failure/cancel recovery correctly.
 - [ ] Run affected native/host/process tests, produce actual generated args/settings preservation proof, review and commit.
 
-### Task 6: Homepage choices and native click/visual acceptance
-
-**Files:** Web/app.js/app.css, focused mode UI suite and production native harness, usage/quality docs.
-
-- [ ] RED actual DOM cases show 启动配置 with 启动器配置(default)/Steam 配置/原版配置 plus named normal and snapshot configurations. Create/edit uses one configuration workflow for version/components/mod list/order; keep existing ordinary named mod-list compatibility without merging their storage semantics silently. Only selected-mode description and actual memory/components appear; Steam takeover/force actions only in its mode.
-- [ ] Wire strict native actions, persisted selection and single force confirmation. All targets use selection; no hollow selector, raw JSON, duplicate progress or irrelevant old-parameter gate in launcher mode.
-- [ ] Actual clicks -> production controller -> real owned files for select/install/enable/approval/launch preparation, failure/cancel/retry and Steam confirmation; inspect desktop/narrow dark/light and final statuses. Tests may not claim injected ProcessStart results are actual game entry.
-- [ ] Run affected DOM/native suites, inspect screenshots, review and commit. Build/game acceptance follows Task7 after the shared editor and frozen backend are integrated.
-
 ### Task 5: Editable frozen configuration contents
 
 **Files:** SaveEnvironments/SaveEnvironmentRuntime transaction boundary, focused snapshot configuration editor service, controller/host and shared configuration UI, affected native/file/JVM tests.
@@ -78,6 +69,15 @@
 - [ ] Add atomic snapshot revision transaction under same per-snapshot resource lease. Use manifest/index hash publication with recoverable rollback on failure/cancel; do not copy whole game again, auto backup user saves or introduce unrelated global tasks. Keep existing identity/manifest invariants and active-process file ownership. Copied new root remains inside chosen snapshot; removal only drops selected IDs and unreferenced owned root. Existing IDs/order untouched except user's explicit edits.
 - [ ] Rebuild effective discovery/default/preload/approval configuration for that snapshot from current revised copied roots; list edits consistent through next launch/save/exit/reopen. Apply explicit replacement/skips consistently. Original source metadata warnings may inform but never gate unchanged available content.
 - [ ] Actual shared editor DOM clicks→production native edit→real copied files/manifest/runtime; inspect progress/count/cancel, reorder animation and post-error retry. Verify source changes do not alter copy and exact gameversion stays pinned. Actual production-entry game acceptance for edited snapshot remains required before publication.
+
+### Task 6: Homepage choices and native click/visual acceptance
+
+**Files:** Web/app.js/app.css, focused mode UI suite and production native harness, usage/quality docs.
+
+- [ ] RED actual DOM cases show 启动配置 with 启动器配置(default)/Steam 配置/原版配置 plus named normal and snapshot configurations. Create/edit uses one configuration workflow for version/components/mod list/order; keep existing ordinary named mod-list compatibility without merging their storage semantics silently. Only selected-mode description and actual memory/components appear; Steam takeover/force actions only in its mode.
+- [ ] Wire strict native actions, persisted selection and single force confirmation. All targets use selection; no hollow selector, raw JSON, duplicate progress or irrelevant old-parameter gate in launcher mode.
+- [ ] Actual clicks -> production controller -> real owned files for select/install/enable/approval/launch preparation, failure/cancel/retry and Steam confirmation; inspect desktop/narrow dark/light and final statuses. Tests may not claim injected ProcessStart results are actual game entry.
+- [ ] Run affected DOM/native suites, inspect screenshots, review and commit. Build/game acceptance follows Task7 after the shared editor and frozen backend are integrated.
 
 ### Task 7: Final local candidate and production-entry acceptance
 
