@@ -38,25 +38,37 @@
 - [ ] Add separate live discovery contract selecting owned Java roots and retaining Lua, owned default/loaded file routing and vanilla exclusion. Keep frozen parser/requirements intact. Initialize Buddy deny-new/no blanket trusts and include enabled components via explicit lists/approvals.
 - [ ] Execute isolated Java contract probes and native component lifecycle with real copied package bytes; source hashes unchanged. Review/commit with exact unsupported boundaries.
 
-### Task 3: Named profiles, production launch, status, memory and recovery integration
+### Task 3: Named configuration storage and effective-context resolution
+
+**Files:** focused LaunchConfigurationProfiles.cs with tests; LauncherConfiguration.cs to support explicit named identity/root; build registration.
+
+**Interface:** built-in IDs launcher/steam/vanilla and named live/frozen entries form one inventory. Named normal entries hold name/version ID/ordinary mod IDs, while their component state and memory belong to an instance-scoped LauncherConfiguration. Frozen entries resolve registered SaveEnvironments records read-only. Task4 consumes selection resolution; Task6 consumes native list/edit results.
+
+- [ ] RED create/list/select/rename/version selection/mod order of two independent configurations; selection persists across restart; named A component/default/memory state cannot change B; frozen entries expose pinned game+mods without copying another game. Original PlayProfiles storage preserved and not silently applied/migrated.
+- [ ] Implement small per-user configuration index with exact selected ID; built-ins always available, new named defaults launcher mode. Resolve installed VersionLibrary IDs read-only and exact snapshot registration; do not select global VersionLibrary as a side effect. Named context key incorporates configuration ID at the same directory depth as default to avoid deep nested Windows paths. No arbitrary browser game/source path accepted by the public resolution API.
+- [ ] Save ordinary list/order only into chosen context, preserving exact bytes on no-op. Preserve safely parsed prior memory setting on initial default configuration when available; arbitrary original VM arguments never imported. Profile create/delete/select/queries do not acquire global game locks; only the chosen index/context writer serializes. Missing selected version reports its exact unavailability without blocking unrelated pages.
+- [ ] Native/file fixtures verify source/Steam/save/default/other profile bytes and target resolution; commit/report API and tests for review.
+
+### Task 4: Production launch, components, status, memory and recovery integration
 
 **Files:** Program.cs Engine, ModernController/LibraryController/ModernHostPolicy, LaunchProfiles/LauncherLaunch/LaunchPreflight/GameStartupComponent, process/recovery tests.
 
 **Interface:** selected mode persisted from Task1; components/discovery from Task2; new strict host read/change action for homepage. All mode-aware consumers share the bound context, including controller restart.
 
 - [ ] RED fixtures: polluted original config doesn't block launcher/vanilla normal/save/server; Steam still reads its settings; owned memory/config status correct; PID/birth journal/restart/forced-stop preserves selected game classification; no unrelated process killed.
-- [ ] Add named normal configuration store choosing installed version, independent ordinary mod order and component state. Extend Task1 context identity/root for profile ID without changing existing default context. Bind production selected configuration on engine selection; route explicit launches/preparation to owned assets. No original JSON/BAT component install side effects. Snapshot selection can use its pinned game/mod context for normal/menu, save and server targets without silently changing original mod files. Adjust evidence/preflight to selected configuration rather than unused files.
+- [ ] Bind Task3 selected configuration on production engine selection; route explicit launches/preparation to owned assets. No original JSON/BAT component install side effects. Snapshot selection can use its pinned game/mod context for normal/menu, save and server targets without silently changing original mod files. Adjust evidence/preflight to selected configuration rather than unused files. Default launcher save targets retain the save's ordinary choices plus selected components; an explicitly selected named configuration supplies its own ordinary choices, without writing the original save list.
+- [ ] Route component/Java-list/install/dependency/approval actions to Task2 backend before legacy mutation adapters. Normal configurations follow current selected-source bytes; snapshots use copied sources only. Reuse original workflow exact download/source resolution; metadata sorting cannot become a generic normal-operation/launch gate. Actual missing source/selected component failure is named and actionable.
 - [ ] Keep Steam takeover optional with single confirmation; force clears this account/game full options and reports unhandled cleanup truthfully. Mode change remains usable during unrelated reads; actual conflicting writes only serialized. Release failure/cancel recovery correctly.
 - [ ] Run affected native/host/process tests, produce actual generated args/settings preservation proof, review and commit.
 
-### Task 4: Homepage choices and native click/visual acceptance
+### Task 6: Homepage choices and native click/visual acceptance
 
 **Files:** Web/app.js/app.css, focused mode UI suite and production native harness, usage/quality docs.
 
 - [ ] RED actual DOM cases show 启动配置 with 启动器配置(default)/Steam 配置/原版配置 plus named normal and snapshot configurations. Create/edit uses one configuration workflow for version/components/mod list/order; keep existing ordinary named mod-list compatibility without merging their storage semantics silently. Only selected-mode description and actual memory/components appear; Steam takeover/force actions only in its mode.
 - [ ] Wire strict native actions, persisted selection and single force confirmation. All targets use selection; no hollow selector, raw JSON, duplicate progress or irrelevant old-parameter gate in launcher mode.
 - [ ] Actual clicks -> production controller -> real owned files for select/install/enable/approval/launch preparation, failure/cancel/retry and Steam confirmation; inspect desktop/narrow dark/light and final statuses. Tests may not claim injected ProcessStart results are actual game entry.
-- [ ] Build local immutable candidate, verify bootstrap RSA/file hashes and NotSigned status. Review code; perform production-entry actual game acceptance if feasible within foreground constraint. If foreground required, preserve candidate and report concrete unverified paths, no publication/completion claim until accepted.
+- [ ] Run affected DOM/native suites, inspect screenshots, review and commit. Build/game acceptance follows Task7 after the shared editor and frozen backend are integrated.
 
 ### Task 5: Editable frozen configuration contents
 
@@ -66,3 +78,9 @@
 - [ ] Add atomic snapshot revision transaction under same per-snapshot resource lease. Use manifest/index hash publication with recoverable rollback on failure/cancel; do not copy whole game again, auto backup user saves or introduce unrelated global tasks. Keep existing identity/manifest invariants and active-process file ownership. Copied new root remains inside chosen snapshot; removal only drops selected IDs and unreferenced owned root. Existing IDs/order untouched except user's explicit edits.
 - [ ] Rebuild effective discovery/default/preload/approval configuration for that snapshot from current revised copied roots; list edits consistent through next launch/save/exit/reopen. Apply explicit replacement/skips consistently. Original source metadata warnings may inform but never gate unchanged available content.
 - [ ] Actual shared editor DOM clicks→production native edit→real copied files/manifest/runtime; inspect progress/count/cancel, reorder animation and post-error retry. Verify source changes do not alter copy and exact gameversion stays pinned. Actual production-entry game acceptance for edited snapshot remains required before publication.
+
+### Task 7: Final local candidate and production-entry acceptance
+
+- [ ] Review the whole branch and resolve Critical/Important findings. Run affected checks after final changes; retain per-task evidence instead of mechanically repeating every project suite.
+- [ ] Build immutable local candidate, verify bootstrap RSA/all listed file hashes and Windows NotSigned status truthfully; no VERSION/publication change by this plan.
+- [ ] Use candidate production entry/exact arguments for actual menu, selected Java/Lua provenance, named configuration, Chinese-path edited snapshot save/save-exit/relaunch, multiplayer, process/recovery/force-stop. Keep real user data and foreground intact. If actual foreground interaction is indispensable, prepare the concrete candidate first and request that limited permission; no game acceptance/completion/publication claim before it passes.
