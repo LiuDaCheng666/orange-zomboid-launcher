@@ -11,6 +11,7 @@ $jar=if($JdkPath){Join-Path $JdkPath 'bin\jar.exe'}else{(Get-Command jar.exe -Er
 $output=Join-Path ([IO.Path]::GetTempPath()) ('ozl-live-'+[guid]::NewGuid().ToString('N').Substring(0,8))
 $classes=Join-Path $output 'classes';New-Item -ItemType Directory -Path $classes -Force | Out-Null
 $sources=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool\LiveSource') -Recurse -Filter '*.java' -File | Sort-Object FullName | ForEach-Object FullName)
+$sources+=@('ActiveSelectionSession.java','ActiveTargetContract.java','ActiveSelectionHooks.java')|ForEach-Object{Join-Path $PSScriptRoot ('Orange3DTool/EnvironmentSource/ozl/environment/'+$_)}
 $sources+=@(Join-Path $PSScriptRoot 'Orange3DTool/EnvironmentSource/ozl/environment/SafePaths.java');$sources+=@(Join-Path $PSScriptRoot 'Orange3DTool/EnvironmentSource/ozl/environment/TargetContract.java')
 if($sources.Count -eq 0){throw 'Environment agent sources missing'}
 & $javac -encoding UTF-8 --release 8 -Xlint:-options -classpath $buddy -d $classes $sources

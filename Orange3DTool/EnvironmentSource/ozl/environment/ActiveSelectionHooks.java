@@ -1,0 +1,31 @@
+package ozl.environment;
+import java.nio.file.*;import java.util.*;import java.util.function.*;import net.bytebuddy.asm.*;import net.bytebuddy.dynamic.DynamicType;import static net.bytebuddy.matcher.ElementMatchers.*;
+/** Shared active-list phase hooks; dependency metadata is intentionally separate. */
+public final class ActiveSelectionHooks {
+ private static ActiveSelectionSession selection;private static Consumer<List<String>> clientMerge;private static Path game;
+ static void configure(Path gamePath,Path user,Path choices,boolean override,BiConsumer<List<String>,List<String>> normalize,Consumer<List<String>> merge){game=gamePath;selection=new ActiveSelectionSession(user,choices,override,normalize);clientMerge=merge;}
+ static DynamicType.Builder<?> apply(DynamicType.Builder<?> builder,String type){try{
+  if(type.equals("zombie.modding.ActiveMods"))return builder.visit(Advice.to(Copied.class).on(named("copyFrom").and(takesArguments(1))));
+  if(type.equals("zombie.modding.ActiveModsFile"))return builder.visit(Advice.to(ReadSource.class).on(named("read").and(takesArguments(2)))).visit(Advice.to(WriteSource.class).on(named("write").and(takesArguments(2))));
+  if(!type.equals("zombie.ZomboidFileSystem"))return builder;
+  return builder.visit(Advice.to(BeforeLoad.class).on(named("loadMods").and(takesArguments(String.class))))
+   .visit(Advice.to(DefaultRead.class).on(named("readDefaultModsTxt").and(takesArguments(0))))
+   .visit(MemberSubstitution.strict().method(named("loadMods").and(isDeclaredBy(named("zombie.ZomboidFileSystem"))).and(takesArguments(List.class)).and(returns(void.class))).replaceWith(ActiveSelectionHooks.class.getMethod("loadSelected",Object.class,List.class)).on(named("loadMods").and(takesArguments(String.class))));
+ }catch(Exception failure){throw new IllegalStateException("active selection hook is unavailable",failure);}}
+ @SuppressWarnings("unchecked") private static List<String> mods(Object active)throws Exception{java.lang.reflect.Field field=active.getClass().getDeclaredField("mods");field.setAccessible(true);return (List<String>)field.get(active);}
+ private static String id(Object active)throws Exception{java.lang.reflect.Field field=active.getClass().getDeclaredField("id");field.setAccessible(true);return (String)field.get(active);}
+ public static boolean client(ClassLoader loader)throws Exception{Class<?> type=Class.forName("zombie.network.GameClient",false,loader);Path actual=SafePaths.canonical(Paths.get(type.getProtectionDomain().getCodeSource().getLocation().toURI()),true,false);if(!actual.equals(game.resolve("projectzomboid.jar")))throw new IllegalStateException("foreign client phase source");java.lang.reflect.Field field=type.getField("client");if(field.getType()!=boolean.class||!java.lang.reflect.Modifier.isStatic(field.getModifiers()))throw new IllegalStateException("invalid client phase");return field.getBoolean(null);}
+ public static void defaultLoaded(Object active){try{selection.defaultLoaded(mods(active));}catch(Throwable failure){stop("default selection failed",failure);}}
+ public static void copied(Object target,Object source,String id,List<String> ids){if(!"currentGame".equals(id))return;try{selection.copied(target,source,id,ids,client(target.getClass().getClassLoader()));}catch(Throwable failure){stop("current selection failed",failure);}}
+ public static String readSource(String file,Object active){try{return selection.readPath(file,active);}catch(Throwable failure){stop("save metadata provenance failed",failure);return file;}}
+ public static void readCompleted(Object active,boolean success){try{selection.readCompleted(active,mods(active),success,client(active.getClass().getClassLoader()));}catch(Throwable failure){stop("save metadata selection failed",failure);}}
+ public static String writeSource(String file,Object active){try{return selection.writePath(file,active,id(active));}catch(Throwable failure){stop("save metadata destination failed",failure);return file;}}
+ public static void beforeLoad(Object filesystem,String name){try{ClassLoader loader=filesystem.getClass().getClassLoader();if(!"currentGame".equals(name)||client(loader))return;Class<?> active=Class.forName("zombie.modding.ActiveMods",false,loader);Object selected=active.getMethod("getById",String.class).invoke(null,name);selection.loading(name,mods(selected),false);}catch(Throwable failure){stop("local selection preparation failed",failure);}}
+ public static void loadSelected(Object filesystem,List<String> ids){try{if(client(filesystem.getClass().getClassLoader()))clientMerge.accept(ids);filesystem.getClass().getMethod("loadMods",List.class).invoke(filesystem,ids);}catch(Throwable failure){stop("selected phase loading failed",failure);}}
+ private static void stop(String reason,Throwable failure){System.err.println("[OZL-ACTIVE] isolation failure: "+reason+" ("+failure.getClass().getSimpleName()+")");System.err.flush();Runtime.getRuntime().halt(78);}
+ public static final class BeforeLoad {@Advice.OnMethodEnter public static void enter(@Advice.This Object filesystem,@Advice.Argument(0) String name){ActiveSelectionHooks.beforeLoad(filesystem,name);}}
+ public static final class DefaultRead {@Advice.OnMethodExit public static void exit(@Advice.Return Object active){ActiveSelectionHooks.defaultLoaded(active);}}
+ public static final class Copied {@Advice.OnMethodExit public static void exit(@Advice.This Object target,@Advice.Argument(0) Object source,@Advice.FieldValue("id") String id,@Advice.FieldValue("mods") ArrayList<String> ids){ActiveSelectionHooks.copied(target,source,id,ids);}}
+ public static final class ReadSource {@Advice.OnMethodEnter public static void enter(@Advice.Argument(value=0,readOnly=false) String file,@Advice.Argument(1) Object active){file=ActiveSelectionHooks.readSource(file,active);}@Advice.OnMethodExit public static void exit(@Advice.Argument(1) Object active,@Advice.Return boolean success){ActiveSelectionHooks.readCompleted(active,success);}}
+ public static final class WriteSource {@Advice.OnMethodEnter public static void enter(@Advice.Argument(value=0,readOnly=false) String file,@Advice.Argument(1) Object active){file=ActiveSelectionHooks.writeSource(file,active);}}
+}
