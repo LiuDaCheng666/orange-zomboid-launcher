@@ -1,0 +1,7 @@
+package ozl.environment.tests;
+import java.nio.file.*;import java.lang.reflect.*;import java.util.*;
+public final class BuddyGateProbe {
+ static void check(boolean ok,String reason){if(!ok)throw new AssertionError(reason);}
+ public static void main(String[] args)throws Exception{Path selected=Paths.get(args[0]),external=Paths.get(args[1]);Class<?> loader=Class.forName("me.zed_0xff.zombie_buddy.Loader");Method append=loader.getDeclaredMethod("addJarToClasspath",Path.class,String.class,String.class);append.setAccessible(true);Class<?> phase=Class.forName("me.zed_0xff.zombie_buddy.Loader$Phase");Method load=loader.getDeclaredMethod("loadJar",Path.class,String.class,String.class,phase);load.setAccessible(true);Object premain=Enum.valueOf((Class)phase,"PREMAIN");
+  check(!(Boolean)load.invoke(null,external,"fixture.payload",null,premain),"unknown PREMAIN Java rejected");check(!(Boolean)append.invoke(null,external,"fixture.payload",args[2]),"external identical approved hash rejected at append");check(!(Boolean)append.invoke(null,selected,"wrong.pkg",args[2]),"wrong package rejected");check((Boolean)append.invoke(null,selected,"fixture.payload",args[2]),"explicit selected approved payload appended by actual Buddy");Class.forName("fixture.payload.Marker");System.out.println("PASS actual Buddy compiled loadJar/append gate; only selected current source loaded");}
+}

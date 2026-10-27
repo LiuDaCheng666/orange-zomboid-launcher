@@ -8,7 +8,7 @@ $buddy=Join-Path $PSScriptRoot 'Dependencies\ZombieBuddy-v2.3.4.jar'
 if(-not(Test-Path -LiteralPath $buddy) -or (Get-FileHash -LiteralPath $buddy -Algorithm SHA256).Hash -ne 'EB79B9876332010733A8E0D7CE4FE0377846059A9E28859029E2A0FB449F6CF2'){throw 'Pinned Byte Buddy development container missing or changed; prepare the existing dependency first.'}
 $javac=if($JdkPath){Join-Path $JdkPath 'bin\javac.exe'}else{(Get-Command javac.exe -ErrorAction Stop).Source}
 $jar=if($JdkPath){Join-Path $JdkPath 'bin\jar.exe'}else{(Get-Command jar.exe -ErrorAction Stop).Source}
-$output=Join-Path $PSScriptRoot ('artifacts\environment-java-'+[guid]::NewGuid().ToString('N'))
+$output=Join-Path ([IO.Path]::GetTempPath()) ('ozl-env-'+[guid]::NewGuid().ToString('N').Substring(0,8))
 $classes=Join-Path $output 'classes';New-Item -ItemType Directory -Path $classes -Force | Out-Null
 $sources=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool\EnvironmentSource') -Recurse -Filter '*.java' -File | Sort-Object FullName | ForEach-Object FullName)
 if($sources.Count -eq 0){throw 'Environment agent sources missing'}

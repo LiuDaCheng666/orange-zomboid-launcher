@@ -15,7 +15,8 @@ if((Get-FileHash -LiteralPath $buddy -Algorithm SHA256).Hash -ne $buddyHash){thr
 $files=@(Get-ChildItem -LiteralPath $source -Recurse -Filter '*.java' -File | Sort-Object FullName)
 if($files.Count -eq 0){throw 'Startup Java sources missing'}
 $environmentFiles=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool\EnvironmentSource') -Recurse -Filter '*.java' -File | Sort-Object FullName)
-$inputs=@($PSCommandPath,$logo,(Join-Path $PSScriptRoot 'Build-EnvironmentComponent.ps1'))+@($files.FullName)+@($environmentFiles.FullName)
+$liveFiles=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Orange3DTool\LiveSource') -Recurse -Filter '*.java' -File | Sort-Object FullName)
+$inputs=@($PSCommandPath,$logo,(Join-Path $PSScriptRoot 'Build-EnvironmentComponent.ps1'),(Join-Path $PSScriptRoot 'Build-LiveComponent.ps1'))+@($files.FullName)+@($environmentFiles.FullName)+@($liveFiles.FullName)
 $fingerprint=(@($inputs | ForEach-Object {(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash})+$buddyHash)-join ':'
 if(-not $Force -and (Test-Path -LiteralPath $asset) -and (Test-Path -LiteralPath $stamp)){
  try{$cached=Get-Content -LiteralPath $stamp -Raw | ConvertFrom-Json;if($cached.inputs -eq $fingerprint -and $cached.jar -eq (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash){return}}catch{}
@@ -33,7 +34,7 @@ $gameApi=if($GameDirectory){Join-Path $GameDirectory 'projectzomboid.jar'}else{'
 if(-not $gameApi -or -not(Test-Path -LiteralPath $gameApi)){throw 'Pass -GameDirectory pointing to an installed Project Zomboid; its API is compile-only and is never packaged.'}
 $javac=if($JdkPath){Join-Path $JdkPath 'bin\javac.exe'}else{(Get-Command javac.exe -ErrorAction Stop).Source}
 $jar=if($JdkPath){Join-Path $JdkPath 'bin\jar.exe'}else{(Get-Command jar.exe -ErrorAction Stop).Source}
-$output=Join-Path $PSScriptRoot ('artifacts\startup-java-'+[guid]::NewGuid().ToString('N'))
+$output=Join-Path ([IO.Path]::GetTempPath()) ('ozl-startup-'+[guid]::NewGuid().ToString('N').Substring(0,8))
 $classes=Join-Path $output 'classes'
 New-Item -ItemType Directory -Path $classes -Force | Out-Null
 & $javac -encoding UTF-8 --release 17 -classpath ($buddy+';'+$gameApi) -d $classes $files.FullName
@@ -43,6 +44,9 @@ Copy-Item -LiteralPath $logo -Destination $logoTarget
 $environmentAgent=Join-Path $classes 'ozl\environment\EnvironmentAgent.jar'
 & (Join-Path $PSScriptRoot 'Build-EnvironmentComponent.ps1') -OutputPath $environmentAgent -JdkPath $JdkPath
 if($LASTEXITCODE -ne 0){throw 'Mandatory environment asset compilation failed'}
+$liveAgent=Join-Path $classes 'ozl\live\LiveEnvironmentAgent.jar'
+& (Join-Path $PSScriptRoot 'Build-LiveComponent.ps1') -OutputPath $liveAgent -JdkPath $JdkPath
+if($LASTEXITCODE -ne 0){throw 'Mandatory live discovery asset compilation failed'}
 $container=[IO.Compression.ZipFile]::OpenRead($buddy)
 try{
  foreach($entry in $container.Entries){

@@ -7,7 +7,7 @@ namespace PZ3D {
  static class BundledAssets {
   const string Resource="Orange3D.Bundle.zip";
   static readonly object sync=new object();
-  public static byte[] ReadOwnAsset(string name){if(name=="OrangeEnvironment.jar")return ReadEnvironmentAgent();if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua"&&name!="OrangeStartup.jar")throw new InvalidDataException("Unknown bridge asset.");
+  public static byte[] ReadOwnAsset(string name){if(name=="OrangeEnvironment.jar")return ReadEnvironmentAgent();if(name=="OrangeLive.jar")return ReadLiveAgent();if(name!="OrangeShootPresentation.jar"&&name!="OrangeLaunchBridge.lua"&&name!="OrangeStartup.jar")throw new InvalidDataException("Unknown bridge asset.");
 #if OZL_VELOPACK
  if(DistributionPaths.Enabled)return DistributionBootstrap.Asset("Assets/"+name);
 #endif
@@ -20,6 +20,13 @@ if(Assembly.GetExecutingAssembly().GetManifestResourceInfo("Launcher.UpdatePubli
    using(var input=new MemoryStream(ReadOwnAsset("OrangeStartup.jar")))using(var archive=new ZipArchive(input,ZipArchiveMode.Read)){
     ZipArchiveEntry selected=null;foreach(var entry in archive.Entries)if(entry.FullName=="ozl/environment/EnvironmentAgent.jar"){if(selected!=null)throw new InvalidDataException("Duplicate environment agent asset.");selected=entry;}
     if(selected==null||selected.Length<=0||selected.Length>33554432)throw new InvalidDataException("Missing environment agent asset.");
+    using(var content=selected.Open())using(var output=new MemoryStream()){content.CopyTo(output);return output.ToArray();}
+   }
+  }
+  static byte[] ReadLiveAgent(){
+   using(var input=new MemoryStream(ReadOwnAsset("OrangeStartup.jar")))using(var archive=new ZipArchive(input,ZipArchiveMode.Read)){
+    ZipArchiveEntry selected=null;foreach(var entry in archive.Entries)if(entry.FullName=="ozl/live/LiveEnvironmentAgent.jar"){if(selected!=null)throw new InvalidDataException("Duplicate live discovery agent asset.");selected=entry;}
+    if(selected==null||selected.Length<=0||selected.Length>33554432)throw new InvalidDataException("Missing live discovery agent asset.");
     using(var content=selected.Open())using(var output=new MemoryStream()){content.CopyTo(output);return output.ToArray();}
    }
   }
