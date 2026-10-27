@@ -56,6 +56,7 @@ function Get-OzlProductionSources {
         'InstallWorkflow.cs',
         'JavaApprovals.cs',
         'LauncherContact.cs',
+        'LauncherConfiguration.cs',
         'LauncherDiagnostics.cs',
         'LauncherFeatures.cs',
         'LauncherJournal.cs',
