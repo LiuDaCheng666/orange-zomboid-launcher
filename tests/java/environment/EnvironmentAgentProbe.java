@@ -14,7 +14,19 @@ public final class EnvironmentAgentProbe {
   if(mode.equals("foreign-bridge")){Path folder=Files.createDirectories(user.resolve("mods/OrangeLauncherSession"));Files.write(folder.resolve("mod.info"),"id=ForeignMod\n".getBytes(StandardCharsets.UTF_8));new ZomboidFileSystem().getAllModFolders(new ArrayList<String>());throw new AssertionError("foreign bridge accepted");}
   if(mode.equals("null-output")){new ZomboidFileSystem().getAllModFolders(null);throw new AssertionError("invalid output ignored");}
   if(mode.equals("delete-settings")){Files.move(mods,mods.resolveSibling("removed-settings"));new ZomboidFileSystem().defaultText();throw new AssertionError("missing frozen mod settings fell through");}
+  if(mode.equals("dependency-source")){new zombie.gameStates.ChooseGameInfo.Mod("owned-mod-root").getRequire();throw new AssertionError("foreign dependency class accepted");}
+  if(mode.equals("choices")){
+   ActiveMods active=new ActiveMods("save");ArrayList<String> original=active.getMods();original.addAll(Arrays.asList("Keep","OldMod","SkippedMod","NewMod"));
+   check(active.getMods()==original&&original.equals(Arrays.asList("Keep","NewMod")),"save ActiveMods are mapped and skipped in place with existing replacement deduplicated");
+   original.add("OrangeLauncherSession");check(active.getMods()==original&&original.equals(Arrays.asList("Keep","NewMod","OrangeLauncherSession")),"repeated mapping is idempotent and keeps the mutable bridge insertion");
+   zombie.gameStates.ChooseGameInfo.Mod dependent=new zombie.gameStates.ChooseGameInfo.Mod("owned-mod-root");ArrayList<String> requires=dependent.getRequire();requires.addAll(Arrays.asList("OldMod","SkippedMod","Keep","NewMod"));
+   check(dependent.getRequire()==requires&&requires.equals(Arrays.asList("NewMod","Keep")),"native dependency getter applies the same explicit choices without changing mod.info");
+   ArrayList<String> parsed=new ArrayList<String>(Arrays.asList(" OldMod "," SkippedMod ","Keep","NewMod"));dependent.setRequire(parsed);java.lang.reflect.Field field=dependent.getClass().getDeclaredField("require");field.setAccessible(true);
+   check(field.get(dependent)==parsed&&parsed.equals(Arrays.asList("NewMod","Keep")),"parsed dependency setter normalizes before native direct-field availability checks");
+   System.out.println("PASS "+checks+" explicit ActiveMods/dependency choices checks");return;
+  }
   ZomboidFileSystem fs=new ZomboidFileSystem();List<String> folders=new ArrayList<String>(Arrays.asList("untrusted cached root"));fs.getAllModFolders(folders);
+  ActiveMods unchanged=new ActiveMods("legacy-save");ArrayList<String> legacy=unchanged.getMods();legacy.addAll(Arrays.asList("OldMod","SkippedMod","NewMod"));check(unchanged.getMods()==legacy&&legacy.equals(Arrays.asList("OldMod","SkippedMod","NewMod")),"without explicit choices active save mods remain unchanged");
   List<String> expected=new ArrayList<String>(Arrays.asList(first.toString(),second.toString()));if(bridge)expected.add(user.resolve("mods/OrangeLauncherSession").toString());
   check(folders.equals(expected),"native discovery clears and returns only full frozen roots in captured order plus owned bridge");
   check(fs.liveScans==0,"discovery never executes Steam/Workshop/local scanning");

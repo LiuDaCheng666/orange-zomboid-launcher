@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
@@ -81,10 +82,28 @@ namespace PZ3D {
    return new Dictionary<string,byte[]>{{Path.Combine(folder,"common","mod.info"),info},{Path.Combine(folder,"42","mod.info"),Encoding.UTF8.GetBytes("name=Orange Launcher Session\nid="+ModId+"\n")},{Path.Combine(folder,"42","media","lua","client","OrangeLaunchBridge.lua"),Script()}};
   }
   static string QuoteArgument(string value){var result=new StringBuilder("\"");int slashes=0;foreach(char c in value){if(c=='\\'){slashes++;continue;}if(c=='"'){result.Append('\\',slashes*2+1);result.Append(c);}else{result.Append('\\',slashes);result.Append(c);}slashes=0;}return result.Append('\\',slashes*2).Append('"').ToString();}
+  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct WindowsVersionInfo {public int Size,Major,Minor,Build,Platform;[MarshalAs(UnmanagedType.ByValTStr,SizeConst=128)]public string ServicePack;}
+  [DllImport("ntdll.dll",CharSet=CharSet.Unicode)]static extern int RtlGetVersion(ref WindowsVersionInfo version);
+  internal static Version CurrentWindowsVersion(){try{var version=new WindowsVersionInfo{Size=Marshal.SizeOf(typeof(WindowsVersionInfo))};if(RtlGetVersion(ref version)==0&&version.Major>0)return new Version(version.Major,version.Minor,version.Build);}catch{}return Environment.OSVersion.Version;}
+  internal static string[] FrozenJavaArguments(Dictionary<string,object> config,Version windowsVersion){
+   Func<object,string[]> strings=node=>{var sequence=node as System.Collections.IEnumerable;if(node is string||node is System.Collections.IDictionary||sequence==null)throw new IOException("快照启动参数必须为文本数组。");var items=sequence.Cast<object>().ToArray();if(items.Any(item=>!(item is string)))throw new IOException("快照启动参数必须为文本。");return items.Cast<string>().ToArray();};object value;string main=config!=null&&config.TryGetValue("mainClass",out value)?value as string:null;if(string.IsNullOrWhiteSpace(main)||!config.ContainsKey("classpath")||!config.ContainsKey("vmArgs"))throw new IOException("快照启动配置缺少主类或参数。");var arguments=new List<string>(strings(config["vmArgs"]));
+   if(config.TryGetValue("windows",out value)){var windows=value as Dictionary<string,object>;if(windows==null)throw new IOException("快照 Windows 启动配置无效。");string branch=windows.Keys.Where(key=>{Version version;return Version.TryParse(key,out version)&&version<=windowsVersion;}).OrderByDescending(key=>new Version(key)).FirstOrDefault();if(branch!=null){var selected=windows[branch] as Dictionary<string,object>;if(selected==null)throw new IOException("快照 Windows 启动分支无效。");if(selected.TryGetValue("vmArgs",out value))arguments.AddRange(strings(value));}}
+   arguments.Add("-cp");arguments.Add(string.Join(";",strings(config["classpath"])));arguments.Add(main.Replace('/','.'));return arguments.ToArray();
+  }
   internal static ProcessStartInfo BuildStartInfo(Engine e){
    foreach(string path in new[]{e.Game,e.User,Path.Combine(e.Game,"ProjectZomboid64.exe")})LauncherMaintenance.NoReparse(path);
    var start=new ProcessStartInfo(Path.Combine(Path.GetFullPath(e.Game),"ProjectZomboid64.exe")){UseShellExecute=false,WorkingDirectory=Path.GetFullPath(e.Game)};
-   if(e.ManagedVersion||e.FrozenEnvironment!=null){string cache=Path.GetFullPath(e.User);if(cache.Any(char.IsControl))throw new IOException("独立存档目录包含无效字符。");start.Arguments=QuoteArgument("-cachedir="+cache);start.EnvironmentVariables["SteamAppId"]="108600";start.EnvironmentVariables["SteamGameId"]="108600";}return start;
+   // The native launcher embeds jvm.dll; its instrument.dll dependencies must
+   // resolve beside this game's JRE instead of a different JDK inherited in PATH.
+   start.EnvironmentVariables["PATH"]=Path.Combine(Path.GetFullPath(e.Game),"jre64","bin")+";"+(start.EnvironmentVariables["PATH"]??"");
+   if(e.FrozenEnvironment!=null){
+    // The native JSON launcher passes UTF-8 option bytes through the system code
+    // page. Java's Unicode command line preserves the frozen paths verbatim.
+    try{LauncherMaintenance.NoReparse(e.Config);Dictionary<string,object> config;using(var input=new SnapshotFileSystem.Stream(e.Config,FileMode.Open,FileAccess.Read,FileShare.Read)){if(input.Length>4194304)throw new IOException("快照启动配置超过读取上限。");using(var reader=new StreamReader(input,new UTF8Encoding(false,true),true))config=new JavaScriptSerializer{MaxJsonLength=4194304}.Deserialize<Dictionary<string,object>>(reader.ReadToEnd());}
+     string[] arguments=FrozenJavaArguments(config,CurrentWindowsVersion());start.FileName=Path.Combine(Path.GetFullPath(e.Game),"jre64","bin","java.exe");LauncherMaintenance.NoReparse(start.FileName);start.CreateNoWindow=true;start.Arguments=string.Join(" ",arguments.Select(QuoteArgument));
+    }catch(Exception error){throw new IOException("无法读取已验证快照的 Java 启动配置。",error);}
+   }
+   if(e.ManagedVersion||e.FrozenEnvironment!=null){string cache=Path.GetFullPath(e.User);if(cache.Any(char.IsControl))throw new IOException("独立存档目录包含无效字符。");start.Arguments=(string.IsNullOrEmpty(start.Arguments)?"":start.Arguments+" ")+QuoteArgument("-cachedir="+cache);start.EnvironmentVariables["SteamAppId"]="108600";start.EnvironmentVariables["SteamGameId"]="108600";}return start;
   }
   static void PrivateRequest(string path,string text){LauncherMaintenance.NoReparse(path);if(File.Exists(path))throw new Exception("存在尚未清理的启动请求，拒绝覆盖。");var security=new FileSecurity();security.SetAccessRuleProtection(true,false);security.AddAccessRule(new FileSystemAccessRule(WindowsIdentity.GetCurrent().User,FileSystemRights.FullControl,AccessControlType.Allow));using(var file=new FileStream(path,FileMode.CreateNew,FileSystemRights.Write,FileShare.None,4096,FileOptions.None,security)){byte[] bytes=new UTF8Encoding(false).GetBytes(text);file.Write(bytes,0,bytes.Length);}}
   static string Payload(ProfileLaunchRequest r){Clean(r.Kind);Clean(r.Id);if(r.Kind=="save"){if(string.IsNullOrWhiteSpace(r.Mode)||string.IsNullOrWhiteSpace(r.Save)||new[]{r.Mode,r.Save}.Any(s=>s=="."||s==".."||s.IndexOfAny(new[]{'\\','/',':'})>=0)||r.Mode=="Multiplayer")throw new Exception("存档标识无效。");}else if(r.Kind=="server"){if(string.IsNullOrWhiteSpace(r.Host)||r.Port<1||r.Port>65535||string.IsNullOrWhiteSpace(r.Username))throw new Exception("服务器连接配置不完整。");}else if(r.Kind!="normal")throw new Exception("未知启动目标。");

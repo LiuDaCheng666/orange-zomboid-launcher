@@ -21,6 +21,7 @@ namespace PZ3D {
   internal static Request Begin(string action,Dictionary<string,object> payload){
    string mapped,key,description;
    switch(action){
+    case "environmentStorageChoose":mapped="environmentStorageSave";key="directory";description="选择以后创建快照的保存位置";break;
     case "environmentChooseCreate":mapped="environmentCreate";key="destination";description="选择游戏与模组快照保存位置";break;
     case "versionChooseImport":mapped="versionImport";key="path";description="选择已经安装的游戏版本文件夹";break;
     case "versionChoosePreserve":mapped="versionPreserve";key="destination";description="选择存放独立游戏版本的位置";break;

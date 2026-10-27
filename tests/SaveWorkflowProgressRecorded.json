@@ -1,0 +1,145 @@
+{
+  "provenance": {
+    "source": "Actual shipped 1.2.34 public ModernController.Execute(environmentPreview), TestMode=false, read-only metadata verified unchanged",
+    "sourceReportSha256": "032161ed3867d3594c167ce99db9ce9a13f7f9c40fe7982264f57fef69c713e7",
+    "appSha256": "CD09C38C489A31614A39AB42613EEB88CC7E1B8B4A93E3D53D58229FB2C5F140",
+    "recordedElapsedMs": 21178,
+    "recordedEventCount": 433,
+    "identity": "Save/job identities sanitized; native file/byte counters unchanged"
+  },
+  "saveId": "Sandbox/RecordedOldSave",
+  "result": {
+    "stamp": "82fa5dc120f92c6463c0b2385c381afc560ede3826f937844a686571f1a46218",
+    "bindingStamp": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saveId": "Sandbox/RecordedOldSave",
+    "gameVersion": "42.21",
+    "activeSnapshotId": "",
+    "gameBytes": 22473216918,
+    "modBytes": 5925295763,
+    "modCount": 141,
+    "warnings": [
+      "GardeniaTranslate_CN (GardeniaTranslate_CN)：存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+      "AirdropMod.20 (AirdropMod.20)：存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+      "AutoCook (AutoCook)：同一模组标识存在多个本地来源或工坊映射，无法安全选择。",
+      "WL_WeaponSlings (WL_WeaponSlings)：存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+      "dustinguished_cleaning_wipes (dustinguished_cleaning_wipes)：存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+      "Ladders42131 (Ladders42131)：存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+      "B42ModCNTranslate (B42ModCNTranslate)：存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+      "GRTranslationCN42 (GRTranslationCN42)：存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。"
+    ],
+    "ready": false,
+    "canPrepare": false,
+    "missing": [
+      {
+        "modId": "GardeniaTranslate_CN",
+        "name": "GardeniaTranslate_CN",
+        "requiredBy": "",
+        "kind": "workshop-mod",
+        "workshopId": "",
+        "reason": "存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+        "canDownload": false
+      },
+      {
+        "modId": "AirdropMod.20",
+        "name": "AirdropMod.20",
+        "requiredBy": "",
+        "kind": "workshop-mod",
+        "workshopId": "",
+        "reason": "存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+        "canDownload": false
+      },
+      {
+        "modId": "AutoCook",
+        "name": "AutoCook",
+        "requiredBy": "",
+        "kind": "ambiguous-source",
+        "workshopId": "",
+        "reason": "同一模组标识存在多个本地来源或工坊映射，无法安全选择。",
+        "canDownload": false
+      },
+      {
+        "modId": "WL_WeaponSlings",
+        "name": "WL_WeaponSlings",
+        "requiredBy": "",
+        "kind": "workshop-mod",
+        "workshopId": "",
+        "reason": "存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+        "canDownload": false
+      },
+      {
+        "modId": "dustinguished_cleaning_wipes",
+        "name": "dustinguished_cleaning_wipes",
+        "requiredBy": "",
+        "kind": "workshop-mod",
+        "workshopId": "",
+        "reason": "存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+        "canDownload": false
+      },
+      {
+        "modId": "Ladders42131",
+        "name": "Ladders42131",
+        "requiredBy": "",
+        "kind": "workshop-mod",
+        "workshopId": "",
+        "reason": "存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+        "canDownload": false
+      },
+      {
+        "modId": "B42ModCNTranslate",
+        "name": "B42ModCNTranslate",
+        "requiredBy": "",
+        "kind": "workshop-mod",
+        "workshopId": "",
+        "reason": "存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+        "canDownload": false
+      },
+      {
+        "modId": "GRTranslationCN42",
+        "name": "GRTranslationCN42",
+        "requiredBy": "",
+        "kind": "workshop-mod",
+        "workshopId": "",
+        "reason": "存档只记录模组标识，本地目录与已有快照没有唯一的工坊 ID 映射，无法安全自动下载。",
+        "canDownload": false
+      }
+    ]
+  },
+  "events": [
+    {
+      "elapsedMs": 164,
+      "jobId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "saveId": "Sandbox/RecordedOldSave",
+      "stage": "context",
+      "text": "正在核对存档和游戏版本",
+      "value": -1,
+      "completedFiles": 0,
+      "totalFiles": 0,
+      "completedBytes": 0,
+      "totalBytes": 0
+    },
+    {
+      "elapsedMs": 10456,
+      "jobId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "saveId": "Sandbox/RecordedOldSave",
+      "stage": "game-inventory",
+      "text": "正在统计游戏文件和所需空间",
+      "value": -1,
+      "completedFiles": 0,
+      "totalFiles": 0,
+      "completedBytes": 0,
+      "totalBytes": 0
+    },
+    {
+      "elapsedMs": 19818,
+      "jobId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "saveId": "Sandbox/RecordedOldSave",
+      "stage": "game-inventory",
+      "text": "正在统计游戏文件和所需空间 · 119684 个文件",
+      "value": -1,
+      "completedFiles": 119684,
+      "totalFiles": 0,
+      "completedBytes": 22473216918,
+      "totalBytes": 0
+    }
+  ]
+}

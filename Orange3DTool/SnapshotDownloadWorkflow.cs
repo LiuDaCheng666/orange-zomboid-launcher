@@ -36,5 +36,12 @@ namespace PZ3D {
     return result;
    });
   }
+  string ResolveSnapshotWorkshop(Engine selected,SaveEnvironmentMissing missing,Action<int,string> progress,CancellationToken token){
+   var result=WithSteamLane(token,()=>{var download=SnapshotDownloadEngine(selected);return SnapshotWorkshopResolver.Resolve(missing.modId,new HashSet<string>(StringComparer.Ordinal),query=>networkFetch(download,"search",new Dictionary<string,object>{{"query",query},{"page",1}},progress,token,null),token,progress);});
+   if(result.candidates.Length>1){var previous=SnapshotWorkshopResolver.HistoricalItems(selected.User,token,progress);result=SnapshotWorkshopResolver.Select(result.candidates,previous);}
+   if(result.workshopId.Length>0)return result.workshopId;
+   if(result.candidates.Length>1)throw new IOException(missing.modId+" 找到了多个工坊项目："+string.Join("；",result.candidates.Select(row=>row.name+"（"+row.workshopId+"）"))+"。请在此模组的工坊来源中选择一个。");
+   throw new IOException(missing.modId+" 没有搜到仍提供此标识的工坊项目。可填写原工坊链接重试；作者改名或删除的旧模组需要选择新版或原文件。");
+  }
  }
 }

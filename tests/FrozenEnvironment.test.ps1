@@ -1,6 +1,7 @@
 param([string]$GameDirectory='E:\Steam\steamapps\common\ProjectZomboid')
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
+$sourceGameJar=Join-Path $GameDirectory 'projectzomboid.jar';$sourceGameHash=(Get-FileHash -LiteralPath $sourceGameJar -Algorithm SHA256).Hash
 $output=Join-Path $repo ('artifacts\frozen-environment-'+[guid]::NewGuid().ToString('N'))
 $classes=Join-Path $output 'test-classes';$fixtureClasses=Join-Path $output 'fixture-classes';$agent=Join-Path $output 'EnvironmentAgent.jar'
 New-Item -ItemType Directory -Path $classes,$fixtureClasses -Force | Out-Null
@@ -52,6 +53,10 @@ function Run-ApiProbe([string[]]$GamePaths,[int]$Expected=0){
  if($code -ne $Expected -or @($lines).Count -ne 1 -or [string]$lines[0] -ne $wanted){throw "Pure API probe returned $code / $($lines -join ' '); expected $Expected / $wanted"}
  Write-Host "PASS pure API probe $wanted / exit $Expected"
 }
+function Set-Choices($Case){
+ [IO.File]::AppendAllText($Case.Manifest,"choices=$([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('OldMod'))):$([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('NewMod'))),$([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('SkippedMod'))):`n",[Text.Encoding]::ASCII)
+ $Case.Hash=(Get-FileHash -LiteralPath $Case.Manifest -Algorithm SHA256).Hash
+}
 Run-ApiProbe @($GameDirectory)
 Run-ApiProbe @() -Expected 2
 Run-ApiProbe @('relative-game') -Expected 2
@@ -59,6 +64,7 @@ Run-ApiProbe @($GameDirectory,$GameDirectory) -Expected 2
 Run-Isolated (New-Case 'without-presentation')
 Run-Isolated (New-Case 'b41-flat-bridge' 'flat')
 Run-Isolated (New-Case 'b42-versioned-bridge' 'versioned')
+$choices=New-Case 'explicit-mod-choices';Set-Choices $choices;Run-Isolated $choices -Mode 'choices'
 Run-Isolated (New-Case 'missing-manifest') -NoManifest -Expected 78
 Run-Isolated (New-Case 'changed-manifest') -Hash ('0'*64) -Expected 78
 Run-Isolated (New-Case 'deleted-root') -Mode 'delete-root' -Expected 78
@@ -66,6 +72,8 @@ Run-Isolated (New-Case 'foreign-bridge') -Mode 'foreign-bridge' -Expected 78
 Run-Isolated (New-Case 'null-output') -Mode 'null-output' -Expected 78
 Run-Isolated (New-Case 'deleted-settings') -Mode 'delete-settings' -Expected 78
 $wrong=New-Case 'wrong-class-source';Run-Isolated $wrong -Classpath ($classes+';'+$fixtureJar) -Expected 78
+$wrongActive=New-Case 'wrong-active-class-source';Set-Choices $wrongActive;Run-Isolated $wrongActive -Mode 'choices' -Classpath ($classes+';'+$fixtureJar) -Expected 78
+$wrongDependency=New-Case 'wrong-dependency-class-source';Set-Choices $wrongDependency;Run-Isolated $wrongDependency -Mode 'dependency-source' -Classpath ($classes+';'+$fixtureJar) -Expected 78
 $badClasses=Join-Path $output 'bad-classes';$badSource=Join-Path $output 'bad-source\zombie\ZomboidFileSystem.java'
 $body=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'java\environment\fixtures\zombie\ZomboidFileSystem.java')).Replace('Core.getMyDocumentFolder()','System.getProperty("ozl.fixture.user")');Write-Text $badSource $body
 New-Item -ItemType Directory -Path $badClasses -Force | Out-Null
@@ -75,7 +83,7 @@ $bad=New-Case 'changed-path-bytecode';Remove-Item -LiteralPath (Join-Path $bad.G
 if($LASTEXITCODE -ne 0){throw 'Changed API fixture JAR failed'}
 Run-Isolated $bad -Expected 78
 Run-ApiProbe @($bad.Game) -Expected 2
-$actual=New-Case 'actual-installed-api';Copy-Item -LiteralPath (Join-Path $GameDirectory 'projectzomboid.jar') -Destination (Join-Path $actual.Game 'projectzomboid.jar') -Force;Run-Isolated $actual -ActualApi
+$actual=New-Case 'actual-installed-api';Copy-Item -LiteralPath (Join-Path $GameDirectory 'projectzomboid.jar') -Destination (Join-Path $actual.Game 'projectzomboid.jar') -Force;Set-Choices $actual;Run-Isolated $actual -ActualApi
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive=[IO.Compression.ZipFile]::OpenRead($agent)
 try{
@@ -83,4 +91,5 @@ try{
  foreach($entry in $archive.Entries | Where-Object {$_.FullName.EndsWith('.class')}){$stream=$entry.Open();try{$head=New-Object byte[] 8;if($stream.Read($head,0,8) -ne 8 -or $head[6] -ne 0 -or $head[7] -gt 52 -or ($entry.FullName.StartsWith('ozl/environment/') -and $head[7] -ne 52)){throw 'Packaged environment agent/dependency bytecode exceeds Java 8'}}finally{$stream.Dispose()}}
  if(-not($archive.Entries | Where-Object FullName -eq 'META-INF/BYTE-BUDDY-LICENSE.txt')){throw 'Pinned Byte Buddy license missing'}
 }finally{$archive.Dispose()}
-'PASS mandatory frozen agent: isolated fixtures, fatal guards, actual installed API metadata, Java8 classfiles and package boundary; no game/Steam initialization'
+if((Get-FileHash -LiteralPath $sourceGameJar -Algorithm SHA256).Hash -ne $sourceGameHash){throw 'Installed source game JAR changed during read-only API verification'}
+'PASS mandatory frozen agent: isolated fixtures, fatal guards, actual saved-mod/dependency APIs, Java8 classfiles and package boundary; no game/UI/Steam entry point; installed source JAR unchanged'

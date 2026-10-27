@@ -12,8 +12,10 @@ public final class EnvironmentManifest {
     public final String id;
     public final Path game,user,home,mods,bridge,snapshot;
     public final List<Path> roots;
-    private EnvironmentManifest(String id,Path game,Path user,Path home,Path mods,Path bridge,List<Path> roots){
+    public final Map<String,String> choices;
+    private EnvironmentManifest(String id,Path game,Path user,Path home,Path mods,Path bridge,List<Path> roots,Map<String,String> choices){
         this.id=id;this.game=game;this.user=user;this.home=home;this.mods=mods;this.bridge=bridge;this.snapshot=game.getParent();this.roots=Collections.unmodifiableList(new ArrayList<Path>(roots));
+        this.choices=Collections.unmodifiableMap(new LinkedHashMap<String,String>(choices));
     }
     private static IllegalArgumentException invalid(String reason){return new IllegalArgumentException(reason);}
     private static byte[] expectedHash(String text){
@@ -29,18 +31,35 @@ public final class EnvironmentManifest {
             return Paths.get(value);
         }catch(IllegalArgumentException e){throw invalid("invalid encoded path");}
     }
+    private static String choiceId(String encoded,boolean empty)throws IOException {
+        byte[] bytes;try{bytes=Base64.getDecoder().decode(encoded);}catch(IllegalArgumentException failure){throw invalid("invalid choice encoding");}
+        if(!Base64.getEncoder().encodeToString(bytes).equals(encoded))throw invalid("noncanonical choice encoding");
+        String id=StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+        if(id.length()==0&&empty)return id;
+        if(id.length()==0||id.length()>200||!id.equals(id.trim())||id.matches(".*[\\p{Cntrl},;={}].*")||id.equals("OrangeLauncherSession"))throw invalid("invalid choice mod identity");
+        for(String part:id.split("[/\\\\]",-1))if(part.equals(".")||part.equals(".."))throw invalid("choice identity contains traversal");
+        return id;
+    }
+    private static Map<String,String> choices(String encoded)throws IOException {
+        Map<String,String> result=new LinkedHashMap<String,String>();if(encoded==null||encoded.length()==0)return result;
+        String[] entries=encoded.split(",",-1);if(entries.length>2000)throw invalid("too many mod choices");
+        for(String entry:entries){int colon=entry.indexOf(':');if(colon<1||colon!=entry.lastIndexOf(':'))throw invalid("invalid choice entry");String old=choiceId(entry.substring(0,colon),false),replacement=choiceId(entry.substring(colon+1),true);if(result.put(old,replacement)!=null)throw invalid("duplicate choice identity");}
+        for(Map.Entry<String,String> entry:result.entrySet())if(!entry.getKey().equals(entry.getValue())&&result.containsKey(entry.getValue())&&!result.get(entry.getValue()).equals(entry.getValue()))throw invalid("chained mod choice is not idempotent");
+        return result;
+    }
     public static EnvironmentManifest read(Path file,String sha256,Path cwd,Path actualHome)throws IOException {
         byte[] expected=expectedHash(sha256),bytes=SafePaths.bytes(file,4*1024*1024);
         try{if(!MessageDigest.isEqual(expected,MessageDigest.getInstance("SHA-256").digest(bytes)))throw invalid("manifest SHA-256 mismatch");}catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
         for(byte b:bytes)if((b&255)>127||(b<32&&b!='\n'&&b!='\r'))throw invalid("manifest must be plain ASCII properties");
         Map<String,String> values=new HashMap<String,String>();
-        Set<String> allowed=new HashSet<String>(Arrays.asList("version","id","game","user","home","mods","roots","bridge"));
+        Set<String> required=new HashSet<String>(Arrays.asList("version","id","game","user","home","mods","roots","bridge"));
+        Set<String> allowed=new HashSet<String>(required);allowed.add("choices");
         for(String line:new String(bytes,StandardCharsets.US_ASCII).split("\\r?\\n",-1)){
             if(line.length()==0||line.startsWith("#")||line.startsWith("!"))continue;
             int equals=line.indexOf('=');if(equals<1)throw invalid("invalid manifest property");String key=line.substring(0,equals);
             if(!allowed.contains(key)||values.put(key,line.substring(equals+1))!=null)throw invalid("unknown or duplicate manifest property");
         }
-        if(!values.keySet().equals(allowed)||!"OZLENV1".equals(values.get("version"))||!values.get("id").matches("[a-f0-9]{32}"))throw invalid("invalid manifest identity or version");
+        if(!values.keySet().containsAll(required)||!"OZLENV1".equals(values.get("version"))||!values.get("id").matches("[a-f0-9]{32}"))throw invalid("invalid manifest identity or version");
         Path game=SafePaths.canonical(path(values.get("game")),true,true),user=SafePaths.canonical(path(values.get("user")),true,true),home=SafePaths.canonical(path(values.get("home")),true,true),mods=SafePaths.canonical(path(values.get("mods")),true,true),bridge=path(values.get("bridge"));
         Path snapshot=game.getParent();if(snapshot==null||snapshot.getParent()==null)throw invalid("invalid snapshot root");SafePaths.canonical(snapshot,true,true);
         if(!SafePaths.canonical(cwd,true,true).equals(game))throw invalid("working directory differs from frozen game");
@@ -51,7 +70,7 @@ public final class EnvironmentManifest {
         if(encodedRoots.length()>0){String[] entries=encodedRoots.split(",",-1);if(entries.length>4096)throw invalid("too many frozen mod roots");
             for(String entry:entries){Path root=SafePaths.canonical(path(entry),true,true);if(!root.startsWith(snapshot)||root.equals(snapshot)||root.equals(game)||root.startsWith(home)||!unique.add(root))throw invalid("invalid, duplicate or unfrozen mod root");SafePaths.tree(root);roots.add(root);}
         }
-        EnvironmentManifest manifest=new EnvironmentManifest(values.get("id"),game,user,home,mods,bridge,roots);manifest.bridgePresent();return manifest;
+        EnvironmentManifest manifest=new EnvironmentManifest(values.get("id"),game,user,home,mods,bridge,roots,choices(values.get("choices")));manifest.bridgePresent();return manifest;
     }
     /** The sole permitted live mod root is the launcher's journal-owned bridge. */
     public boolean bridgePresent()throws IOException {
@@ -68,4 +87,11 @@ public final class EnvironmentManifest {
     public List<String> discoveryRoots()throws IOException {
         List<String> result=new ArrayList<String>();for(Path root:roots){SafePaths.canonical(root,true,true);result.add(root.toString());}if(bridgePresent())result.add(bridge.toString());return result;
     }
+    public void normalizeMods(List<String> mods){
+        if(choices.isEmpty())return;
+        List<String> mapped=new ArrayList<String>();Set<String> seen=new HashSet<String>();
+        for(String id:mods){String key=canonicalId(id),value=choices.containsKey(key)?choices.get(key):id;if(!"".equals(value)&&seen.add(canonicalId(value)))mapped.add(value);}
+        if(!mods.equals(mapped)){mods.clear();mods.addAll(mapped);}
+    }
+    private static String canonicalId(String id){id=id.trim();int start=0;while(start<id.length()&&id.charAt(start)=='\\')start++;return id.substring(start);}
 }

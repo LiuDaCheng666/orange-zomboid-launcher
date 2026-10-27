@@ -131,6 +131,13 @@ namespace PZ3D {
   internal static bool CanPrepareOwnedArgument(Engine e,string argument){if(argument!=Argument||e==null)return false;try{
    Paths(e.Game,e.User);string folder=Folder(e.Game);byte[] session=Read(Path.Combine(folder,"session.properties"),SessionLimit);var owner=Existing(folder,Read(Path.Combine(folder,"OrangeStartup.jar"),JarLimit),session,Read(Path.Combine(folder,"issues.txt"),IssueLimit),Read(Path.Combine(folder,"ownership.json"),4096));return owner!=null&&(session==null||Session(e.Game,e.User,session,false)!=null);
   }catch{return false;}}
+  // Copying a recorded prior version never authorizes running those bytes. The
+  // snapshot replaces its JAR with the bundled payload and creates its own user
+  // session; only the source session's game binding must match the source here.
+  internal static bool CanCopyOwnedArgument(Engine e,string argument){if(argument!=Argument||e==null)return false;try{
+   Paths(e.Game,e.User);string folder=Folder(e.Game);byte[] jar=Read(Path.Combine(folder,"OrangeStartup.jar"),JarLimit),session=Read(Path.Combine(folder,"session.properties"),SessionLimit);var owner=Existing(folder,jar,session,Read(Path.Combine(folder,"issues.txt"),IssueLimit),Read(Path.Combine(folder,"ownership.json"),4096));if(owner==null||jar==null||session==null)return false;
+   string sourceUser=Encoding.ASCII.GetString(session).Split('\n').Single(line=>line.StartsWith("user=",StringComparison.Ordinal));return Session(e.Game,Decode(sourceUser.Substring(5)),session,false)!=null;
+  }catch{return false;}}
   internal static void Prepare(Engine e,string sessionId){
    if(e==null)throw new ArgumentNullException("e");if(!Nonce(sessionId))throw new IOException("启动组件会话标识无效。");bool frozen=e.FrozenEnvironment!=null,enabled=Enabled(e);if(frozen&&!File.ReadAllText(e.Config).Contains(Argument))return;if(!enabled&&!frozen){UpdatePreference(e,false,true);return;}Paths(e.Game,e.User);LauncherMaintenance.NoReparse(e.Config);LauncherMaintenance.NoReparse(LaunchProfiles.Journal(e));if(LaunchProfiles.Pending(e))throw new IOException("启动会话尚未恢复，未改动启动组件。");e.GuardLaunch();byte[] payload=Payload(e);
    using(var lease=Lease(e.Game)){bool acquired=Acquire(lease);if(!acquired)throw new IOException("另一个启动组件准备正在进行。");try{
