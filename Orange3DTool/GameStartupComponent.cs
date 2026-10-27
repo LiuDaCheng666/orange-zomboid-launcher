@@ -94,7 +94,7 @@ namespace PZ3D {
    if(count==1&&atRoot)return original;
    foreach(var branch in branches)branch["vmArgs"]=((IEnumerable)branch["vmArgs"]).Cast<string>().Where(a=>a!=Argument).ToArray();config["vmArgs"]=((IEnumerable)config["vmArgs"]).Cast<string>().Concat(new[]{Argument}).ToArray();byte[] bytes=new UTF8Encoding(false).GetBytes(Json.Serialize(config));if(bytes.Length>ConfigLimit)throw new IOException("游戏启动配置超过安全大小。");return bytes;
   }
-  static string Preference(Engine e){return Path.Combine(Path.GetFullPath(e.Data),"game-startup-enabled.txt");}
+  static string Preference(Engine e){return Path.Combine(e.OwnedLaunch?e.OwnedConfiguration.Root:Path.GetFullPath(e.Data),"game-startup-enabled.txt");}
   static bool PreferenceValue(byte[] bytes){if(bytes==null)return true;string value=Encoding.ASCII.GetString(bytes);if(value=="enabled\n")return true;if(value=="disabled\n")return false;throw new IOException("加载页设置格式无效，未覆盖。");}
   internal static bool Enabled(Engine e){if(e==null)throw new ArgumentNullException("e");return PreferenceValue(Read(Preference(e),64));}
   static byte[] Detached(byte[] original,out bool installed){
@@ -102,6 +102,7 @@ namespace PZ3D {
    foreach(var branch in branches)branch["vmArgs"]=((IEnumerable)branch["vmArgs"]).Cast<string>().Where(arg=>arg!=Argument).ToArray();byte[] result=new UTF8Encoding(false).GetBytes(Json.Serialize(config));if(result.Length>ConfigLimit)throw new IOException("游戏启动配置超过安全大小。");return result;
   }
   internal static object State(Engine e){
+   if(e!=null&&e.OwnedLaunch)return new{enabled=Enabled(e),installed=Enabled(e),removable=Enabled(e),warning=""};
    bool enabled=true,installed=false,removable=false;string warning="";if(e==null)return new{enabled=enabled,installed=installed,removable=removable,warning="未选择游戏目录。"};
    try{enabled=Enabled(e);}catch(Exception error){warning=error.Message;}
    try{bool detected;Detached(Read(e.Config,ConfigLimit),out detected);installed=detected;}catch(Exception error){warning=warning==""?error.Message:warning+" "+error.Message;}
@@ -115,8 +116,8 @@ namespace PZ3D {
    catch{if(wroteConfig){try{if(Same(Read(e.Config,ConfigLimit),detached))Atomic(e.Config,config);}catch{ /* Exact detachment remains safe; never overwrite a later external edit. */ }}throw;}
   }
   static void UpdatePreference(Engine e,bool enabled,bool onlyIfDisabled){ControlGuard(e);using(var lease=Lease(e.Game)){if(!Acquire(lease))throw new IOException("另一个加载页操作正在进行。");try{byte[] preference=Read(Preference(e),64);if(onlyIfDisabled&&PreferenceValue(preference))return;byte[] config=Read(e.Config,ConfigLimit);bool installed;byte[] detached=Detached(config,out installed);SaveEnabled(e,enabled,preference,config,detached);}finally{lease.ReleaseMutex();}}}
-  internal static void SetEnabled(Engine e,bool enabled){UpdatePreference(e,enabled,false);}
-  internal static void Remove(Engine e){ControlGuard(e);using(var lease=Lease(e.Game)){if(!Acquire(lease))throw new IOException("另一个加载页操作正在进行。");try{
+  internal static void SetEnabled(Engine e,bool enabled){if(e.OwnedLaunch){e.OwnedConfiguration.Initialize();Atomic(Preference(e),Encoding.ASCII.GetBytes(enabled?"enabled\n":"disabled\n"));return;}UpdatePreference(e,enabled,false);}
+  internal static void Remove(Engine e){if(e.OwnedLaunch){SetEnabled(e,false);return;}ControlGuard(e);using(var lease=Lease(e.Game)){if(!Acquire(lease))throw new IOException("另一个加载页操作正在进行。");try{
    string folder=Folder(e.Game),recordPath=Path.Combine(folder,"ownership.json");string[] targets={Path.Combine(folder,"OrangeStartup.jar"),Path.Combine(folder,"session.properties"),Path.Combine(folder,"issues.txt")};byte[][] bytes={Read(targets[0],JarLimit),Read(targets[1],SessionLimit),Read(targets[2],IssueLimit)};byte[] record=Read(recordPath,4096),preference=Read(Preference(e),64),config=Read(e.Config,ConfigLimit);bool installed;byte[] detached=Detached(config,out installed);var owner=Existing(folder,bytes[0],bytes[1],bytes[2],record);PreferenceValue(preference);
    if(owner!=null&&owner.PreparationPending&&!owner.RemovalPending)throw new IOException("启动组件准备尚未恢复，请先完成启动恢复后再卸载。");if(owner!=null&&bytes[1]!=null)Session(e.Game,e.User,bytes[1],false);
    SaveEnabled(e,false,preference,config,detached);if(owner==null)return;
@@ -139,6 +140,7 @@ namespace PZ3D {
    string sourceUser=Encoding.ASCII.GetString(session).Split('\n').Single(line=>line.StartsWith("user=",StringComparison.Ordinal));return Session(e.Game,Decode(sourceUser.Substring(5)),session,false)!=null;
   }catch{return false;}}
   internal static void Prepare(Engine e,string sessionId){
+   if(e!=null&&e.OwnedLaunch){if(!Nonce(sessionId))throw new IOException("启动组件会话标识无效。");e.GuardLaunch();return;}
    if(e==null)throw new ArgumentNullException("e");if(!Nonce(sessionId))throw new IOException("启动组件会话标识无效。");bool frozen=e.FrozenEnvironment!=null,enabled=Enabled(e);if(frozen&&!File.ReadAllText(e.Config).Contains(Argument))return;if(!enabled&&!frozen){UpdatePreference(e,false,true);return;}Paths(e.Game,e.User);LauncherMaintenance.NoReparse(e.Config);LauncherMaintenance.NoReparse(LaunchProfiles.Journal(e));if(LaunchProfiles.Pending(e))throw new IOException("启动会话尚未恢复，未改动启动组件。");e.GuardLaunch();byte[] payload=Payload(e);
    using(var lease=Lease(e.Game)){bool acquired=Acquire(lease);if(!acquired)throw new IOException("另一个启动组件准备正在进行。");try{
     string folder=Folder(e.Game),jarPath=Path.Combine(folder,"OrangeStartup.jar"),sessionPath=Path.Combine(folder,"session.properties"),issuesPath=Path.Combine(folder,"issues.txt"),recordPath=Path.Combine(folder,"ownership.json");
@@ -152,6 +154,13 @@ namespace PZ3D {
    }finally{lease.ReleaseMutex();}}
   }
   static string Safe(string text,int maximum){text=GameDiagnostics.Sanitize(text??"");return text.Length>maximum?text.Substring(0,maximum):text;}
+  internal static string[] PrepareOwnedSession(Engine e,string sessionId,string directory){
+   if(!e.OwnedLaunch||e.OwnedConfiguration.Mode=="vanilla"||!Enabled(e))return new string[0];
+   if(!Nonce(sessionId)||!VersionLibrary.Same(Path.GetDirectoryName(directory),e.OwnedConfiguration.RuntimeDirectory))throw new IOException("加载页会话目录无效。");
+   string folder=Path.Combine(directory,"startup"),jar=Path.Combine(folder,"OrangeStartup.jar"),issues=Path.Combine(folder,"issues.txt");LauncherMaintenance.NoReparse(folder);long now=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+   byte[] receipt=Encoding.ASCII.GetBytes(string.Join("\n",new[]{"version=OZLOWN1","session="+sessionId,"created="+now,"expires="+(now+600),"game="+Encode(e.Game),"user="+Encode(e.User),"context="+Encode(e.OwnedConfiguration.Root),"issues="+Encode(issues),"theme="+(LauncherTheme.Load(e.Data).Light?"light":"dark"),"reducedMotion="+(ReducedMotion()?"true":"false")})+"\n");
+   LauncherComponents.Atomic(jar,Payload());LauncherComponents.Atomic(Path.Combine(folder,"session.properties"),receipt);LauncherComponents.Atomic(issues,IssueBytes(sessionId,null));return new[]{"-Dozl.startup.context="+e.OwnedConfiguration.Root,"-javaagent:"+jar};
+  }
   static bool LiveClient(GameStartupLaunch launch,GameStartupSnapshot snapshot){if(!snapshot.ProcessId.HasValue||snapshot.ProcessBirth<launch.StartedUtc.Ticks)return false;try{using(var process=Process.GetProcessById(snapshot.ProcessId.Value)){
    if(process.HasExited||process.StartTime.ToUniversalTime().Ticks!=snapshot.ProcessBirth)return false;string name=process.ProcessName,image=process.MainModule.FileName;bool java=name=="java"||name=="javaw";if(java&&GameProcessGuard.ReadJavaRole(launch.GamePath,name,image,process)!=JavaProcessRole.Client)return false;return GameStartupMonitor.MatchesClientIdentity(launch.GamePath,launch.StartedUtc,name,image,new DateTime(snapshot.ProcessBirth,DateTimeKind.Utc),java);
   }}catch{return false;}}
@@ -167,6 +176,13 @@ namespace PZ3D {
   internal static string IssueIdentity(GameStartupSnapshot snapshot){var issue=Primary(snapshot);return Convert.ToBase64String(IssueBytes("",issue,0))+"|"+(issue==null?0:issue.ObservationLine).ToString(CultureInfo.InvariantCulture);}
   internal static bool WriteIssues(GameStartupLaunch launch,GameStartupSnapshot snapshot){
    if(launch==null||snapshot==null||!Nonce(launch.SessionId)||launch.SessionId!=snapshot.SessionId)return false;
+   try{var engine=new Engine(launch.GamePath,launch.UserPath,launch.DataPath);var owned=LaunchProfiles.OwnedSession(engine,launch.SessionId);if(owned!=null){
+    string folder=Path.Combine(owned.SessionDirectory,"startup"),jar=Path.Combine(folder,"OrangeStartup.jar"),receipt=Path.Combine(folder,"session.properties"),issues=Path.Combine(folder,"issues.txt");
+    if(!Same(Read(jar,JarLimit),Payload()))return false;byte[] bytes=Read(receipt,SessionLimit);if(bytes==null)return false;var values=Encoding.ASCII.GetString(bytes).Split('\n').Where(line=>line.Contains("=")).Select(line=>line.Split(new[]{'='},2)).ToDictionary(pair=>pair[0],pair=>pair[1]);
+    if(values["version"]!="OZLOWN1"||values["session"]!=launch.SessionId||Decode(values["game"])!=launch.GamePath||Decode(values["user"])!=launch.UserPath||Decode(values["context"])!=owned.ConfigurationRoot||Decode(values["issues"])!=issues)return false;
+    if(long.Parse(values["expires"],CultureInfo.InvariantCulture)<=DateTimeOffset.UtcNow.ToUnixTimeSeconds()&&!LiveClient(launch,snapshot))return false;
+    byte[] next=IssueBytes(launch.SessionId,Primary(snapshot));if(next.Length>IssueLimit)return false;LauncherComponents.Atomic(issues,next);return true;
+   }}catch{return false;}
    try{Paths(launch.GamePath,launch.UserPath);using(var lease=Lease(launch.GamePath)){bool acquired=Acquire(lease);if(!acquired)return false;try{
     string folder=Folder(launch.GamePath),jarPath=Path.Combine(folder,"OrangeStartup.jar"),sessionPath=Path.Combine(folder,"session.properties"),path=Path.Combine(folder,"issues.txt"),recordPath=Path.Combine(folder,"ownership.json");byte[] jar=Read(jarPath,JarLimit),session=Read(sessionPath,SessionLimit),old=Read(path,IssueLimit),record=Read(recordPath,4096);var owner=Existing(folder,jar,session,old,record);if(owner==null||owner.PreparationPending||jar==null||session==null)return false;var binding=Session(launch.GamePath,launch.UserPath,session,false);if(binding["session"]!=launch.SessionId||(long.Parse(binding["expires"],CultureInfo.InvariantCulture)<=DateTimeOffset.UtcNow.ToUnixTimeSeconds()&&!LiveClient(launch,snapshot)))return false;
     var issue=Primary(snapshot);byte[] next=IssueBytes(launch.SessionId,issue);if(next.Length>IssueLimit)return false;

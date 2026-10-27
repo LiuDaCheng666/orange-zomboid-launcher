@@ -39,7 +39,7 @@ namespace PZ3D {
    object windows;if(config.TryGetValue("windows",out windows)){var branches=windows as Dictionary<string,object>;if(branches==null)throw new Exception("windows 分支格式错误。");foreach(var branch in branches.Values){var d=branch as Dictionary<string,object>;if(d==null)throw new Exception("windows 启动分支格式错误。");foreach(var a in Arrays(d))yield return a;}}
   }
   static long HeapBytes(string arg){var m=Regex.Match(arg,@"^-Xm[xs]([1-9][0-9]*)([kKmMgG]?)$");long n;if(!m.Success||!long.TryParse(m.Groups[1].Value,out n))throw new Exception("无法识别堆内存参数："+arg);long factor=m.Groups[2].Value.Length==0?1:m.Groups[2].Value.Equals("g",StringComparison.OrdinalIgnoreCase)?(long)GiB:m.Groups[2].Value.Equals("m",StringComparison.OrdinalIgnoreCase)?1048576:1024;if(n>long.MaxValue/factor)throw new Exception("堆内存参数超出范围。");return n*factor;}
-  public static int ReadHeapGiB(Engine e){var args=Arrays(Read(e)).First();string last=args.LastOrDefault(a=>a.StartsWith("-Xmx",StringComparison.Ordinal));if(last==null)throw new Exception("启动配置未设置 Xmx；请选择内存后保存。");return checked((int)Math.Ceiling((double)HeapBytes(last)/GiB));}
+  public static int ReadHeapGiB(Engine e){if(e.OwnedLaunch)return (int)Math.Ceiling(e.OwnedConfiguration.MemoryMb/1024.0);var args=Arrays(Read(e)).First();string last=args.LastOrDefault(a=>a.StartsWith("-Xmx",StringComparison.Ordinal));if(last==null)throw new Exception("启动配置未设置 Xmx；请选择内存后保存。");return checked((int)Math.Ceiling((double)HeapBytes(last)/GiB));}
   static Dictionary<string,object> ProfileConfig(byte[] bytes){if(bytes==null||bytes.Length>2097152)throw new Exception("启动 JSON 缺失或过大。");string text=new UTF8Encoding(false,true).GetString(bytes).TrimStart('\uFEFF');var config=PlayProfileJson.Object(text,2097152,64);if(!config.ContainsKey("vmArgs"))throw new Exception("启动 JSON 缺少 vmArgs。");Arrays(config).ToArray();return config;}
   internal static long? ProfileHeapBytes(byte[] bytes){var args=Arrays(ProfileConfig(bytes)).First();string last=args.LastOrDefault(a=>a.StartsWith("-Xmx",StringComparison.Ordinal));return last==null?(long?)null:HeapBytes(last);}
   internal static int? ProfileHeapGiB(byte[] bytes){long? heap=ProfileHeapBytes(bytes);return heap.HasValue?checked((int)Math.Ceiling((double)heap.Value/GiB)):(int?)null;}
@@ -53,6 +53,7 @@ namespace PZ3D {
    if(value<1||value>policy.MaximumHeapGiB)throw new Exception("内存超出按总物理内存计算的设置上限；需为系统保留至少 4 GiB 或 25%。");
   }
   internal static string SetHeapGiB(Engine e,int value,Func<LauncherMemoryInfo> memoryProvider){
+   if(e.OwnedLaunch){e.GuardHeap();ValidateHeapBudget(value,memoryProvider);e.OwnedConfiguration.SetMemoryMb(checked(value*1024));return "此启动配置的最大堆内存已设为 "+value+" GiB。";}
    e.GuardHeap();ValidateHeapBudget(value,memoryProvider);NoReparse(e.Config);byte[] before=File.ReadAllBytes(e.Config);var config=Read(e);
    if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");
    Normalize(config,value);NoReparse(e.Data);string backupDir=Path.Combine(e.Data,"backups","heap-"+DateTime.UtcNow.ToString("yyyyMMddHHmmss")+"-"+Guid.NewGuid().ToString("N"));NoReparse(backupDir);Directory.CreateDirectory(backupDir);

@@ -74,6 +74,7 @@ namespace PZ3D {
   public static LaunchPreflightReport Check(Engine e,bool busy,bool running,string targetKind){return CheckLaunch(e,busy,running,targetKind,null,false);}
   internal static LaunchPreflightReport CheckLaunch(Engine e,bool busy,bool running,string targetKind,string targetId,bool capture){
    if(targetKind!="normal"&&targetKind!="save"&&targetKind!="server")throw new ArgumentException("未知启动预检类型。");
+   if(e.OwnedLaunch)return CheckOwned(e,busy,running,targetKind,targetId,capture);
    var items=new List<LaunchPreflightItem>();bool safe=true,config=false,pending=false,sessionPending=false,otherRecovery=false;var budget=new LaunchReadBudget(16777216);if(capture)budget.Capture();
    items.Add(Item("activity",busy||running?"error":"ok","任务与游戏进程",busy?"本机任务尚未结束，请完成或取消后再启动。":running?"游戏进程仍在运行，请先退出游戏。":"没有阻止启动的任务或已知游戏进程。","home"));
    try{foreach(string path in new[]{e.Game,e.Config,e.User,e.Mods,e.Data,e.Workshop,Path.Combine(e.Game,"ProjectZomboid64.exe"),Path.Combine(e.Game,"ZombieBuddy.jar"),Path.Combine(e.Game,"zbNative.dll"),Path.Combine(e.Data,"launch-sessions",LaunchProfiles.Key(e)+".json"),Path.Combine(e.Data,"workshop-rebuild.pending"),Path.Combine(e.Data,"workshop-paths.json")})LauncherMaintenance.NoReparse(path);}
@@ -105,5 +106,22 @@ namespace PZ3D {
    items.Add(Item("memory",memoryStatus,"堆内存建议",memoryMessage,"memory"));
    bool allowed=items.All(i=>i.status!="error");return new LaunchPreflightReport{canLaunch=allowed,checkedUtc=DateTime.UtcNow.ToString("o"),items=items.ToArray(),Evidence=budget.Evidence,message=allowed?"启动检查通过。":items.First(i=>i.status=="error").message};
   }
+  static LaunchPreflightReport CheckOwned(Engine e,bool busy,bool running,string kind,string target,bool capture){
+   if(capture)e.OwnedConfiguration.Initialize();
+   var items=new List<LaunchPreflightItem>();var evidence=capture?new LaunchReadSet():null;
+   string reason=LauncherLaunch.PreparationReason(e,busy,running);items.Add(Item("launch-config",reason==""?"ok":"error","启动配置",reason==""?"启动器配置已就绪。":reason,"home"));
+   try{e.GuardLaunch();if(LaunchProfiles.Pending(e))throw new IOException("上一次启动会话尚未结束或清理。");
+    if(e.OwnedConfiguration.Mode!="vanilla"){
+     var components=e.OwnedComponents();var current=components.CaptureCurrent(System.Threading.CancellationToken.None);var warnings=new List<string>();var catalog=SaveProfiles.Entries(e,warnings);string[] ordinary=kind=="save"&&e.OwnedConfiguration.ProfileId==null?SaveProfiles.LaunchMods(e,target,new LaunchReadBudget(1048576)):null;
+     var plan=components.PlanEnabled(current,catalog.ToArray(),System.Threading.CancellationToken.None,ordinary);
+     foreach(var row in current.Rows.Where(r=>r.Enabled&&r.Jar!=null&&r.Id!="ZombieBuddy"))if(row.Decision!=true)throw new IOException(row.Name+"：请先确认当前 Java 文件授权。");
+     if(evidence!=null)evidence.Expect(()=>components.RequireCurrent(current));
+     items.Add(Item("mods","ok","配置模组","将使用此配置的普通模组与已启用组件。","mods",plan.errors.Concat(plan.warnings).Concat(plan.violations).ToArray()));
+    }
+    if(evidence!=null){int memory=e.OwnedConfiguration.MemoryMb;evidence.Expect(()=>{if(e.OwnedConfiguration.MemoryMb!=memory)throw new IOException("启动内存已变化，请重试。");});}
+   }catch(Exception error){items.Add(Item("configuration","error","启动配置",error.Message,"components"));}
+   bool allowed=items.All(x=>x.status!="error");return new LaunchPreflightReport{canLaunch=allowed,checkedUtc=DateTime.UtcNow.ToString("o"),items=items.ToArray(),Evidence=evidence,message=allowed?"启动检查通过。":items.First(x=>x.status=="error").message};
+  }
+
  }
 }

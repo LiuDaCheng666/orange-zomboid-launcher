@@ -1,0 +1,4 @@
+using System;using System.Reflection;
+namespace PZ3D {static class OwnedAffectedRegressionTests {
+ [STAThread]static int Main(string[] args){int failures=0;foreach(string name in args)try{var type=typeof(Program).Assembly.GetType("PZ3D."+name,true);var run=type.GetMethod("Run",BindingFlags.Public|BindingFlags.Static);if(run!=null)run.Invoke(null,null);else{var main=type.GetMethod("Main",BindingFlags.Public|BindingFlags.Static);object result=main.Invoke(null,main.GetParameters().Length==0?null:new object[]{new string[0]});if(result is int&&(int)result!=0)throw new Exception("nonzero fixture result");}Console.WriteLine("GROUP PASS "+name);}catch(Exception error){failures++;Console.WriteLine("GROUP FAIL "+name+" "+(error is TargetInvocationException?error.InnerException:error));}return failures==0?0:1;}
+}}

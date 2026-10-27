@@ -17,6 +17,7 @@ namespace PZ3D {
   public static string Reason(Engine e,bool busy,bool running){return ReasonCore(e,busy,running,false);}
   internal static string PreparationReason(Engine e,bool busy,bool running){return ReasonCore(e,busy,running,true);}
   static string ReasonCore(Engine e,bool busy,bool running,bool preparing){
+   if(e.OwnedLaunch){if(busy)return "此配置正在修改，请稍后启动。";if(running)return "游戏已经运行，请退出后再启动。";try{var version=GameVersionProbe.Read(e.Game)??new Version(42,0);if(version.Major!=42)return "此游戏版本的独立模组加载入口尚未核实；可明确选择 Steam 配置启动。";e.OwnedConfiguration.StockArguments(version.Major);return "";}catch(Exception error){return error.Message;}}
    if(PlayProfileTransaction.Pending(e))return PlayProfileTransaction.PendingMessage;
    if(BuddyTakeover.Pending(e))return "旧 Buddy 参数接管尚未恢复，请先检查维护页恢复状态。";
    if(busy)return "正在执行任务，请等待完成或取消后再启动。";

@@ -15,7 +15,7 @@ namespace PZ3D {
    Assert(typeof(LaunchProfiles).GetMethod("LaunchNormal",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic).ReturnType!=typeof(object),"normal launch returns typed readable outcome");
    string root=Path.Combine(Path.GetTempPath(),"ozl-startup-presentation-"+Guid.NewGuid().ToString("N"));
    Directory.CreateDirectory(root);
-   try{using(var controller=new ModernController(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true)){
+   try{using(var controller=new ModernController(Path.Combine(root,"game"),Path.Combine(root,"user"),Path.Combine(root,"data"),true,null,null,null,null,true)){
     var events=new List<GameStartupLaunch>();controller.StartupPresentation=value=>events.Add(value);
     foreach(string kind in new[]{"normal","save","server"}){
      events.Clear();string action=kind=="normal"?"launch":"profileLaunch";

@@ -29,7 +29,11 @@ public final class Session {
         try {
             Path fullAgent=agent.toAbsolutePath().normalize(), game=workingDirectory.toAbsolutePath().normalize();
             if(!fullAgent.toRealPath().equals(fullAgent)||!game.toRealPath().equals(game))return null;
-            Path folder=game.resolve("OrangeLauncherRuntime/startup");
+            String ownedContext=System.getProperty("ozl.startup.context","");
+            boolean owned=!ownedContext.isEmpty();
+            Path context=owned?Path.of(ownedContext):null;
+            Path folder=owned?fullAgent.getParent():game.resolve("OrangeLauncherRuntime/startup");
+            if(owned&&(!canonical(context)||context.startsWith(game)||context.equals(game)||!folder.getFileName().toString().equals("startup")||!folder.getParent().getFileName().toString().matches("live-[a-f0-9]{12}")||!folder.getParent().getParent().equals(context.resolve("runtime"))))return null;
             if(!folder.resolve("OrangeStartup.jar").equals(fullAgent))return null;
             Path file=folder.resolve("session.properties");
             if(!file.toRealPath().equals(file)||Files.size(file)>8192)return null;
@@ -37,13 +41,14 @@ public final class Session {
             try(Reader reader=Files.newBufferedReader(file,StandardCharsets.UTF_8)){p.load(reader);}
             String nonce=p.getProperty("session",""),theme=p.getProperty("theme","");
             long created=Long.parseLong(p.getProperty("created","")),expires=Long.parseLong(p.getProperty("expires",""));
-            if(!"OZL1".equals(p.getProperty("version"))||!nonce.matches("[a-f0-9]{32}"))return null;
+            if(!(owned?"OZLOWN1":"OZL1").equals(p.getProperty("version"))||!nonce.matches("[a-f0-9]{32}"))return null;
             if(created>nowSeconds+5||expires<=nowSeconds||expires<=created||expires-created>600)return null;
             if(!"dark".equals(theme)&&!"light".equals(theme))return null;
             String reduced=p.getProperty("reducedMotion","");
             if(!"true".equals(reduced)&&!"false".equals(reduced))return null;
             Path recordedGame=Path.of(decode(p,"game"));
             Path user=Path.of(decode(p,"user"));
+            if(owned&&(!Path.of(decode(p,"context")).equals(context)||context.startsWith(user)))return null;
             Path issues=Path.of(decode(p,"issues"));
             if(!canonical(recordedGame)||!recordedGame.equals(game)||!canonical(user)||!canonical(issues))return null;
             if(!issues.equals(folder.resolve("issues.txt")))return null;

@@ -35,6 +35,7 @@ namespace PZ3D {
   Engine ResolveEnvironmentEngine(Engine source,string kind,string target){
    // No catalog means there cannot be a binding. Keep ordinary launch behavior
    // independent of snapshot inventory and preserve the early loading canvas.
+   if(source.LaunchConfiguration!=null&&(source.LaunchConfiguration.Kind=="frozen"||source.OwnedLaunch&&(source.OwnedConfiguration.ProfileId!=null||source.OwnedConfiguration.Mode=="vanilla")))return source;
    if(kind!="save"||!File.Exists(Path.Combine(source.Data,"save-environments","index.json")))return source;
    var selected=SaveEnvironmentRuntime.ForSave(source,target);RememberEnvironment(selected);return selected;
   }
@@ -42,12 +43,15 @@ namespace PZ3D {
    if(selected.FrozenEnvironment==null){RecoverStartup();return;}
    string recovered=LaunchProfiles.Recover(selected);if(recovered!="")lock(gate)log.Add(recovered);
    if(LaunchProfiles.Pending(selected))throw new IOException("此存档的上次启动尚未结束，请先退出游戏再重试。");
+   if(selected.LaunchConfiguration!=null&&selected.LaunchConfiguration.Kind=="frozen"){SaveEnvironmentRuntime.PrepareTarget(selected,kind,target);return;}
    if(kind!="save")throw new IOException("游戏与模组快照只用于原绑定的单人存档。");
    SaveEnvironmentRuntime.PrepareForLaunch(selected,target);
   }
   void ValidateEnvironmentBinding(Engine selected){
    StartupAttempt attempt;lock(startupGate)attempt=startupAttempt;
-   if(attempt==null||attempt.Launch.TargetKind!="save")return;
+   if(attempt==null)return;
+   if(selected.LaunchConfiguration!=null&&selected.LaunchConfiguration.Kind=="frozen"){SaveEnvironmentRuntime.ValidateTarget(selected,attempt.Launch.TargetKind,attempt.TargetId);return;}
+   if(attempt.Launch.TargetKind!="save")return;
    var current=ResolveEnvironmentEngine(attempt.Engine,"save",attempt.TargetId);
    if(!VersionLibrary.Same(current.Game,selected.Game)||!VersionLibrary.Same(current.User,selected.User)||(current.FrozenEnvironment==null)!=(selected.FrozenEnvironment==null)||current.FrozenEnvironment!=null&&current.FrozenEnvironment.Id!=selected.FrozenEnvironment.Id)throw new IOException("此存档使用的游戏与模组快照已变化，请重新启动。");
    SaveEnvironmentRuntime.Validate(selected,attempt.TargetId);

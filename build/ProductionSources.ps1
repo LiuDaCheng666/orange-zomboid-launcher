@@ -73,7 +73,7 @@ function Get-OzlProductionSources {
         'LauncherTheme.cs',
         'LauncherWorkshopRebuild.cs',
         'LaunchPreflight.cs',
-        'LaunchProfiles.cs',
+        'LaunchProfiles.cs', 'OwnedLaunchSession.cs', 'LaunchConfigurationController.cs', 'OwnedComponentController.cs',
         'LegalContent.cs',
         'LocalAddon.cs',
         'ManagedBackgroundWorker.cs',

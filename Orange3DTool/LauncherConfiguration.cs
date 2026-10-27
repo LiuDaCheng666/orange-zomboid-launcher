@@ -14,6 +14,7 @@ namespace PZ3D {
   int initialMemoryMb=3072;
   bool indexed;
   public string ProfileId {get;private set;}
+  internal string OwnerUser {get;private set;}
   static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
   public string Mode {get;private set;} public string Key {get;private set;}
   public string Game {get;private set;} public string User {get;private set;} public string Root {get;private set;}
@@ -35,12 +36,12 @@ namespace PZ3D {
   // Indexed inventory owns selection; resolution never reads or writes the legacy selection.txt.
   internal static LauncherConfiguration ResolveIndexed(string data,string game,string user,string profileId,string ownerUser,int initialMemory){
    if(initialMemory<512||initialMemory>262144)throw new ArgumentOutOfRangeException("initialMemory");
-   var c=new LauncherConfiguration{Game=Full(game),User=Full(user),Mode="launcher",ProfileId=profileId,indexed=true,initialMemoryMb=initialMemory};
+   var c=new LauncherConfiguration{Game=Full(game),User=Full(user),OwnerUser=Full(ownerUser),Mode="launcher",ProfileId=profileId,indexed=true,initialMemoryMb=initialMemory};
    string identity=profileId==null?c.Game.ToUpperInvariant()+"\n"+c.User.ToUpperInvariant():"profile\n"+Full(ownerUser).ToUpperInvariant()+"\n"+profileId;
    using(var sha=SHA256.Create())c.Key=BitConverter.ToString(sha.ComputeHash(Utf8.GetBytes(identity))).Replace("-","").ToLowerInvariant();
    c.Root=Path.Combine(Full(data),"launcher-configurations",c.Key);return c;
   }
-  public LauncherConfiguration Bind(string mode){return new LauncherConfiguration{Game=Game,User=User,Root=Root,Key=Key,Mode=ParseMode(mode),ProfileId=ProfileId,indexed=indexed,initialMemoryMb=initialMemoryMb};}
+  public LauncherConfiguration Bind(string mode){return new LauncherConfiguration{Game=Game,User=User,Root=Root,Key=Key,Mode=ParseMode(mode),ProfileId=ProfileId,OwnerUser=OwnerUser,indexed=indexed,initialMemoryMb=initialMemoryMb};}
   public LauncherConfiguration Select(string mode){if(indexed)throw new InvalidOperationException("请使用启动配置目录选择配置。");var selected=Bind(mode);lock(Gate){OwnWrites();Atomic(SelectionPath,Utf8.GetBytes(selected.Mode));}return selected;}
   static bool Beneath(string file,string directory){return file.StartsWith(directory.TrimEnd('\\','/')+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)||string.Equals(file,directory,StringComparison.OrdinalIgnoreCase);}
   static void NoLinks(string path){for(string p=Path.GetFullPath(path);!string.IsNullOrEmpty(p);p=Path.GetDirectoryName(p)){if((File.Exists(p)||Directory.Exists(p))&&(File.GetAttributes(p)&FileAttributes.ReparsePoint)!=0)throw new IOException("启动配置目录不能使用链接："+p);}}

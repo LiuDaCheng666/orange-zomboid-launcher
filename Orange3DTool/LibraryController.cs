@@ -38,10 +38,11 @@ namespace PZ3D {
   object ReadRecommendations(Dictionary<string,object> payload,CancellationToken token){if(recommendations==null)Interlocked.CompareExchange(ref recommendations,new RecommendedServers(data),null);return recommendations.Read(Flag(payload,"refresh"),token);}
   object QueryRecommendation(Dictionary<string,object> payload,CancellationToken token){if(recommendations==null)Interlocked.CompareExchange(ref recommendations,new RecommendedServers(data),null);return recommendations.Query(Text(payload,"id"),token);}
   object DispatchLibrary(string action,Dictionary<string,object> p){
+   if(engine.OwnedLaunch&&action.StartsWith("javaComponents",StringComparison.Ordinal))return OwnedJavaAction(action,p);
    switch(action){
     case "versionList":return VersionRows();
-    case "versionSelect":RequireVersionIdle();var previous=versions.Selected();var selected=versions.Select(Text(p,"id"));try{SetEngine(selected.GamePath,selected.UserPath,selected.Managed);}catch{versions.Select(previous.Id);throw;}return new{message="已切换到 "+selected.Name,version=VersionRow(selected,selected.Id)};
-    case "versionImport":RequireVersionIdle();var imported=versions.Import(Text(p,"path"),Text(p,"name"));return new{message="版本已添加",version=VersionRow(imported,versions.Selected().Id)};
+    case "versionSelect":cancel.Token.ThrowIfCancellationRequested();var previous=versions.Selected();var selected=versions.Select(Text(p,"id"));try{SetEngine(selected.GamePath,selected.UserPath,selected.Managed);}catch{versions.Select(previous.Id);throw;}return new{message="已切换到 "+selected.Name,version=VersionRow(selected,selected.Id)};
+    case "versionImport":cancel.Token.ThrowIfCancellationRequested();var imported=versions.Import(Text(p,"path"),Text(p,"name"));return new{message="版本已添加",version=VersionRow(imported,versions.Selected().Id)};
     case "versionPreserve":RequireVersionIdle();var copied=versions.Preserve(engine.Game,Text(p,"destination"),Text(p,"name"),cancel.Token,CopyProgress);return new{message="独立版本已保存",version=VersionRow(copied,versions.Selected().Id)};
     case "versionInstallBegin":RequireVersionIdle();var install=versionInstall.BeginInteractive(Convert.ToInt32(p["major"]),Text(p,"destination"),Text(p,"name"),cancel.Token,CopyProgress);if(!test)Links.Open("steam://nav/games/details/108600");return InstallRow(install);
     case "versionInstallState":return InstallRow(versionInstall.State());

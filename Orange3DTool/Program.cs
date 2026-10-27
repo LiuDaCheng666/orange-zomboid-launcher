@@ -67,6 +67,18 @@ namespace PZ3D {
  sealed class Engine {
   public string Game,User,Data;
   public bool ManagedVersion;
+  internal LaunchConfigurationResolution LaunchConfiguration;
+  internal LauncherConfiguration OwnedConfiguration {get{return LaunchConfiguration==null?null:LaunchConfiguration.Context;}}
+  internal bool OwnedLaunch {get{return OwnedConfiguration!=null&&OwnedConfiguration.Mode!="steam";}}
+  internal LiveModDiscovery.Session LiveSession;
+  internal void BindConfiguration(LaunchConfigurationResolution selection){
+   if(selection==null||!selection.Available)throw new IOException(selection==null?"启动配置不存在。":selection.Message);
+   if(selection.Context!=null&&(!VersionLibrary.Same(Game,selection.Context.Game)||!VersionLibrary.Same(User,selection.Context.User)))throw new IOException("启动配置与游戏目录不一致。");
+   if(selection.Snapshot!=null&&(!VersionLibrary.Same(Game,selection.Snapshot.GamePath)||!VersionLibrary.Same(User,selection.Snapshot.UserPath)))throw new IOException("快照配置与游戏目录不一致。");
+   LaunchConfiguration=selection;FrozenEnvironment=selection.Snapshot;
+  }
+  internal LauncherComponents OwnedComponents(){if(!OwnedLaunch)throw new InvalidOperationException("未选择启动器配置。");return new LauncherComponents(OwnedConfiguration,GameVersionProbe.Read(Game)??new Version(42,0),Progress);}
+
   internal SaveEnvironmentRecord FrozenEnvironment;
   public string BuddySource,ViewSource,ModelsSource;
   public Action<int,string> Progress;
@@ -85,7 +97,7 @@ namespace PZ3D {
   internal bool RuntimeRunning(bool clientOnly=false){return clientOnly?GameProcessGuard.IsClientRunning(Game,ProcessInventory):GameProcessGuard.IsRunning(Game,ProcessInventory);}
   internal SteamLaunchOptionsSnapshot ReadSteamOptions(){return steamOptions();}
   public string Config {get{return Path.Combine(Game,"ProjectZomboid64.json");}}
-  public string Mods {get{return FrozenEnvironment==null?Path.Combine(User,"mods","default.txt"):Path.Combine(FrozenEnvironment.RootPath,"runtime","mods","default.txt");}}
+  public string Mods {get{return OwnedLaunch?OwnedConfiguration.DefaultModsPath:FrozenEnvironment==null?Path.Combine(User,"mods","default.txt"):Path.Combine(FrozenEnvironment.RootPath,"runtime","mods","default.txt");}}
   public string Workshop {get{return FrozenEnvironment==null?Path.GetFullPath(Path.Combine(Game,"..","..","workshop","content","108600")):Path.Combine(FrozenEnvironment.RootPath,"runtime","no-live-workshop");}}
   public string BuddyLib {get{return Path.Combine(BuddySource??Path.Combine(Workshop,"3619862853"),"mods","ZombieBuddy","libs");}}
   public bool HasView {get{string source=ViewSource??Path.Combine(Workshop,"3809306528");return Directory.Exists(source) && Directory.EnumerateFiles(source,"mod.info",SearchOption.AllDirectories).Any(p=>Regex.IsMatch(File.ReadAllText(p),@"(?m)^id\s*=\s*Viewpoint\s*$"));}}
@@ -94,8 +106,8 @@ namespace PZ3D {
   static bool Agent(string s){return BuddyLaunchArguments.Classify(s)==BuddyArgumentKind.Known;}
   Dictionary<string,object> ReadConfig(){return Json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Config));}
   static string[] Args(Dictionary<string,object> c){return ((System.Collections.IEnumerable)c["vmArgs"]).Cast<object>().Select(o=>o.ToString()).ToArray();}
-  public bool Enabled {get{try{return Args(ReadConfig()).Any(Agent) && File.Exists(Mods) && Regex.IsMatch(File.ReadAllText(Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}catch{return false;}}}
-  internal bool FrameworkConfigured {get{try{return Args(ReadConfig()).Any(Agent);}catch{return false;}}}
+  public bool Enabled {get{if(OwnedLaunch)return OwnedConfiguration.Mode!="vanilla"&&OwnedComponents().List(System.Threading.CancellationToken.None).Any(r=>r.Id=="Viewpoint"&&r.Enabled);try{return Args(ReadConfig()).Any(Agent) && File.Exists(Mods) && Regex.IsMatch(File.ReadAllText(Mods),@"(?m)^\s*mod\s*=\s*Viewpoint\s*,");}catch{return false;}}}
+  internal bool FrameworkConfigured {get{if(OwnedLaunch)return OwnedConfiguration.Mode!="vanilla"&&OwnedComponents().List(System.Threading.CancellationToken.None).Any(r=>r.Id=="ZombieBuddy"&&r.Enabled);try{return Args(ReadConfig()).Any(Agent);}catch{return false;}}}
   public void Guard(){GuardCore(false);}
   internal void GuardContent(bool ownProfileTransaction=false){foreach(string path in new[]{Game,Config,User,Mods,Data})LauncherMaintenance.NoReparse(path);GuardCore(ownProfileTransaction,false,false,true);}
   internal void GuardHeap(){GuardCore(false,false,false);}
@@ -103,6 +115,7 @@ namespace PZ3D {
   internal void GuardMaintenance(){GuardCore(false);if(!TestMode&&RuntimeRunning())throw new Exception("客户端、同目录专用服务器或 Java 仍占用文件，请结束占用后清理缓存或重建工坊。");}
   internal void GuardPlayProfile(){GuardCore(true);}
   void GuardCore(bool ownProfileTransaction,bool launch=false,bool checkSteam=true,bool content=false){
+   if(OwnedLaunch){foreach(string path in new[]{Game,User,Data,OwnedConfiguration.Root})LauncherMaintenance.NoReparse(path);if(launch&&!TestMode&&RuntimeRunning(true))throw new IOException("游戏进程仍在运行，请退出后再启动。");return;}
    if(!ownProfileTransaction&&PlayProfileTransaction.Pending(this))throw new Exception(PlayProfileTransaction.PendingMessage);
    BuddyTakeover.Guard(this);
    if(!File.Exists(Config))throw new Exception("所选文件夹不是游戏安装目录：找不到 ProjectZomboid64.json。");
