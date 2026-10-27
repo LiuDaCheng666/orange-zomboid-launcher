@@ -1,5 +1,7 @@
 # Windows 签名与正式发布
 
+> 2026-10-27 后续决定：用户仅接受免费方案，并要求先发布本次修复。1.2.34 使用显式 `-AllowUnsignedRelease` / `--allow-unsigned-release`，Windows 签名状态记为 `NotSigned`；两条路线共用内部 RSA bootstrap、归档清单、外层 RSA 清单及上传摘要核验。付款和实名方案不继续推进，免费可信签名另行研究，不阻塞本次发布，也不宣称杀毒问题已经根治。
+
 Windows 发布者签名使用可信 CA 签发的代码签名证书。`release-private.xml` 只签 RSA 更新清单，不能用于 Authenticode。证书私钥留在云签名/硬件提供者内，配置只记录公开的指纹、Subject、证书库位置和时间戳服务；不导出 PFX、不保存密码、不上传 RSA 私钥。
 
 ## 当前证书状态（2026-10-27）
@@ -28,7 +30,7 @@ Windows 发布者签名使用可信 CA 签发的代码签名证书。`release-pr
 
 - 冻结最终候选，按本次变更验证真实安装、更新、启动及失败/取消页面。记录准确产物 SHA-256、源提交、工具和防护状态；不能把惰性安装 fixture 或源码测试当作正式产品通过。
 - 发布工具先用 Windows WinTrust/SignTool 验证最终两个容器中的主程序、更新程序、执行 stub 和最终安装器，再核对已有 RSA bootstrap。验签时持有只读共享句柄；待上传字节必须匹配该次验签的十项摘要，变化时在 SSH 连接之前退出。
-- 普通软件发布命令新增必填 `--authenticode-config private/authenticode.json`；其他 source、preserved-legacy、expected-current、evidence 参数沿用既有发布流程。该本地配置不会上传到服务器。
+- 普通软件发布命令选择 `--authenticode-config private/authenticode.json`；用户明确决定暂不使用 Windows 签名时，显式使用 `--allow-unsigned-release`，不能自动降级。其他 source、preserved-legacy、expected-current、evidence 参数沿用既有发布流程。该本地配置不会上传到服务器。
 - 只更新十项发行文件、既有版本/签名清单。服务器渠道正常后发布 GitHub 相同字节，随后使用 `deploy/publish_changelog.py` 增补线上更新记录。不得部署整个网页、覆盖他人改动或改 HTTP/SSH 配置。
 - 如果同一最终产物仍被检出，保留准确哈希、检测名称和版本，交微软判定；不以改名、重复打包试探、恢复隔离或排除项冒充解决。
 

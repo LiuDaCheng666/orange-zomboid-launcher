@@ -310,19 +310,25 @@ def main():
     parser.add_argument('--expected-current', required=True, help='Previously verified physical current site path')
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--health-origin', default='https://orangezl.com')
-    parser.add_argument('--authenticode-config', type=Path, required=True,
-                        help='Local exact Windows publisher identity; no certificate key is uploaded')
+    signing = parser.add_mutually_exclusive_group(required=True)
+    signing.add_argument('--authenticode-config', type=Path,
+                         help='Local exact Windows publisher identity; no certificate key is uploaded')
+    signing.add_argument('--allow-unsigned-release', action='store_true',
+                         help='Explicitly publish without Windows signing; RSA authentication is still required')
     args = parser.parse_args()
     try:
         # Verify the actual bytes before opening SSH. RSA update-feed signatures
         # do not establish a Windows publisher or prevent unsigned regressions.
         signing_receipt = args.evidence.resolve().with_suffix('.authenticode.json')
         signing_receipt.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File',
+        verification = ['powershell.exe', '-NoProfile', '-NonInteractive', '-File',
                         str(Path(__file__).resolve().parents[1] / 'build' / 'Verify-WindowsRelease.ps1'),
-                        '-ReleaseDirectory', str(args.source.resolve()),
-                        '-AuthenticodeConfig', str(args.authenticode_config.resolve()),
-                        '-EvidencePath', str(signing_receipt)], check=True)
+                        '-ReleaseDirectory', str(args.source.resolve()), '-EvidencePath', str(signing_receipt)]
+        if args.allow_unsigned_release:
+            verification.append('-AllowUnsignedRelease')
+        else:
+            verification.extend(['-AuthenticodeConfig', str(args.authenticode_config.resolve())])
+        subprocess.run(verification, check=True)
         windows_verified = load_json(signing_receipt.read_bytes())
         verified_hashes = {item['name']: item['sha256'] for item in windows_verified['artifacts']}
         result = publish(args.source, args.preserved_legacy, args.public_key.read_bytes(), args.expected_current,

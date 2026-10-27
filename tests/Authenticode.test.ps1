@@ -35,6 +35,9 @@ $base.signToolPath=$tool;Write-Config $base
 $blockedOutput=Join-Path $testRoot 'formal-release-must-not-exist'
 Rejected {& "$repo/Build-VelopackRelease.ps1" -SigningKey (Join-Path $testRoot 'must-not-read-private-key.xml') -OutputDirectory $blockedOutput -AuthenticodeConfig (Join-Path $testRoot 'missing-config.json')} 'Formal build must require publisher signing before output/key access' 'Windows code-signing configuration is missing'
 if(Test-Path -LiteralPath $blockedOutput){throw 'Missing publisher identity must not leave a partial formal release'}
+if(-not (Get-Command "$repo/Build-VelopackRelease.ps1").Parameters.ContainsKey('AllowUnsignedRelease')){throw 'Explicitly authorized unsigned publication must be available without a fake Windows publisher'}
+Rejected {& "$repo/Build-VelopackRelease.ps1" -SigningKey (Join-Path $testRoot 'missing-update-key.xml') -OutputDirectory $blockedOutput -AllowUnsignedRelease} 'Unsigned Windows lane must still require the real RSA update identity' 'missing-update-key.xml'
+if(Test-Path -LiteralPath $blockedOutput){throw 'Unsigned publication must not create output before RSA identity validation'}
 $context=[pscustomobject]@{Config=Read-OzlAuthenticodeConfig $configPath;SignToolPath=$tool}
 Rejected {Assert-OzlAuthenticodeFile -Context $context -Path "$repo/Dependencies/Velopack/sdk/lib/net472/Velopack.dll"} 'Unsigned dependency cannot pass as a signed application' 'not trusted/valid'
 Rejected {Assert-OzlAuthenticodeFile -Context $context -Path $tool} 'A valid Microsoft signature cannot pass as our expected publisher' 'Unexpected publisher'
