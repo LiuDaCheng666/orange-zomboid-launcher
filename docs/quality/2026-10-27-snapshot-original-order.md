@@ -38,3 +38,17 @@ native harness 的 TestMode 和 500ms 测试调度延迟只用于可重复取消
 独立 SnapshotPreviewCancellation.test.ps1 编译成功，但其 Start-MpScan 在测试执行前返回 0x80508023，故该脚本不计通过。未关闭 Defender、添加排除项或绕过其检查。新增 native DOM 取消/再次核对路径已实际通过。编译有四处既有 CS0649 警告，未声称零警告。
 
 最后一次隔离快照目录：`E:\AppCaches\Temp\ozl-original-order-1793102471367\中文快照\OZL-快照-20261027-200114-02fc65`。保留该目录供复核；仅包含本测试新建数据。
+
+## Review fix 1：缺失默认清单的兼容回退
+
+审查发现，原默认文件不存在时 DefaultMods(null) 与空的 DefaultModIds 相等，新加入的原字节保留分支会将 null 写入运行环境输出，导致创建失败。生产修复仅添加 `row.DefaultBytes != null` 条件；不存在的原默认文件继续使用原有 ReplaceDefaultMods(null, []) 生成合法空配置。
+
+新增 `AbsentDefaultRuntime` 回归及 `--absent-default` 聚焦入口；测试脚本接受可选 TestArguments，默认仍运行完整既有套件。
+
+- RED：`tests/SaveEnvironmentRuntime.test.ps1 -TestArguments --absent-default` 实际复制后在准备输出时报“快照运行准备输出无效”。记录 artifacts/snapshot-original-order/absent-default-red。
+- GREEN：同一命令修复后通过 28 assertions，记录 absent-default-green。
+- 缺失 default.txt：存在明确存档清单 First，预览有效且盘点非零，实际创建游戏/模组副本和 manifest；捕获默认 ID 为空、存档 ID 仍为 First，生成非零长度且能解析的空 runtime default；原默认文件仍不存在；冻结运行环境 Validate 通过，原资料未改变。
+- 合法空 mods 块：实际创建通过且 runtime default 与源文件逐字节相同。
+- 零字节 default.txt：具体配置错误，ready=false、inventoryAvailable=false，不当成合法空清单或已完成的零统计；原文件未变。
+
+本修复只重跑上述聚焦回归，未重复整套测试，也未新增 DOM 或实际游戏验收。测试为生产复制/运行环境准备实现处理真实隔离文件，TestMode=true；没有启动游戏、操作前台、Steam 或真实存档。四个既有 CS0649 编译警告仍存在。临时 R: 路径别名测试后已移除。

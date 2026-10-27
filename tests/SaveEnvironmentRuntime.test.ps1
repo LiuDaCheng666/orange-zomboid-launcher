@@ -1,4 +1,4 @@
-param([string]$EvidenceDirectory)
+param([string]$EvidenceDirectory,[string[]]$TestArguments=@())
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 . (Join-Path $repo 'build/ProductionSources.ps1')
@@ -20,5 +20,5 @@ $refs+="/reference:$sdk/Microsoft.Web.WebView2.WinForms.dll"
 $output=Join-Path $fixture 'SaveEnvironmentRuntimeTests.exe'
 & C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe /nologo /target:exe /main:PZ3D.SaveEnvironmentRuntimeTests "/out:$output" "/resource:$agent,OrangeEnvironment.jar" "/resource:$project/Assets/OrangeStartup.jar,OrangeStartup.jar" "/resource:$project/Assets/OrangeLaunchBridge.lua,OrangeLaunchBridge.lua" $refs $sources 2>&1|Tee-Object (Join-Path $EvidenceDirectory 'compile.log')
 if($LASTEXITCODE -ne 0){throw 'Frozen runtime test compilation failed'}
-& $output 2>&1|Tee-Object (Join-Path $EvidenceDirectory 'runtime.log')
+& $output @TestArguments 2>&1|Tee-Object (Join-Path $EvidenceDirectory 'runtime.log')
 if($LASTEXITCODE -ne 0){throw 'Frozen runtime fixtures failed'}
