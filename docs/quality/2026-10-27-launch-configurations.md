@@ -51,3 +51,14 @@ Coordinator verification actually executed:
 - Commit whitespace verification passed. Four existing CS0649 compiler warnings remain. Implementer-run affected suites and exact commands are retained in the task handoff, including frozen runtime 377, frozen launch 29 and controller 158 checks.
 
 Task5 revision-aware frozen editing is now in progress. Task6 shared UI/native click/screenshots and Task7 actual packaged production-entry game/save/server acceptance remain required. No actual game/foreground operation, VERSION change, publication or website/server modification is covered by this checkpoint.
+
+
+## Reviewed editable snapshot backend
+
+`85fbfaa`, corrected by `175c36c`, adds native snapshot revision editing for ordinary order/add/remove, component enable/disable/uninstall, exact copied Java approvals and memory. New selected sources are copied locally; existing copied sources and game version remain pinned. Ordinary no-op saves preserve bytes. File/byte progress and cancellation are scoped to the chosen snapshot, with a recoverable manifest/runtime/index publication and committed cleanup reporting.
+
+Independent review found three Important gaps: identical JAR bytes with independent source decisions lost Buddy approval output; metadata-present missing Java payloads bypassed same-flow dependency download; interrupted deletion of an original captured root could not finish on retry. All three have failing/passing native regressions and the scoped review closes them at `175c36c`. Hash-level Buddy decisions retain the separate exact path/package/hash execution gate; only new sources can be repaired before copying; cleanup verifies every surviving recorded entry while retaining changed/foreign bytes.
+
+Coordinator fresh verification: `powershell -NoProfile -ExecutionPolicy Bypass -File tests/FrozenConfigurationEditor.test.ps1` exits 0 with 66 assertions at `E:\AppCaches\Temp\o5-5ef7e836`, including generated approval bytes, actual copy/delete/locks, rollback/commit recovery, A/B ownership and edited tiny-JVM phase/persistence runs. Implementer also reports runtime 377, controller 158, review regression 38, live 15/15/14, frozen 7 and actual pinned-Buddy tiny-main checks. Four existing CS0649 compiler warnings remain; there are no new reported warnings. All six foreign deploy/site tracked file hashes still match the preexisting baseline.
+
+These are native filesystem and JVM/API fixtures, not real game entry. Download repair callbacks used isolated fixture files; no real Steam/network download was performed. Task6 DOM/native clicks, screenshots and common editor remain pending, followed by Task7 actual immutable-package production entry, gameplay/save-exit/relaunch and source-update independence. No release, VERSION, website/server or foreground game operation was performed. A formatting Minor remains for some unchanged compressed transaction/dispatch lines and will be included in final review.
