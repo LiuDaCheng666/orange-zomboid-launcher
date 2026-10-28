@@ -28,13 +28,13 @@ assert.equal(
 // Each case needs an untouched installation; keep its real files independent.
 if (!process.argv[4] || process.argv[4] === "all") {
   const { spawnSync } = require("node:child_process");
-  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings"]) {
+  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection"]) {
     const result = spawnSync(process.execPath, [__filename, process.argv[2], process.argv[3], name], { stdio: "inherit", windowsHide: true });
     if (result.status !== 0) process.exit(result.status || 1);
   }
   process.exit(0);
 }
-assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings"].includes(process.argv[4]), "unknown final review case");
+assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection"].includes(process.argv[4]), "unknown final review case");
 const out = path.resolve(process.argv[3]),
   child = spawn(
     path.join(process.argv[2], "NativeUi.exe"),
@@ -86,13 +86,19 @@ const ask = async (action, payload = {}) => {
   return r.data;
 };
 
-(async()=>{const info=await ready;let browser,page,passed=false;const cases=process.argv[4]||'all';try{
+(async()=>{const info=await ready;let browser,page,passed=false,bootProfile,bootOrder='catalog-late',heldOwner='',releaseOwnedStatus=null;const cases=process.argv[4]||'all';try{
+    if(cases==='BootSelection'){for(const relative of ['projectzomboid.jar','jre64/bin/java.exe','jre64/bin/server/jvm.dll','steam_api64.dll','ZNetJNI64.dll','Lighting64.dll']){const file=path.join(info.root,'version2',relative);fs.mkdirSync(path.dirname(file),{recursive:true});fs.copyFileSync(path.join(info.game,relative),file);}bootProfile=await ask('configurationCreate',{name:'重启后所选配置',versionId:info.version2});await ask('launchConfigurationSelect',{id:bootProfile.id});assert.equal((await ask('versionList')).selectedId,'steam','global game version remains distinct from persisted named owner');}
     browser = await chromium.launch({ channel: "msedge", headless: true });
     const fixture = { errors: [] };
     page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
     page.setDefaultTimeout(45000);
     page.on("pageerror", (e) => fixture.errors.push(e.message));
-    await page.exposeFunction("configurationNative", native);
+    await page.exposeFunction("configurationNative", async message=>{
+      const result=await native(message);
+      if(heldOwner&&message.action==='configurationRequest'&&message.payload.id===heldOwner&&message.payload.action==='status'){heldOwner='';await new Promise(resolve=>{releaseOwnedStatus=resolve;});}
+      if(cases==='BootSelection'&&(bootOrder==='catalog-late'&&message.action==='launchConfigurations'||bootOrder==='status-late'&&message.action==='configurationRequest'&&message.payload.id==='launcher'&&message.payload.action==='status'))await new Promise(resolve=>setTimeout(resolve,350));
+      return result;
+    });
     await page.addInitScript(() => {
       window.testErrors = [];
       window.addEventListener("error", (e) => testErrors.push(e.message));
@@ -155,6 +161,14 @@ const originalPaths=[path.join(info.user,'mods/default.txt'),path.join(info.game
 for(const item of ['999111','999112'])originalPaths.push(path.join(info.root,'steam/steamapps/workshop/content/108600',item,'mods/Java/42/mod.info'));
 if(cases==='Generic')for(const item of ['999111','999112'])originalPaths.push(path.join(info.root,'steam/steamapps/workshop/content/108600',item,'mods/Java/42/payload.jar'));
 const originals=Object.fromEntries(originalPaths.map(f=>[f,bytes(f)]));
+if(chosen('BootSelection')){
+ async function bootReady(){await page.waitForFunction(id=>orange.launchConfigurationUi.model.cover?.status.configurationId===id&&orange.state.status?.configurationId===id,bootProfile.id);await page.waitForTimeout(500);}
+ await bootReady();await page.screenshot({path:path.join(out,'final-BootSelection-catalog-late.png')});assert.doesNotMatch(await page.locator('#page').innerText(),/游戏目录已变化，请重新核对配置/,'a normal fresh page must not compare temporary launcher status with persisted named game');assert.equal(await page.evaluate(()=>orange.state.status.gamePath),path.join(info.root,'version2'));assert.equal(await page.evaluate(()=>orange.state.status.validGame),true,'owned independent fixture satisfies the native game-file check');assert.ok(calls.filter(c=>c.action==='configurationRequest'&&c.payload.action==='status').every(c=>c.payload.id===bootProfile.id),'initial status requests belong to the persisted configuration');
+ bootOrder='status-late';await page.reload();await page.waitForFunction(()=>!!window.orange);await bootReady();assert.doesNotMatch(await page.locator('#page').innerText(),/游戏目录已变化，请重新核对配置/);await page.screenshot({path:path.join(out,'final-BootSelection-status-late.png')});
+ heldOwner=bootProfile.id;const oldRead=page.evaluate(()=>orange.request('status').then(value=>({ok:true,value}),error=>({ok:false,error:error.message})));const deadline=Date.now()+10000;while(!releaseOwnedStatus){assert.ok(Date.now()<deadline,'actual native owner reply reached transport hold');await page.waitForTimeout(20);}const epoch=await page.evaluate(()=>orange.launchConfigurationUi.model.epoch);await ask('launchConfigurationSelect',{id:'launcher'});await page.evaluate(()=>orange.launchConfigurationUi.reload());assert.equal(await page.evaluate(()=>orange.launchConfigurationUi.model.epoch),epoch,'external catalog refresh has no intentional select epoch');releaseOwnedStatus();const stale=await oldRead;assert.equal(stale.ok,false,'late reply for old owner is rejected even when catalog reload does not change epoch');assert.match(stale.error,/忽略之前的读取/);assert.equal(await page.evaluate(()=>orange.state.status.configurationId),'launcher');await page.locator('#launch-configuration-select').selectOption(bootProfile.id);await bootReady();assert.doesNotMatch(await page.locator('#page').innerText(),/游戏目录已变化，请重新核对配置/,'intentional reselect still clears only the path notice');
+ const invalidated=await page.evaluate(()=>{const old=orange.state.status.configStamp,stale={marker:'old actual'};orange.state.actual.shaders=stale;orange.acceptStatus({...orange.state.status,configStamp:old+'-changed'});return {stamp:orange.state.status.configStamp,expected:old+'-changed',cleared:orange.state.actual.shaders!==stale};});assert.equal(invalidated.stamp,invalidated.expected);assert.equal(invalidated.cleared,true,'same-owner external stamp change clears actual data');const external=await page.evaluate(()=>{const before=orange.state.experienceEpoch;orange.state.preflight={marker:'old preflight'};orange.acceptStatus({...orange.state.status,gamePath:orange.state.status.gamePath+'-external'});return {epoch:orange.state.experienceEpoch,before,preflight:orange.state.preflight};});assert.ok(external.epoch>external.before);assert.equal(external.preflight,null);assert.match(await page.locator('#page').innerText(),/游戏目录已变化，请重新核对配置/,'same-owner external path changes remain visible');
+ console.log('PASS BootSelection fresh persisted named boot in both native reply orders; no launcher bootstrap status, same-owner external path/stamp invalidation retained');
+}
 if(chosen('SortWarnings')){
  const put=(id,extra='')=>{const file=path.join(info.user,'mods',id,'42/mod.info');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'id='+id+'\nname='+id+'\n'+extra);};
  put('UnselectedDecoration','description='+('x'.repeat(400))+'\nposter=../invalid.png\n');

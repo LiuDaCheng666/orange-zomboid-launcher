@@ -93,11 +93,13 @@ const launchConfigurationUi = (() => {
   }
   request = async function (action, payload = {}) {
     if (!owned.has(action)) return raw(action, payload);
+    if (!model.list) await reload();
+    if (!model.list) throw Error(model.error || "启动配置尚未读取，请重新读取。");
     const id = selectedId(),
       epoch = model.epoch;
     const data = await ownerRequest(id, action, payload);
     if (
-      epoch !== model.epoch &&
+      (epoch !== model.epoch || id !== selectedId()) &&
       [
         "status",
         "memoryGet",
