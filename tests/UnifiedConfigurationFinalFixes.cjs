@@ -28,13 +28,13 @@ assert.equal(
 // Each case needs an untouched installation; keep its real files independent.
 if (!process.argv[4] || process.argv[4] === "all") {
   const { spawnSync } = require("node:child_process");
-  for (const name of ["R1", "R2", "R3", "Minor1"]) {
+  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins"]) {
     const result = spawnSync(process.execPath, [__filename, process.argv[2], process.argv[3], name], { stdio: "inherit", windowsHide: true });
     if (result.status !== 0) process.exit(result.status || 1);
   }
   process.exit(0);
 }
-assert.ok(["R1", "R2", "R3", "Minor1"].includes(process.argv[4]), "unknown final review case");
+assert.ok(["R1", "R2", "R3", "Minor1", "Builtins"].includes(process.argv[4]), "unknown final review case");
 const out = path.resolve(process.argv[3]),
   child = spawn(
     path.join(process.argv[2], "NativeUi.exe"),
@@ -145,9 +145,18 @@ async function idle(){await page.waitForFunction(()=>!orange.launchConfiguration
 async function saved(){await page.locator('[data-configuration-save]').click();await idle();assert.match(await page.locator('[data-configuration-editor-status]').innerText(),/已保存/);}
 const owner=(action,payload={})=>ask('configurationRequest',{id:'launcher',action,payload}).then(r=>r.data);
 const bytes=f=>fs.readFileSync(f).toString('base64');
+// A managed row makes the original Steam read distinct from owned projection.
+if(cases==='Builtins')fs.writeFileSync(path.join(info.user,'mods/default.txt'),'mods\n{\n mod = B,\n mod = ZombieBuddy,\n mod = A,\n}\nmaps\n{\n}\n');
 const originalPaths=[path.join(info.user,'mods/default.txt'),path.join(info.game,'ProjectZomboid64.json'),path.join(info.game,'ProjectZomboid64.bat'),path.join(info.root,'steam/userdata/44/config/localconfig.vdf')];
 for(const item of ['999111','999112'])originalPaths.push(path.join(info.root,'steam/steamapps/workshop/content/108600',item,'mods/Java/42/mod.info'));
 const originals=Object.fromEntries(originalPaths.map(f=>[f,bytes(f)]));
+if(chosen('Builtins')){
+ for(const [id,expected] of [['launcher',['B','A']],['steam',['B','ZombieBuddy','A']],['vanilla',['B','A']]]){
+  const view=await ask('configurationRead',{id});assert.equal(view.id,id);assert.equal(view.available,true);assert.deepEqual(view.ordinaryIds,expected,id+' preserves its own read contract');
+ }
+ assert.equal(fs.existsSync(info.ownedDefault),false,'builtin reads do not initialize owned defaults');assert.equal(fs.existsSync(info.selection),false,'builtin reads do not initialize component state');
+ console.log('PASS Builtins native launcher/steam/vanilla reads; Steam retains source managed rows, owned modes project, originals unchanged');
+}
 if(chosen('R1')){
  await opened();await page.locator('[data-configuration-tab="components"]').click();await idle();
  const twin=item=>page.locator('[data-configuration-component="Twin"]').filter({hasText:'工坊 '+item});
