@@ -28,13 +28,13 @@ assert.equal(
 // Each case needs an untouched installation; keep its real files independent.
 if (!process.argv[4] || process.argv[4] === "all") {
   const { spawnSync } = require("node:child_process");
-  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel"]) {
+  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings"]) {
     const result = spawnSync(process.execPath, [__filename, process.argv[2], process.argv[3], name], { stdio: "inherit", windowsHide: true });
     if (result.status !== 0) process.exit(result.status || 1);
   }
   process.exit(0);
 }
-assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel"].includes(process.argv[4]), "unknown final review case");
+assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings"].includes(process.argv[4]), "unknown final review case");
 const out = path.resolve(process.argv[3]),
   child = spawn(
     path.join(process.argv[2], "NativeUi.exe"),
@@ -155,6 +155,26 @@ const originalPaths=[path.join(info.user,'mods/default.txt'),path.join(info.game
 for(const item of ['999111','999112'])originalPaths.push(path.join(info.root,'steam/steamapps/workshop/content/108600',item,'mods/Java/42/mod.info'));
 if(cases==='Generic')for(const item of ['999111','999112'])originalPaths.push(path.join(info.root,'steam/steamapps/workshop/content/108600',item,'mods/Java/42/payload.jar'));
 const originals=Object.fromEntries(originalPaths.map(f=>[f,bytes(f)]));
+if(chosen('SortWarnings')){
+ const put=(id,extra='')=>{const file=path.join(info.user,'mods',id,'42/mod.info');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'id='+id+'\nname='+id+'\n'+extra);};
+ put('UnselectedDecoration','description='+('x'.repeat(400))+'\nposter=../invalid.png\n');
+ put('NeedsDependency','require=MissingDependency\n');put('Loop1','loadAfter=Loop2\n');put('Loop2','loadAfter=Loop1\n');put('DeclaredConflict','incompatible=A\n');
+ const gameOnly=path.join(info.game,'mods/GameOnly/42/mod.info');fs.mkdirSync(path.dirname(gameOnly),{recursive:true});fs.writeFileSync(gameOnly,'id=GameOnly\n');
+ const readTree=folder=>Object.fromEntries(fs.readdirSync(folder,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?Object.entries(readTree(path.join(folder,entry.name))):[[path.join(folder,entry.name),{bytes:bytes(path.join(folder,entry.name)),mtime:fs.statSync(path.join(folder,entry.name)).mtimeMs}]]));
+ const frozenBefore=readTree(info.snapshotRoot);
+ const catalog=await owner('modCatalog');assert.match(JSON.stringify(catalog),/作者元数据超过显示限制/);assert.match(JSON.stringify(catalog),/封面路径无效/,'ordinary catalog keeps its display diagnostics');
+ await opened();assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),['B','A']);
+ await page.locator('[data-configuration-sort]').click();await idle();assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),['A','B']);
+ const text=await page.locator('[data-configuration-editor-status]').innerText();await page.screenshot({path:path.join(out,'final-SortWarnings-ordinary.png')});
+ assert.doesNotMatch(text,/作者元数据超过显示限制|封面路径无效/,'sort report must not import unrelated catalog decoration warnings');assert.match(text,/加载顺序：A → B/,'selected ordering advice remains visible');assert.equal(fs.existsSync(info.ownedDefault),false,'sort is draft-only');assert.equal(fs.existsSync(info.selection),false);
+ const ordinary=await owner('modSort',{mods:['B','A']});assert.deepEqual(ordinary.mods,['A','B']);assert.deepEqual(ordinary.warnings,[]);assert.match(ordinary.violations.join('\n'),/A → B/);
+ put('LargeSelected','description='+('y'.repeat(300000))+'\nloadAfter=A\n');
+ const large=await owner('modSort',{mods:['LargeSelected','A']});assert.deepEqual(large.mods,['A','LargeSelected'],'sorting retains its existing full metadata limit and reads author edges beyond display/identity summaries');assert.deepEqual(large.errors,[]);assert.deepEqual(large.warnings,[]);fs.unlinkSync(path.join(info.user,'mods/LargeSelected/42/mod.info'));
+ for(const [ids,pattern] of [[['NeedsDependency'],/缺少依赖：NeedsDependency → MissingDependency/],[['A','MissingSource'],/模组未下载或本地目录缺失：MissingSource/],[['GameOnly'],/模组未下载或本地目录缺失：GameOnly/],[['Loop2','Loop1'],/依赖或加载顺序存在循环/],[['DeclaredConflict','A'],/作者声明模组冲突/]]){const result=await owner('modSort',{mods:ids});assert.match(result.errors.join('\n'),pattern);assert.deepEqual(result.mods,ids,'actionable error preserves requested order');assert.equal(result.changed,false);assert.doesNotMatch(JSON.stringify(result),/作者元数据超过显示限制|封面路径无效/);}
+ await page.locator('[data-source-key="NeedsDependency"]').click();const errorDraft=await page.evaluate(()=>orange.launchConfigurationUi.editor().ids);await page.locator('[data-configuration-sort]').click();await idle();assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),errorDraft);assert.match(await page.locator('[data-configuration-editor-status]').innerText(),/缺少依赖：NeedsDependency → MissingDependency/);await page.screenshot({path:path.join(out,'final-SortWarnings-selected-error.png')});await page.locator('[data-configuration-close]').click();await page.locator('#confirm-yes').click();
+ await page.locator('#launch-configuration-select').selectOption('snapshot:'+info.snapshotId);await opened();const frozenIds=await page.evaluate(()=>orange.launchConfigurationUi.editor().ids);assert.deepEqual(frozenIds,['B','A']);await page.locator('[data-configuration-sort]').click();await idle();assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),['A','B']);assert.match(await page.locator('[data-configuration-editor-status]').innerText(),/加载顺序：A → B/);assert.doesNotMatch(await page.locator('[data-configuration-editor-status]').innerText(),/作者元数据超过显示限制|封面路径无效/);await page.screenshot({path:path.join(out,'final-SortWarnings-frozen.png')});await page.locator('[data-configuration-close]').click();await page.locator('#confirm-yes').click();assert.deepEqual(readTree(info.snapshotRoot),frozenBefore,'frozen sort changes only its draft, preserving every copied byte/mtime');assert.equal(fs.existsSync(info.ownedDefault),false);assert.equal(fs.existsSync(info.selection),false);
+ console.log('PASS SortWarnings selected ordinary/frozen DOM order, native selected dependency/missing/cycle/conflict errors, catalog decorations retained only in catalog, draft-only exact files');
+}
 if(chosen('Builtins')){
  for(const [id,expected] of [['launcher',['B','A']],['steam',['B','ZombieBuddy','A']],['vanilla',['B','A']]]){
   const view=await ask('configurationRead',{id});assert.equal(view.id,id);assert.equal(view.available,true);assert.deepEqual(view.ordinaryIds,expected,id+' preserves its own read contract');
