@@ -978,7 +978,108 @@ const ask = async (action, payload = {}) => {
       "close cancels only A read token",
     );
     await ask("fixtureCanRestart");
-    assert.equal(await page.locator(".configuration-source").count(), 807);
+    const expectedOrdinarySources = [
+      "A",
+      "B",
+      "Added",
+      "Big",
+      ...Array.from(
+        { length: 800 },
+        (_, i) => "Extra" + String(i).padStart(4, "0"),
+      ),
+    ].sort();
+    assert.deepEqual(
+      await page
+        .locator(".configuration-source [data-source-key]")
+        .evaluateAll((es) => es.map((e) => e.dataset.sourceKey).sort()),
+      expectedOrdinarySources,
+      "ordinary Add contains exactly the four Lua fixtures and all 800 Extra fixtures",
+    );
+    for (const id of ["Java", "Twin", "ZombieBuddy"])
+      assert.equal(
+        await page
+          .locator(`.configuration-source [data-source-key="${id}"]`)
+          .count(),
+        0,
+        id + " is managed through components rather than ordinary Add",
+      );
+    const componentViewStart = calls.length;
+    await page.locator('[data-configuration-tab="components"]').click();
+    await page.waitForFunction(
+      () =>
+        !!orange.launchConfigurationUi.editor()?.inventory &&
+        !orange.launchConfigurationUi.editor()?.reading,
+    );
+    const javaSources = await page.evaluate(() => {
+      const editor = orange.launchConfigurationUi.editor();
+      return {
+        rows: editor.inventory.rows
+          .filter((r) => ["Java", "Twin"].includes(r.modId))
+          .map((r) => ({
+            id: r.modId,
+            workshopId: r.workshopId || "",
+            token: r.token,
+            enabled: r.enabled,
+          })),
+        approved: (editor.approvals?.jars || []).filter((r) => r.decision === true),
+      };
+    });
+    assert.deepEqual(
+      javaSources.rows
+        .map(({ token, ...r }) => r)
+        .sort((a, b) =>
+          (a.id + a.workshopId).localeCompare(b.id + b.workshopId),
+        ),
+      [
+        { id: "Java", workshopId: "", enabled: false },
+        { id: "Twin", workshopId: "999111", enabled: false },
+        { id: "Twin", workshopId: "999112", enabled: false },
+      ],
+      "all three generic Java sources remain separately selectable and disabled in B",
+    );
+    assert.equal(
+      javaSources.approved.length,
+      0,
+      "viewing components grants no Java approval",
+    );
+    assert.deepEqual(
+      await page
+        .locator(
+          '[data-configuration-component="Java"],[data-configuration-component="Twin"]',
+        )
+        .evaluateAll((es) =>
+          es.map((e) => e.dataset.configurationSourceToken).sort(),
+        ),
+      javaSources.rows.map((r) => r.token).sort(),
+      "component DOM exposes the exact native source tokens, including both Twin sources",
+    );
+    for (const row of javaSources.rows) {
+      const card = page.locator(
+        `[data-configuration-source-token="${row.token}"]`,
+      );
+      assert.equal(
+        await card.locator("[data-configuration-component-toggle]").innerText(),
+        "启用",
+      );
+      assert.equal(await card.locator("[data-configuration-approve]").count(), 0);
+      if (row.workshopId)
+        assert.match(await card.innerText(), new RegExp(row.workshopId));
+    }
+    assert.ok(
+      !calls.slice(componentViewStart).some((c) =>
+        [
+          "javaComponentsApply",
+          "javaComponentsEnable",
+          "componentsAction",
+          "javaSave",
+        ].includes(c.payload?.action),
+      ),
+      "opening component management never selects or approves a source",
+    );
+    await page.screenshot({
+      path: path.join(out, "long-catalog-component-sources.png"),
+    });
+    await page.locator('[data-configuration-tab="mods"]').click();
     for (const width of [1366, 420]) {
       await page.setViewportSize({ width, height: 900 });
       await page
