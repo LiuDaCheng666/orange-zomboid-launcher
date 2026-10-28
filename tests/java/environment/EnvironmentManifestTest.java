@@ -28,6 +28,8 @@ public final class EnvironmentManifestTest {
   check(choices.size()==2&&"NewMod".equals(choices.get("OldMod"))&&"".equals(choices.get("SkippedMod")),"optional explicit replacement and skip choices are decoded exactly");
   check(((Map<?,?>)type.getField("choices").get(accepted)).isEmpty(),"old manifests omit choices and retain the original behavior");
   check(load(file,text+"choices=\n",game,home)!=null,"explicit empty choices remain compatible");
+  String namespace="1299328280/ToadTraits",replacement="Firearms/Replacement";String encodedNamespace=Base64.getEncoder().encodeToString(namespace.getBytes(StandardCharsets.UTF_8)),encodedReplacement=Base64.getEncoder().encodeToString(replacement.getBytes(StandardCharsets.UTF_8));
+  Object namespaced=load(file,text+"choices="+encodedNamespace+":"+encodedReplacement+"\nactiveManaged="+encodedReplacement+"\nactiveComponents="+encodedReplacement+"\nactiveOrder="+encodedReplacement+"\n",game,home);List<String> namespaceMods=new ArrayList<String>(Arrays.asList(namespace,"Ordinary/Unselected"));type.getMethod("normalizeActive",List.class,List.class).invoke(namespaced,namespaceMods,null);check(namespaceMods.equals(Arrays.asList(replacement,"Ordinary/Unselected")),"frozen namespace choices and active policy preserve full logical IDs without treating them as root paths");
   invalid(file,text+choice+choice,game,home,"duplicate choices property is rejected");
   invalid(file,text+"choices=T2xkTW9k:T3RoZXI=,T2xkTW9k:\n",game,home,"duplicate old choice identity is rejected");
   invalid(file,text+"choices=:TmV3TW9k\n",game,home,"empty old choice identity is rejected");
