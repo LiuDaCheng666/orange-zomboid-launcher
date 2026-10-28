@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -65,8 +66,9 @@ namespace PZ3D {
   internal CoreHealthStartup(string[] args){if(args.Length!=4||args[0]!="--core-update-health")throw new InvalidDataException("Invalid health startup arguments.");root=CoreDeployment.Root(args[1]);task=args[2];nonce=args[3];if(!CoreDeployment.SamePath(Process.GetCurrentProcess().MainModule.FileName,CoreReleaseProtocol.Target(root,"橙子启动器.exe")))throw new InvalidDataException("Health executable path differs from installation.");var info=CoreUpdateTransaction.GetTaskInfo(root,task);if(info.State!="PendingHealth"||info.Nonce!=nonce)throw new InvalidDataException("Health task is not pending.");var until=DateTime.UtcNow.AddSeconds(10);while(true){try{CoreUpdateTransaction.AssertCandidateStartup(root,task,CoreUpdateTrust.PublicKeyXml);break;}catch(IOException){if(DateTime.UtcNow>=until)throw;Thread.Sleep(25);}}}
   internal void PageLoaded(){page=true;TryConfirm();}
   internal void BridgeReady(){bridge=true;TryConfirm();}
-  internal void AssertAction(string action){ValidateAction(action,CoreUpdateTransaction.GetTaskInfo(root,task));}
-  internal static void ValidateAction(string action,CoreUpdateTaskInfo info){if(ModernController.NativeReads.Contains(action)||ModernController.NativeNetworkReads.Contains(action)||action=="cancel"||action=="coreUpdateStatus"||action=="coreUpdateCheck"||action=="coreUpdateCancel")return;if(info.State!="Succeeded")throw new InvalidOperationException("新版界面正在完成健康验证，完成后才能启动游戏或修改文件。");}
+  internal void AssertAction(string action,Dictionary<string,object> payload){ValidateAction(action,payload,CoreUpdateTransaction.GetTaskInfo(root,task));}
+  internal static void ValidateAction(string action,CoreUpdateTaskInfo info){ValidateAction(action,new Dictionary<string,object>(),info);}
+  internal static void ValidateAction(string action,Dictionary<string,object> payload,CoreUpdateTaskInfo info){if(ModernHostPolicy.IsNativeRead(action,payload)||ModernController.NativeNetworkReads.Contains(action)||action=="cancel"||action=="coreUpdateStatus"||action=="coreUpdateCheck"||action=="coreUpdateCancel")return;if(info.State!="Succeeded")throw new InvalidOperationException("新版界面正在完成健康验证，完成后才能启动游戏或修改文件。");}
   void TryConfirm(){if(!confirmed&&page&&bridge){CoreUpdateTransaction.ConfirmHealth(root,task,nonce);confirmed=true;}}
  }
 }

@@ -647,7 +647,7 @@ const baseAcceptStatus=acceptStatus;
 const actualGlobals=['memory','shaders','settings','mods'];
 function invalidateActual(keys){for(const key of keys){delete state.actual[key];delete state.experienceErrors[key];delete state.experienceReads[key];}}
 function actualWritten(action,data){const keys=({memorySave:['memory'],settingsSave:['settings'],shaderSelect:['shaders','settings'],importShader:['shaders','settings'],modProfileActivate:['mods'],modAutoSort:['mods'],saveSave:['saves'],serverUpsert:['servers'],serverDelete:['servers'],favoriteImport:['servers'],dlss:['settings'],profileRecover:['mods','saves'],profileLaunch:['mods','saves'],componentsAction:actualGlobals,maintenance:actualGlobals,buddyTakeover:actualGlobals,buddyRecover:actualGlobals,forceTakeoverApply:actualGlobals,forceTakeoverRecover:actualGlobals,playProfileApply:[...actualGlobals,'saves'],playProfileRecover:[...actualGlobals,'saves']})[action];if(!keys||data.cancelled||data.status&&!['completed','unchanged','recovered'].includes(data.status))return;invalidateActual(keys);if(state.route==='home')render();}
-acceptStatus=function(data){const changed=state.status&&state.status.gamePath!==data.gamePath,stampChanged=state.status&&state.status.configStamp!==data.configStamp,versionChanged=JSON.stringify(state.status?.gameVersion)!==JSON.stringify(data.gameVersion);if(changed){cancelLaunchAttempt();if(state.launchAttempt?.submitted)state.launchAttempt=null;state.playProfiles=null;state.actual={};state.playPreview=null;state.preflight=null;state.diagnostics=null;resetLogAnalysis();state.restoreResult=null;state.launchFeedback='游戏目录已变化，请重新核对配置。';state.experienceEpoch=(state.experienceEpoch||0)+1;state.experienceReads={};state.experienceErrors={};}else if(stampChanged)invalidateActual(actualGlobals);const pendingBefore=JSON.stringify(state.status?.startup),attemptBefore=state.launchAttempt;baseAcceptStatus(data);reconcileLaunchPending(data.startup);if(pendingBefore!==JSON.stringify(data.startup)||attemptBefore!==state.launchAttempt){if(state.route==='home')render();else disable();}if((changed||stampChanged||versionChanged)&&state.route==='home'||changed&&state.route==='diagnostics')render();};
+acceptStatus=function(data,options={}){const intentionalSelection=typeof options.intentionalSelection==='string'&&options.intentionalSelection===data.configurationId;if(intentionalSelection&&state.launchFeedback==='游戏目录已变化，请重新核对配置。')state.launchFeedback='';const changed=state.status&&state.status.gamePath!==data.gamePath,stampChanged=state.status&&state.status.configStamp!==data.configStamp,versionChanged=JSON.stringify(state.status?.gameVersion)!==JSON.stringify(data.gameVersion);if(changed){cancelLaunchAttempt();if(state.launchAttempt?.submitted)state.launchAttempt=null;state.playProfiles=null;state.actual={};state.playPreview=null;state.preflight=null;state.diagnostics=null;resetLogAnalysis();state.restoreResult=null;state.launchFeedback=intentionalSelection?'':'游戏目录已变化，请重新核对配置。';state.experienceEpoch=(state.experienceEpoch||0)+1;state.experienceReads={};state.experienceErrors={};}else if(stampChanged)invalidateActual(actualGlobals);const pendingBefore=JSON.stringify(state.status?.startup),attemptBefore=state.launchAttempt;baseAcceptStatus(data);reconcileLaunchPending(data.startup);if(pendingBefore!==JSON.stringify(data.startup)||attemptBefore!==state.launchAttempt){if(state.route==='home')render();else disable();}if((changed||stampChanged||versionChanged)&&state.route==='home'||changed&&state.route==='diagnostics')render();};
 function reconcilePlayProfiles(value){
  if(!value||!Array.isArray(value.profiles)||typeof value.stamp!=='string'||!value.stamp||typeof value.selectedId!=='string'||value.profiles.some(p=>!p||typeof p.id!=='string'))throw new Error('游玩配置格式不可用，请重新读取。');
  const p=value.selectedProfile,rows=value.profiles.filter(p=>p.id===value.selectedId);
@@ -1150,7 +1150,7 @@ const launchConfigurationUi = (() => {
           `<option value="${esc(v.id)}" ${v.id === id ? "selected" : ""}>${esc(v.name)} · ${esc(v.version)}</option>`,
       )
       .join("");
-  async function readCover(id, epoch) {
+  async function readCover(id, epoch, intentionalSelection = false) {
     const row = model.list?.configurations.find((r) => r.id === id);
     model.selected = row;
     model.cover = null;
@@ -1164,9 +1164,9 @@ const launchConfigurationUi = (() => {
       status.components = status.components.filter((c) => c.id !== "base");
     model.cover = { status, memory };
     state.actual.memory = memory;
-    acceptStatus(status);
+    acceptStatus(status, { intentionalSelection: intentionalSelection ? id : null });
   }
-  async function reload() {
+  async function reload(intentionalSelection = false) {
     if (model.reading) return model.reading;
     const epoch = model.epoch;
     model.error = "";
@@ -1179,7 +1179,7 @@ const launchConfigurationUi = (() => {
         if (epoch !== model.epoch) return;
         model.list = list;
         model.versions = versions;
-        await readCover(list.selectedId, epoch);
+        await readCover(list.selectedId, epoch, intentionalSelection);
       } catch (error) {
         if (epoch === model.epoch) model.error = error.message;
       } finally {
@@ -1212,7 +1212,7 @@ const launchConfigurationUi = (() => {
       model.list = list;
       model.selected = list.configurations.find((r) => r.id === id);
       render();
-      await readCover(id, epoch);
+      await readCover(id, epoch, true);
     } catch (error) {
       if (epoch === model.epoch) model.error = error.message;
     } finally {
@@ -1415,7 +1415,7 @@ const launchConfigurationUi = (() => {
           const approval = r.enabled
             ? approvals.find((j) => j.id === r.modId)
             : null;
-          return `<article class="card" data-configuration-component="${esc(r.modId)}" data-configuration-source-token="${esc(r.token)}"><h3>${esc((editor.frozen ? meta(editor, r.modId).name : r.name) || r.name || r.modId)}</h3><p class="small">${esc(r.workshopId ? "工坊 " + r.workshopId : r.sourceLabel || (editor.frozen ? "快照副本" : "本地来源"))}</p><p>${r.enabled ? "已启用" : "未启用"}${r.jarState === "missing" ? " · 文件缺失" : ""}${r.jarState === "ready" ? " · Java " + (approval?.decision === true ? "已允许" : approval?.decision === false ? "已拒绝" : "待授权") : ""}</p><div class="actions"><button data-configuration-component-toggle="${index}" data-configuration-write>${r.enabled ? "停用" : "启用"}</button><button data-configuration-component-remove="${index}" data-configuration-write>${editor.frozen ? "移除副本" : "从此配置移除"}</button>${approval ? `<button data-configuration-approve="${esc(approval.approvalToken || approval.sha256)}" data-configuration-decision="${approval.decision !== true}" data-configuration-write>${approval.decision === true ? "拒绝 Java 文件" : "允许此 Java 文件"}</button>` : ""}</div>${approval ? `<details data-configuration-java-source><summary>来源与 Java 文件</summary><p>${editor.frozen ? "此快照中的固定副本" : "此配置所选的当前文件"}</p><p class="small">Java 包 ${esc(r.packageName || "未声明")}</p><p class="key">SHA-256 ${esc(approval.sha256)}</p></details>` : ""}${r.workshopId ? `<button data-mod-workshop="${esc(r.workshopId)}">工坊原页 ↗</button>` : ""}${(r.limitations || []).length ? '<p class="small">' + r.limitations.map(esc).join(" · ") + "</p>" : ""}</article>`;
+          return `<article class="card" data-configuration-component="${esc(r.modId)}" data-configuration-source-token="${esc(r.token)}"><h3>${esc((editor.frozen ? meta(editor, r.modId).name : r.name) || r.name || r.modId)}</h3><p class="small">${esc(r.workshopId ? "工坊 " + r.workshopId : r.sourceLabel || (editor.frozen ? "快照副本" : "本地来源"))}</p><p>${r.enabled ? "已启用" : "未启用"}${r.jarState === "missing" ? " · 文件缺失" : ""}${r.jarState === "ready" ? " · Java " + (approval?.decision === true ? "已允许" : approval?.decision === false ? "已拒绝" : "待授权") : ""}</p><div class="actions"><button data-configuration-component-toggle="${index}" data-configuration-write>${r.enabled ? "停用" : "启用"}</button><button data-configuration-component-remove="${index}" data-configuration-write ${r.canUninstall ? "" : "disabled"}>${editor.frozen ? "移除副本" : "从此配置移除"}</button>${approval ? `<button data-configuration-approve="${esc(approval.approvalToken || approval.sha256)}" data-configuration-decision="${approval.decision !== true}" data-configuration-write>${approval.decision === true ? "拒绝 Java 文件" : "允许此 Java 文件"}</button>` : ""}</div>${approval ? `<details data-configuration-java-source><summary>来源与 Java 文件</summary><p>${editor.frozen ? "此快照中的固定副本" : "此配置所选的当前文件"}</p><p class="small">Java 包 ${esc(r.packageName || "未声明")}</p><p class="key">SHA-256 ${esc(approval.sha256)}</p></details>` : ""}${r.workshopId ? `<button data-mod-workshop="${esc(r.workshopId)}">工坊原页 ↗</button>` : ""}${(r.limitations || []).length ? '<p class="small">' + r.limitations.map(esc).join(" · ") + "</p>" : ""}</article>`;
         })
         .join("") || "<p>没有已读取的组件。</p>"
     }</div><details data-known-component-sources><summary>已知组件与下载</summary><div class="actions">${(
@@ -1894,7 +1894,7 @@ const launchConfigurationUi = (() => {
               false;
             editor.element.querySelector(".status-warning")?.remove();
             model.list = null;
-            await reload();
+            await reload(true);
             return {
               message: "游戏版本已保存，已读取该版本的当前模组。",
             };
@@ -2287,7 +2287,7 @@ const snapshotUi=(()=>{
  const previousRender=render;render=function(){const focused=focusRecord($('[data-environment-root]'));previousRender();decorate();if(focused&&active())$('#page')?.querySelector(focused.selector)?.focus({preventScroll:true});};
  const previousDisable=disable;disable=function(){previousDisable();lockControls();};
  const previousTask=task;task=function(data){previousTask(data);if(model.operation)updateProgress(data);};
- const previousStatus=acceptStatus;acceptStatus=function(data){previousStatus(data);if(sync()&&active()){paint();void readList();}lockControls();};
+ const previousStatus=acceptStatus;acceptStatus=function(data,options){previousStatus(data,options);if(sync()&&active()){paint();void readList();}lockControls();};
  const previousRoute=route;route=function(name){if(name!==state.route&&state.route==='versions'){closeDialog(true);model.revision++;model.reading=null;model.needsRead=true;}previousRoute(name);};
  document.addEventListener('ozl-environment-progress',event=>{const value=event.detail,ticket=model.dialog;if(!ticket||!value||value.saveId!==ticket.saveId)return;if(ticket.reading&&value.jobId===ticket.jobId||model.operation?.dialog===ticket&&value.jobId==null)updateProgress(value);});
  document.addEventListener('change',event=>{if(event.target.matches('[data-environment-save]'))chooseSave(event.target.value);else if(event.target.matches('[data-environment-mod-choice]')){if(model.dialog)model.dialog.element.querySelector('[data-environment-dialog-error]').textContent='';lockControls();}});

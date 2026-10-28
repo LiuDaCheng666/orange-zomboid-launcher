@@ -1,4 +1,4 @@
-param([string]$ReviewCase="")
+param([string]$ReviewCase="",[string]$FinalCase="")
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 . (Join-Path $repo 'build/ProductionSources.ps1')
@@ -14,5 +14,5 @@ $refs+="/resource:$repo/Orange3DTool/Assets/OrangeStartup.jar,OrangeStartup.jar"
 $refs+="/resource:$repo/Orange3DTool/Assets/OrangeLaunchBridge.lua,OrangeLaunchBridge.lua"
 & C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe /nologo /target:exe /main:PZ3D.UnifiedConfigurationNative "/out:$bin/NativeUi.exe" $refs $sources 2>&1 | Tee-Object -FilePath "$out/compile.log"
 if($LASTEXITCODE -ne 0){throw 'native compilation failed'}
-if($ReviewCase){node (Join-Path $PSScriptRoot 'UnifiedConfigurationReviewFixes.cjs') $bin $out $ReviewCase}else{node (Join-Path $PSScriptRoot 'UnifiedConfigurationNative.cjs') $bin $out}
+if($FinalCase){node (Join-Path $PSScriptRoot 'UnifiedConfigurationFinalFixes.cjs') $bin $out $FinalCase}elseif($ReviewCase){node (Join-Path $PSScriptRoot 'UnifiedConfigurationReviewFixes.cjs') $bin $out $ReviewCase}else{node (Join-Path $PSScriptRoot 'UnifiedConfigurationNative.cjs') $bin $out}
 if($LASTEXITCODE -ne 0){throw 'unified configuration acceptance failed'}

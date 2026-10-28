@@ -126,7 +126,7 @@ const launchConfigurationUi = (() => {
           `<option value="${esc(v.id)}" ${v.id === id ? "selected" : ""}>${esc(v.name)} · ${esc(v.version)}</option>`,
       )
       .join("");
-  async function readCover(id, epoch) {
+  async function readCover(id, epoch, intentionalSelection = false) {
     const row = model.list?.configurations.find((r) => r.id === id);
     model.selected = row;
     model.cover = null;
@@ -140,9 +140,9 @@ const launchConfigurationUi = (() => {
       status.components = status.components.filter((c) => c.id !== "base");
     model.cover = { status, memory };
     state.actual.memory = memory;
-    acceptStatus(status);
+    acceptStatus(status, { intentionalSelection: intentionalSelection ? id : null });
   }
-  async function reload() {
+  async function reload(intentionalSelection = false) {
     if (model.reading) return model.reading;
     const epoch = model.epoch;
     model.error = "";
@@ -155,7 +155,7 @@ const launchConfigurationUi = (() => {
         if (epoch !== model.epoch) return;
         model.list = list;
         model.versions = versions;
-        await readCover(list.selectedId, epoch);
+        await readCover(list.selectedId, epoch, intentionalSelection);
       } catch (error) {
         if (epoch === model.epoch) model.error = error.message;
       } finally {
@@ -188,7 +188,7 @@ const launchConfigurationUi = (() => {
       model.list = list;
       model.selected = list.configurations.find((r) => r.id === id);
       render();
-      await readCover(id, epoch);
+      await readCover(id, epoch, true);
     } catch (error) {
       if (epoch === model.epoch) model.error = error.message;
     } finally {
@@ -391,7 +391,7 @@ const launchConfigurationUi = (() => {
           const approval = r.enabled
             ? approvals.find((j) => j.id === r.modId)
             : null;
-          return `<article class="card" data-configuration-component="${esc(r.modId)}" data-configuration-source-token="${esc(r.token)}"><h3>${esc((editor.frozen ? meta(editor, r.modId).name : r.name) || r.name || r.modId)}</h3><p class="small">${esc(r.workshopId ? "工坊 " + r.workshopId : r.sourceLabel || (editor.frozen ? "快照副本" : "本地来源"))}</p><p>${r.enabled ? "已启用" : "未启用"}${r.jarState === "missing" ? " · 文件缺失" : ""}${r.jarState === "ready" ? " · Java " + (approval?.decision === true ? "已允许" : approval?.decision === false ? "已拒绝" : "待授权") : ""}</p><div class="actions"><button data-configuration-component-toggle="${index}" data-configuration-write>${r.enabled ? "停用" : "启用"}</button><button data-configuration-component-remove="${index}" data-configuration-write>${editor.frozen ? "移除副本" : "从此配置移除"}</button>${approval ? `<button data-configuration-approve="${esc(approval.approvalToken || approval.sha256)}" data-configuration-decision="${approval.decision !== true}" data-configuration-write>${approval.decision === true ? "拒绝 Java 文件" : "允许此 Java 文件"}</button>` : ""}</div>${approval ? `<details data-configuration-java-source><summary>来源与 Java 文件</summary><p>${editor.frozen ? "此快照中的固定副本" : "此配置所选的当前文件"}</p><p class="small">Java 包 ${esc(r.packageName || "未声明")}</p><p class="key">SHA-256 ${esc(approval.sha256)}</p></details>` : ""}${r.workshopId ? `<button data-mod-workshop="${esc(r.workshopId)}">工坊原页 ↗</button>` : ""}${(r.limitations || []).length ? '<p class="small">' + r.limitations.map(esc).join(" · ") + "</p>" : ""}</article>`;
+          return `<article class="card" data-configuration-component="${esc(r.modId)}" data-configuration-source-token="${esc(r.token)}"><h3>${esc((editor.frozen ? meta(editor, r.modId).name : r.name) || r.name || r.modId)}</h3><p class="small">${esc(r.workshopId ? "工坊 " + r.workshopId : r.sourceLabel || (editor.frozen ? "快照副本" : "本地来源"))}</p><p>${r.enabled ? "已启用" : "未启用"}${r.jarState === "missing" ? " · 文件缺失" : ""}${r.jarState === "ready" ? " · Java " + (approval?.decision === true ? "已允许" : approval?.decision === false ? "已拒绝" : "待授权") : ""}</p><div class="actions"><button data-configuration-component-toggle="${index}" data-configuration-write>${r.enabled ? "停用" : "启用"}</button><button data-configuration-component-remove="${index}" data-configuration-write ${r.canUninstall ? "" : "disabled"}>${editor.frozen ? "移除副本" : "从此配置移除"}</button>${approval ? `<button data-configuration-approve="${esc(approval.approvalToken || approval.sha256)}" data-configuration-decision="${approval.decision !== true}" data-configuration-write>${approval.decision === true ? "拒绝 Java 文件" : "允许此 Java 文件"}</button>` : ""}</div>${approval ? `<details data-configuration-java-source><summary>来源与 Java 文件</summary><p>${editor.frozen ? "此快照中的固定副本" : "此配置所选的当前文件"}</p><p class="small">Java 包 ${esc(r.packageName || "未声明")}</p><p class="key">SHA-256 ${esc(approval.sha256)}</p></details>` : ""}${r.workshopId ? `<button data-mod-workshop="${esc(r.workshopId)}">工坊原页 ↗</button>` : ""}${(r.limitations || []).length ? '<p class="small">' + r.limitations.map(esc).join(" · ") + "</p>" : ""}</article>`;
         })
         .join("") || "<p>没有已读取的组件。</p>"
     }</div><details data-known-component-sources><summary>已知组件与下载</summary><div class="actions">${(
@@ -870,7 +870,7 @@ const launchConfigurationUi = (() => {
               false;
             editor.element.querySelector(".status-warning")?.remove();
             model.list = null;
-            await reload();
+            await reload(true);
             return {
               message: "游戏版本已保存，已读取该版本的当前模组。",
             };
