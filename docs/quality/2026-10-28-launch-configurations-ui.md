@@ -121,3 +121,20 @@ Task7实际游戏、正常存盘退出/再次启动、中文路径快照与来�
 对应证据位于 artifacts/owned-launch：task7-real-ui-preparation.json、task7-first-game-failed-console.txt、task7-0dad012-game-processes.json、task7-0dad012-menu-console.txt、task7-0dad012-candidate.json、task7-cb91cae-candidate.json、task7-qa-process-cleanup.json、task7-qa-cleanup-selection.json；相关后台点击截图和响应在 task6/。实际Windows画面通过当轮工具截图直接查看，未将后台DOM截图冒充Windows游戏画面。原始JSON/BAT/default.txt及原loaded.txt不存在状态逐项保持，六个外来网站/部署文件哈希保持。
 
 **仍未通过的最终门槛：** 最新包实际重启、选择Java组件并进入游戏、真实创建中文路径快照、从快照进入世界并保存退出/再次启动、来源变化后快照独立使用、多人连接与实际恢复/强制关闭。首次原生导入/Home观察及旧Runtime377预览失效仍未归因。Task7保持未完成，不能宣布全功能验收或正式发布。
+## 2026-10-29 启动器管理侧验收收尾
+
+用户本轮明确把验收限定为启动器的配置、界面与文件操作，并要求解释功能、原理和用法；本轮不再启动游戏，也不把进入世界作为这部分管理功能验收的前置。此前游戏内加载、存盘与再次启动等边界仍保留为未覆盖，不能据本节反向声称已完成游戏内验证。当前仍是本地候选，没有正式发布。
+
+父代理先对当时源码执行九组最终回归：前八组通过，BootSelection 在第二次页面加载超时。原生回执证明两个并发 versionList 查询中有一条被根控制器的全局 busy 拒绝，导致首页目录读取失败。失败 trace、截图和71个隔离文件哈希/长度/mtime留存在 artifacts/owned-launch/launcher-only-boot-failure-20261028；没有用重跑通过覆盖原失败。修复52447263只把明确的版本列表查询转为独立只读入口，返回同一版本目录文档中的selectedId和版本行；读取不替换/取消复制任务的CTS，不进入全局busy。版本元数据打开与原子发布使用同一路径的短命名互斥，整段复制的原有写互斥保持。严格参数、已释放对象、真实冲突写操作和现有元数据边界保持。独立限定复核通过。
+
+父代理在最终生产源码独立执行 `tests/VersionListConcurrency.test.ps1 -EvidenceDirectory artifacts/owned-launch/version-list-concurrency/root-final-20261029`，退出0：266项定点检查和原有VersionLibrary30项断言通过。实际复制暂停期间八个查询可用，原写任务占用及CTS保持；跨进程40次真实原子发布与200次读取并行、旧文件句柄保留原字节通过。这个结果限于按VersionLibrary协议操作的进程，不承诺任意第三方直接改文件都无I/O失败。
+
+第一次完整管理界面复测另在旧807行计数断言处停止，保留330回执/779事件的失败现场到 launcher-only-catalog-assertion-20261029。实际目录808行中有804个普通模组、3个Java来源、1个托管Buddy；原807假设把三个Java来源算进普通“添加模组”，与已审查的分离行为不符。8b446f2仅修改测试：核对独立夹具的精确804个普通ID集合，确认Java未出现在普通列表，并实际切到组件页核对三个来源、两个工坊ID、原生token、未启用/未授权状态及浏览未产生写请求。未修改生产实现，限定审查通过；原失败仍保留。
+
+最终父代理在8b446f2执行完整 `UnifiedConfigurationNative.test.ps1` 后，用同次新编译NativeUi执行BootSelection，均退出0。结果为 **361条真实原生回执、861条进度事件、0条页面异常**；144个生产源码文件在本次执行前后SHA-256相同。隔离根 E:\AppCaches\Temp\o6-mvsbdpo9，原生程序 E:\AppCaches\Temp\o6-bin-226f6076，汇总证据 launcher-only-final-verification.json 与 task6/report.json/trace.json。覆盖三内置选择、命名配置创建/改名/版本修改/删除、普通清单及无改动保存、顺序、组件来源与单独启用/禁用/授权状态、快照真实复制/失败/取消/重试/增删及文件独立性、A/B后台完成归属、长目录、Steam单次强制确认后隔离VDF实际清空、结束后的按钮状态与控制器释放。启动按钮只提交到测试模式明确拒绝实际进程的边界；没有执行游戏，也没有把占位游戏/JAR文件称为真实游戏。
+
+已实际查看本次刷新后的 home-normal-selected.png、long-catalog-component-sources.png、snapshot-copy-progress.png、editor-dark-420.png：所选版本/内存/组件一致，三个Java来源在组件页，进度有实际文件与容量，窄窗口保留关闭和保存。这些截图是实际发布前端经后台浏览器调用生产控制器及隔离文件的结果，不冒充完整程序的Windows操作。此前完整cb91cae EXE本轮正常打开并读取到首页，因前台遮挡没有完成选择器点击；随后仅结束该自有候选进程，未改变真实选择。
+
+最新本地完整包 `E:\Projects\OrangeLauncher\dist\launch-configurations-local-20261029-5244726-container\portable` 由已审查的524生产源码构建；8b446f2仅改测试，生产字节来源相同。标准归档校验、current内bootstrap RSA及21项长度/SHA-256通过；bootstrap SHA-256为 AC2CACED20E5E2606EC3D5362EACA2858CFF1B3C90EB5DB0B9795E7F6BD9673E，Windows发布者签名仍NotSigned。完整包实际生产EXE、空参数、Hidden启动，保持响应并产生WebView2子进程；按精确路径/出生时间确认后结束自有PID65384。该检查只证明正常入口可运行，没有伪称点过完整程序各按钮。证据 launcher-only-5244726-candidate.json、launcher-only-hidden-entry-identity.json/result.json。
+
+本轮启动器管理侧范围已通过上述验收。首次物理导入/Home观察和旧Runtime377未归因记录继续保留，本轮未把它们描述为已修复；完整游戏内快照/存盘等验证不在用户这次限定范围。未改正式版本号、真实Steam参数、原游戏/模组清单或真实存档；未上传、安装、修改网站或覆盖外来改动。
