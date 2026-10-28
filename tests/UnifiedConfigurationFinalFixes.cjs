@@ -28,13 +28,13 @@ assert.equal(
 // Each case needs an untouched installation; keep its real files independent.
 if (!process.argv[4] || process.argv[4] === "all") {
   const { spawnSync } = require("node:child_process");
-  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection", "EditorLifecycle"]) {
+  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection", "EditorLifecycle", "DialogDecisions"]) {
     const result = spawnSync(process.execPath, [__filename, process.argv[2], process.argv[3], name], { stdio: "inherit", windowsHide: true });
     if (result.status !== 0) process.exit(result.status || 1);
   }
   process.exit(0);
 }
-assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection", "EditorLifecycle"].includes(process.argv[4]), "unknown final review case");
+assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection", "EditorLifecycle", "DialogDecisions"].includes(process.argv[4]), "unknown final review case");
 const out = path.resolve(process.argv[3]),
   child = spawn(
     path.join(process.argv[2], "NativeUi.exe"),
@@ -221,6 +221,30 @@ if(chosen('Generic')){
  const finalBytes=bytes(info.ownedDefault),finalMtime=fs.statSync(info.ownedDefault).mtimeMs;await saved();assert.equal(bytes(info.ownedDefault),finalBytes);assert.equal(fs.statSync(info.ownedDefault).mtimeMs,finalMtime);
  await page.screenshot({path:path.join(out,'final-Generic-ordinary.png')});await page.locator('[data-configuration-tab="components"]').click();await idle();assert.equal(bytes(info.selection),componentBytes);await page.screenshot({path:path.join(out,'final-Generic-components.png')});await page.locator('[data-configuration-close]').click();
  console.log('PASS Generic actual DOM/native Java entry separation, selected/unselected projection, Lua add/order, no-op bytes/mtime and exact component approvals');
+}
+if(chosen('DialogDecisions')){
+ const id='Sandbox/窗口关闭删除验收',directory=path.join(info.user,'Saves',...id.split('/'));
+ fs.mkdirSync(directory,{recursive:true});fs.writeFileSync(path.join(directory,'owned-test-marker.txt'),'isolated dialog deletion fixture');
+ await page.locator('nav [data-page="saves"]').click();
+ const selector='[data-save-delete="'+id+'"]';await page.locator(selector).waitFor();
+ const before=calls.filter(call=>call.action==='saveDelete').length;
+ await page.locator(selector).click();await page.locator('#confirm[open]').waitFor();
+ await page.locator('#confirm').evaluate(dialog=>new Promise(resolve=>{
+  dialog.addEventListener('close',()=>queueMicrotask(resolve),{once:true});dialog.close();
+ }));
+ await page.waitForFunction(()=>!orange.state.saveDeleting);
+ assert.equal(fs.readFileSync(path.join(directory,'owned-test-marker.txt'),'utf8'),'isolated dialog deletion fixture');
+ assert.equal(calls.filter(call=>call.action==='saveDelete').length,before);
+ assert.equal(await page.locator(selector).isEnabled(),true);
+ await page.locator(selector).click();await page.locator('#confirm-no').click();
+ await page.waitForFunction(()=>!orange.state.saveDeleting);assert.equal(fs.existsSync(directory),true);
+ await page.locator(selector).click();await page.locator('#confirm-yes').click();
+ await page.waitForFunction(()=>!orange.state.saveDeleting);
+ assert.equal(fs.existsSync(directory),false,'confirmed production operation actually removes only its isolated directory');
+ assert.equal(calls.filter(call=>call.action==='saveDelete').length,before+1);
+ assert.equal(await page.locator(selector).count(),0);
+ await page.screenshot({path:path.join(out,'final-DialogDecisions-actual-delete.png')});
+ console.log('PASS DialogDecisions native Close/Cancel retain the real isolated save; confirmed retry deletes it once and releases the page');
 }
 if(chosen('EditorLifecycle')){
  await page.locator('nav [data-page="components"]').click();
