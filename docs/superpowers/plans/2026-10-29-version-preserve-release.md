@@ -8,6 +8,8 @@
 
 **Tech Stack:** C#/.NET Framework, WebView2, JavaScript/CSS, PowerShell, Python, Velopack.
 
+**Final status (2026-10-29):** 1.2.37 published to both channels and changelog synchronized. Background DOM/native file verification passed; final-package Windows picker and real-game acceptance were not performed after the user stopped desktop input and renewed the publication request. Exact boundaries and receipts: `docs/quality/2026-10-29-1.2.37-publication.md`. Historical checkboxes below describe the initial plan, not a claim that unperformed desktop/game checks passed.
+
 ## Global constraints
 
 - User approved scoped repair and publication. No new product strategy, global task gates, invented progress or website redeployment.
