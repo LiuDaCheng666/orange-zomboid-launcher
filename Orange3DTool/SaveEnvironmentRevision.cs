@@ -59,13 +59,39 @@ namespace PZ3D {
    var roots=(committed?journal.Retired:journal.Added)??new RevisionRoot[0];if(roots.Length>0){string cleanupPath=Child(pointer.RootPath,"runtime/revision-cleanup/"+journal.BeforeHash+"-"+journal.AfterHash+".json");byte[] cleanup=Utf8.GetBytes(Json().Serialize(new RevisionCleanup{Id=pointer.Id,RootIdentity=journal.RootIdentity,Roots=roots}));var existing=Read(cleanupPath,MaxManifest);if(existing!=null&&!EqualBytes(existing,cleanup))throw new IOException("快照清理记录已改变，已保留。");if(existing==null)RevisionWrite(cleanupPath,cleanup);}File.Delete(path);return roots.Length==0?new string[0]:new[]{"配置已恢复，旧副本等待清理。"};
   }
   static bool HasRevisionCleanup(string root){string folder=Child(root,"runtime/revision-cleanup");return Directory.Exists(folder)&&Directory.EnumerateFileSystemEntries(folder).Any();}
+  static bool MatchesRemainingFiles(SaveEnvironmentFile[] expected,SaveEnvironmentFile[] remaining){
+   var recorded=expected.ToDictionary(file=>file.Path,StringComparer.OrdinalIgnoreCase);
+   foreach(var file in remaining){
+    SaveEnvironmentFile original;
+    if(!recorded.TryGetValue(file.Path,out original)||file.Directory!=original.Directory)return false;
+    if(!file.Directory&&(file.Bytes!=original.Bytes||file.Hash!=original.Hash))return false;
+   }
+   return true;
+  }
   internal static string[] RetryRevisionCleanup(SaveEnvironmentRecord owner){
-   var warnings=new List<string>();string folder=Child(owner.RootPath,"runtime/revision-cleanup");if(Directory.Exists(folder))foreach(string path in Directory.EnumerateFileSystemEntries(folder))try{
-    Safe(path);var cleanup=Json().Deserialize<RevisionCleanup>(Utf8.GetString(Read(path,MaxManifest)));if(cleanup==null||cleanup.Id!=owner.Id||cleanup.RootIdentity!=owner.RootIdentity||Identity(owner.RootPath)!=owner.RootIdentity||cleanup.Roots==null)throw new IOException("快照清理记录身份不一致，已保留。");
-    foreach(var root in cleanup.Roots){if(root==null||!Within(root.Path,Child(owner.RootPath,"mods"))||Same(root.Path,Child(owner.RootPath,"mods"))||root.Files==null||owner.ModRoots.Any(r=>Within(r.CopiedRoot,root.Path)||Within(root.Path,r.CopiedRoot)))throw new IOException("旧副本仍被当前配置引用，未删除。");if(Directory.Exists(root.Path)){if(Identity(root.Path)!=root.Identity||!SameContent(root.Files,Scan(root.Path,true,CancellationToken.None)))throw new IOException("旧副本文件已改变，未删除。");DeleteTree(root.Path);}}
+   var warnings=new List<string>();
+   string folder=Child(owner.RootPath,"runtime/revision-cleanup");
+   if(Directory.Exists(folder))foreach(string path in Directory.EnumerateFileSystemEntries(folder))try{
+    Safe(path);
+    var cleanup=Json().Deserialize<RevisionCleanup>(Utf8.GetString(Read(path,MaxManifest)));
+    if(cleanup==null||cleanup.Id!=owner.Id||cleanup.RootIdentity!=owner.RootIdentity||Identity(owner.RootPath)!=owner.RootIdentity||cleanup.Roots==null)
+     throw new IOException("快照清理记录身份不一致，已保留。");
+    foreach(var root in cleanup.Roots){
+     if(root==null||!Within(root.Path,Child(owner.RootPath,"mods"))||Same(root.Path,Child(owner.RootPath,"mods"))||root.Files==null||owner.ModRoots.Any(r=>Within(r.CopiedRoot,root.Path)||Within(root.Path,r.CopiedRoot)))
+      throw new IOException("旧副本仍被当前配置引用，未删除。");
+     if(!Directory.Exists(root.Path))continue;
+     // A previous attempt may have removed some entries before encountering a
+     // lock. Every survivor must still match; missing entries need no deletion.
+     if(Identity(root.Path)!=root.Identity||!MatchesRemainingFiles(root.Files,Scan(root.Path,true,CancellationToken.None)))
+      throw new IOException("旧副本文件已改变，未删除。");
+     DeleteTree(root.Path);
+    }
     File.Delete(path);
-   }catch(IOException error){warnings.Add(error.Message);}catch(UnauthorizedAccessException error){warnings.Add(error.Message);}catch(ArgumentException){warnings.Add("快照清理记录无法读取，已保留。");}
-   warnings.AddRange(RecoverRevisionAdditions(owner));return warnings.ToArray();
+   }catch(IOException error){warnings.Add(error.Message);}
+    catch(UnauthorizedAccessException error){warnings.Add(error.Message);}
+    catch(ArgumentException){warnings.Add("快照清理记录无法读取，已保留。");}
+   warnings.AddRange(RecoverRevisionAdditions(owner));
+   return warnings.ToArray();
   }
   static bool RevisionOutputPath(string path){return path=="game/ZombieBuddy.jar"||path=="game/OrangeLauncherRuntime/environment/OrangeEnvironment.jar"||path==ManifestName||path=="game/ProjectZomboid64.json"||path=="game/OrangeLauncherRuntime/environment/environment.properties"||path=="runtime/mods/default.txt"||path=="runtime/mods/loaded.txt"||path=="runtime/home/.zombie_buddy/config.json"||path=="runtime/home/.zombie_buddy/mod_approvals.json";}
   internal static SaveEnvironmentRecord PublishRevision(Engine engine,SaveEnvironmentRecord previous,SaveEnvironmentRecord revised,Dictionary<string,byte[]> outputs,CancellationToken cancellation,Action<SaveEnvironmentProgress> progress){

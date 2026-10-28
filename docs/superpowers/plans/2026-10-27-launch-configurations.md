@@ -63,7 +63,7 @@
 
 ### Task 5: Editable frozen configuration contents
 
-Status: IN PROGRESS — native backend implementation submitted for root review; native editor 53 assertions, Task4 regression 38, runtime 377, controller 158 and live/frozen/pinned-Buddy tiny-JVM probes passed. Transaction/cancellation/recovery use owned fixtures, not actual game acceptance. Task5 remains unchecked until review PASS; Task6 UI and Task7 packaged-game acceptance remain separate.
+Status: IN PROGRESS — native backend implementation submitted for root review; review fix round 1 submitted; native editor 66 assertions, Task4 regression 38, runtime 377, controller 158 and live/frozen/pinned-Buddy tiny-JVM probes passed. Transaction/cancellation/recovery use owned fixtures, not actual game acceptance. Task5 remains unchecked until review PASS; Task6 UI and Task7 packaged-game acceptance remain separate.
 
 **Files:** SaveEnvironments/SaveEnvironmentRuntime transaction boundary, focused snapshot configuration editor service, controller/host backend actions, affected native/file/JVM tests. Shared editor UI/click acceptance follows Task6.
 

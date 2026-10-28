@@ -13,7 +13,18 @@ namespace PZ3D {
     var rule=new FrozenJavaRule{ModId=id,JarPath=item.Jar,Package=item.Package,Hash=item.Sha256};var previous=(old.JavaRules??new FrozenJavaRule[0]).SingleOrDefault(r=>Token(r)==Token(rule));rule.Approved=previous!=null?previous.Approved:old.JavaRules==null&&old.ModRoots.Any(m=>VersionLibrary.Same(m.CopiedRoot,mapping.CopiedRoot)&&m.ModIds.Contains(id))&&CapturedApproval(old,id,item.Sha256);rule.Allowed=rule.Approved&&revised.ActiveComponentIds.Contains(id);rules.Add(rule);
     if(rule.Allowed){if(!revised.ActiveComponentIds.Contains("ZombieBuddy"))throw new IOException(item.Name+"：启用 Java 文件还需要选择 ZombieBuddy。");var source=ViewpointAddons.ResolveSource(Path.GetDirectoryName(Path.GetDirectoryName(mapping.CopiedRoot)),id,inspector.GameVersion,null,mapping.CopiedRoot);Func<string,string> original=p=>Path.Combine(mapping.SourceRoot,p.Substring(mapping.CopiedRoot.Length).TrimStart('\\','/'));preloads.Add(id,new{infPath=original(source.Info),jarPath=original(item.Jar)});}
    }
-   revised.JavaRules=rules.ToArray();revised.PreloadModIds=preloads.Keys.ToArray();revised.BuddyConfigBytes=Encoding.UTF8.GetBytes(Json().Serialize(new{preload_mods=preloads,trusted_authors=new object[0],auto_fix_mod_order=false,fix_approval_dialog_cursor=false}));revised.ApprovalBytes=Encoding.UTF8.GetBytes(Json().Serialize(new{formatVersion=2,mods=rules.Select(r=>new{id=r.ModId,jar_hash=r.Hash,decision=r.Allowed}).ToArray()}));
+   revised.JavaRules=rules.ToArray();revised.PreloadModIds=preloads.Keys.ToArray();revised.BuddyConfigBytes=Encoding.UTF8.GetBytes(Json().Serialize(new{preload_mods=preloads,trusted_authors=new object[0],auto_fix_mod_order=false,fix_approval_dialog_cursor=false}));
+   // Buddy stores a single decision per hash. The pinned execution gate still
+   // checks each copied path/package/hash rule, so an enabled twin cannot grant
+   // execution to an unapproved or disabled source with identical bytes.
+   revised.ApprovalBytes=Encoding.UTF8.GetBytes(Json().Serialize(new{
+    formatVersion=2,
+    mods=rules.GroupBy(r=>r.Hash,StringComparer.Ordinal).Select(group=>new{
+     id=(group.FirstOrDefault(r=>r.Allowed)??group.First()).ModId,
+     jar_hash=group.Key,
+     decision=group.Any(r=>r.Allowed)
+    }).ToArray()
+   }));
   }
  }
 }
