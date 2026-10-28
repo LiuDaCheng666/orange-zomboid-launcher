@@ -88,6 +88,7 @@ namespace PZ3D {
    if(EnvironmentPreviewAction(action))return ExecuteEnvironmentPreview(action,payload);
    if(ModWorkshopAction(action))ValidateModWorkshopPayload(action,payload??new Dictionary<string,object>());
    if(LibraryActions.Contains(action))ValidateLibraryPayload(action,payload??new Dictionary<string,object>());
+   if(action=="versionList")return ReadVersionRows();
    if(GuideAction(action)){ValidateGuidePayload(action,payload);lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");}return DispatchGuide(action,payload);}
    if(StartupControl(action))return StartupControlRequest(action,payload);
    if(action=="launch"||action=="profileLaunch")ModernHostPolicy.ValidateLaunchPayload(action,payload);

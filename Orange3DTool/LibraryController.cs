@@ -26,7 +26,7 @@ namespace PZ3D {
    try{var selected=versions.Selected();SetEngine(selected.GamePath,selected.UserPath,selected.Managed);}catch(Exception error){journal.Diagnostic("版本库读取失败："+error.Message);SetEngine(legacyGame,defaultUser,false);}
   }
   static object VersionRow(LocalGameVersion row,string selected){return new{id=row.Id,name=row.Name,version=row.Version,gamePath=row.GamePath,userPath=row.UserPath,managed=row.Managed,installed=row.Installed,selected=row.Id==selected};}
-  object VersionRows(){var selected=versions.Selected();return new{selectedId=selected.Id,versions=versions.List().Select(row=>VersionRow(row,selected.Id)).ToArray(),localPreview=LocalLibraryPreview};}
+  object ReadVersionRows(){VersionLibrary snapshot;lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");snapshot=versions;}string selected;var rows=snapshot.ListReadOnly(out selected,false);return new{selectedId=selected,versions=rows.Select(row=>VersionRow(row,selected)).ToArray(),localPreview=LocalLibraryPreview};}
   static object InstallRow(SteamVersionInstall row){if(row==null)return new{stage="none"};return (object)new{stage=row.Stage,message=row.Message,major=row.ExpectedMajor,destination=row.Destination,branch=row.Branch,buildId=row.BuildId,detectedVersion=row.DetectedVersion,bytesDone=row.BytesDone,bytesTotal=row.BytesTotal,installedVersionId=row.InstalledVersionId};}
   internal static bool LocalLibraryPreview {get{
 #if OZL_LOCAL_PREVIEW
@@ -42,7 +42,7 @@ namespace PZ3D {
    if(engine.FrozenEnvironment!=null&&action.StartsWith("javaComponents",StringComparison.Ordinal))return FrozenJavaAction(action,p);
    if(engine.OwnedLaunch&&action.StartsWith("javaComponents",StringComparison.Ordinal))return OwnedJavaAction(action,p);
    switch(action){
-    case "versionList":return VersionRows();
+    case "versionList":return ReadVersionRows();
     case "versionSelect":cancel.Token.ThrowIfCancellationRequested();var previous=versions.Selected();var selected=versions.Select(Text(p,"id"));try{SetEngine(selected.GamePath,selected.UserPath,selected.Managed);}catch{versions.Select(previous.Id);throw;}return new{message="已切换到 "+selected.Name,version=VersionRow(selected,selected.Id)};
     case "versionImport":cancel.Token.ThrowIfCancellationRequested();var imported=versions.Import(Text(p,"path"),Text(p,"name"));return new{message="版本已添加",version=VersionRow(imported,versions.Selected().Id)};
     case "versionPreserve":RequireVersionIdle();var copied=versions.Preserve(engine.Game,Text(p,"destination"),Text(p,"name"),cancel.Token,CopyProgress);return new{message="独立版本已保存",version=VersionRow(copied,versions.Selected().Id)};
