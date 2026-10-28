@@ -1237,25 +1237,31 @@ const launchConfigurationUi = (() => {
       )
         experienceRead(key, action);
   };
+  function displayVersion(row, status) {
+    const known = value => value && value !== "未知";
+    if (status?.gameVersion?.state === "known" && known(status.gameVersion.value))
+      return status.gameVersion.value;
+    return known(row?.version) ? row.version : "未知";
+  }
+  function selectedDisplay() {
+    const id = selectedId(),
+      row = model.list?.configurations.find(r => r.id === id),
+      cover = model.cover?.status.configurationId === id ? model.cover : null,
+      status = state.status?.configurationId === id ? state.status : cover?.status;
+    return { row, cover, status, memory: cover ? state.actual.memory : null,
+      version: displayVersion(row, status),
+      components: status?.components?.filter(c => c.configured) || [] };
+  }
   const previousHome = home;
   home = function () {
     const container = document.createElement("div");
     container.innerHTML = previousHome();
-    const row =
-      model.selected ||
-      model.list?.configurations.find((r) => r.id === selectedId());
+    const display = selectedDisplay(), { row, cover, memory, version, components } = display;
     container.querySelector(".launch-config").innerHTML =
-      `<label for="launch-configuration-select">启动配置</label><select id="launch-configuration-select" ${!model.list ? "disabled" : ""}>${(model.list?.configurations || [{ id: "launcher", name: "启动器配置", kind: "builtin" }]).map((r) => `<option value="${esc(r.id)}" ${r.id === selectedId() ? "selected" : ""}>${esc(r.name)} · ${kind(r)}${r.version ? " · " + esc(r.version) : ""}${r.available === false ? " · 版本不可用" : ""}</option>`).join("")}</select><p data-configuration-description>${esc(description(row))}</p>${row?.available === false ? '<p class="status-warning">' + esc(row.message) + "</p>" : ""}${model.error ? '<p class="status-warning">' + esc(model.error) + "</p>" : ""}<div class="actions"><button data-configuration-create>新建配置</button><button data-configuration-edit ${!row ? "disabled" : ""}>编辑配置</button><button data-configuration-reload>重新读取</button>${row?.id === "steam" ? "<button data-configuration-steam>接管 Steam 配置</button><button data-force-takeover>强制接管</button>" : ""}</div>`;
-    const summary = container.querySelector("[data-current-config]"),
-      cover = model.cover,
-      currentStatus =
-        state.status?.configurationId === selectedId()
-          ? state.status
-          : cover?.status,
-      memory = state.actual.memory,
-      components = currentStatus?.components?.filter((c) => c.configured) || [];
+      `<label for="launch-configuration-select">启动配置</label><select id="launch-configuration-select" ${!model.list ? "disabled" : ""}>${(model.list?.configurations || [{ id: "launcher", name: "启动器配置", kind: "builtin" }]).map((r) => `<option value="${esc(r.id)}" ${r.id === selectedId() ? "selected" : ""}>${esc(r.name)} · ${kind(r)}${r.version ? " · " + esc(r.id === selectedId() ? version : r.version) : ""}${r.available === false ? " · 版本不可用" : ""}</option>`).join("")}</select><p data-configuration-description>${esc(description(row))}</p>${row?.available === false ? '<p class="status-warning">' + esc(row.message) + "</p>" : ""}${model.error ? '<p class="status-warning">' + esc(model.error) + "</p>" : ""}<div class="actions"><button data-configuration-create>新建配置</button><button data-configuration-edit ${!row ? "disabled" : ""}>编辑配置</button><button data-configuration-reload>重新读取</button>${row?.id === "steam" ? "<button data-configuration-steam>接管 Steam 配置</button><button data-force-takeover>强制接管</button>" : ""}</div>`;
+    const summary = container.querySelector("[data-current-config]");
     summary.textContent = cover
-      ? `${memory ? memory.currentGiB + " GiB Java 堆" : "内存待读取"} · ${components.length} 个组件 · ${row?.version || cover.status.gameVersion?.value || "版本未读取"}`
+      ? `${memory ? memory.currentGiB + " GiB Java 堆" : "内存待读取"} · ${components.length} 个组件 · ${version}`
       : "正在读取所选配置…";
     container.querySelector(".current-config h2").textContent = "下次启动配置";
     const detail = container.querySelector(".current-config details");
@@ -1312,15 +1318,8 @@ const launchConfigurationUi = (() => {
     if (root) root.innerHTML = jobsMarkup();
   }
   actualCover = function () {
-    const row = model.selected,
-      cover = model.cover,
-      currentStatus =
-        state.status?.configurationId === selectedId()
-          ? state.status
-          : cover?.status,
-      memory = state.actual.memory,
-      components = currentStatus?.components?.filter((c) => c.configured) || [];
-    return `<aside class="scene-status" data-home-actual aria-label="所选启动配置摘要"><h3>${esc(row?.name || "启动配置")}</h3><dl><dt>游戏版本</dt><dd>${esc(row?.version || cover?.status.gameVersion?.value || "待读取")}</dd><dt>启动内存</dt><dd>${cover ? esc(cover.memory.currentGiB) + " GiB" : "待读取"}</dd><dt>下次启动启用组件</dt><dd>${cover ? components.length + " 项" : "待读取"}</dd></dl><p class="configured-names">${esc(components.map((c) => c.title).join(" · ") || (cover ? "未启用组件" : "正在读取"))}</p></aside>`;
+    const { row, cover, memory, version, components } = selectedDisplay();
+    return `<aside class="scene-status" data-home-actual aria-label="所选启动配置摘要"><h3>${esc(row?.name || "启动配置")}</h3><dl><dt>游戏版本</dt><dd>${esc(version)}</dd><dt>启动内存</dt><dd>${memory ? esc(memory.currentGiB) + " GiB" : "待读取"}</dd><dt>下次启动启用组件</dt><dd>${cover ? components.length + " 项" : "待读取"}</dd></dl><p class="configured-names">${esc(components.map((c) => c.title).join(" · ") || (cover ? "未启用组件" : "正在读取"))}</p></aside>`;
   };
   function editorStatus(editor, text, busy = false) {
     if (model.editor !== editor) return;
@@ -1449,6 +1448,7 @@ const launchConfigurationUi = (() => {
       id,
       element,
       epoch: 0,
+      tab,
       reading: true,
       readRequests: new Set(),
       ids: [],
@@ -1505,8 +1505,8 @@ const launchConfigurationUi = (() => {
         editor.catalog = catalog.mods || [];
       }
       paintMods();
-      if (tab === "components") await readComponents(editor);
-      editorStatus(editor, "模组清单尚未修改。组件操作会单独保存。");
+      if (editor.tab === "components") await readComponents(editor);
+      editorStatus(editor, editor.tab === "components" ? "组件更改会立即保存到此配置。" : "模组清单尚未修改。组件操作会单独保存。");
     } catch (error) {
       editorStatus(editor, error.message);
     } finally {
@@ -1801,6 +1801,13 @@ const launchConfigurationUi = (() => {
       if (button.hasAttribute("data-configuration-close"))
         return void closeEditor();
       if (button.hasAttribute("data-configuration-cancel")) {
+        if (editor.reading && !editor.saving) {
+          await Promise.all([
+            ...[...editor.readRequests].map(token => raw("configurationReadCancel", { id: editor.id, readId: token })),
+            ...(editor.sourceReadId ? [raw("frozenConfigurationReadCancel", { snapshotId: editor.id.slice(9), readId: editor.sourceReadId })] : []),
+          ]);
+          return;
+        }
         await raw(
           editor.frozen ? "frozenConfigurationCancel" : "configurationCancel",
           editor.frozen
@@ -1810,6 +1817,7 @@ const launchConfigurationUi = (() => {
         return;
       }
       if (button.dataset.configurationTab) {
+        editor.tab = button.dataset.configurationTab;
         editor.element.querySelector(".configuration-editor-actions").hidden =
           button.dataset.configurationTab !== "mods";
         for (const area of editor.element.querySelectorAll(
@@ -2141,7 +2149,6 @@ const launchConfigurationUi = (() => {
     },
   };
 })();
-
 const modOrderingUi=(()=>{
  let drag=null;
  const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;

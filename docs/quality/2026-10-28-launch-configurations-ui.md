@@ -59,7 +59,7 @@
 | 深/浅、1366/420宽 | editor-dark-1366.png、editor-dark-420.png、editor-light-1366.png、editor-light-420.png |
 | 800来源滚动到底 | long-catalog-light-1366.png、long-catalog-light-420.png |
 
-实现代理已实际查看相关截图。标题/关闭/保存保持可见；浅色截图通过原生主题偏好及实际CSS类检查。原生合成版本显示「未知」是 fixture 的版本探测边界，不是实际游戏版本结论。
+实现代理已实际查看相关截图。标题/关闭/保存保持可见；浅色截图通过原生主题偏好及实际CSS类检查。原生 fixture 的 status 已读取到已知版本 42.21.0；此前首页「未知」由 UI 误用库存哨兵值遮盖，已在 R3 修复并核对封面、摘要与所选项一致。该版本证据来自隔离 fixture，不代表实际进入游戏验收。
 
 ## 尚未关闭的审查项与实际游戏边界
 
@@ -68,3 +68,5 @@
 Task7 仍须使用待发布包生产入口进入实际游戏，覆盖中文快照路径、正常保存退出/再启动、进程识别/恢复，以及来源更新后副本独立可用。没有触碰实际存档/游戏目录或用户前台，没有发行、VERSION、服务器或网站操作。
 
 最终视觉补充：编辑器进度轨道明确为 8px，轨道/填充沿主题颜色，未知总量继续使用活动条和真实计数。受影响路径单独通过生产 native fixture 点击复制→取消→文件清单不含 Big；截图 snapshot-copy-progress.png 已重新生成并实际查看。聚焦运行证据 artifacts/owned-launch/task6/progress-visual-report.json，隔离根 E:\AppCaches\Temp\o6-mvry8tts；完整套件记录仍对应前述最终功能运行。
+
+Task6复审修复第1轮：R1来源读取取消独立于写任务，真实点击取消/重读/关闭再打开通过；R2初始扫描中切组件会在完成后加载；R3首页封面、摘要和选择项统一已知版本，内存写入与待读取三组DOM检查通过；R4乐观index/manifest/关键JSON读取允许原子替换，持生产旧句柄时真实发布通过，旧句柄仍读取完整旧代。限定delete sharing于乐观读，默认受锁读/复制散列保持原行为。新增tests/UnifiedConfigurationReviewFixes.cjs聚焦原生四组通过；主页37/37，相关快照后端75通过，原生完整受影响文件/点击套件361回复/828进度通过。截图home-normal-selected.png已更新为已知42.21.0，review-R2-components.png、review-R3-home-known.png均已实际查看。首个Runtime377未分类问题和Task7真实游戏边界保持未关闭；Task6待独立复审。
