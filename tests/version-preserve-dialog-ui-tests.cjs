@@ -1,0 +1,36 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {setup,route,chromium}=require('../Orange3DTool/Web/experience-ui-tests.cjs');
+const out=path.resolve(__dirname,'../artifacts/version-preserve-20261029');fs.mkdirSync(out,{recursive:true});
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{const {page,errors}=await setup(browser);try{
+ await page.evaluate(()=>{const base=chrome.webview.postMessage;window.preserveCalls=[];chrome.webview.postMessage=m=>{if(m.action==='versionList'){queueMicrotask(()=>emitNative({id:m.id,ok:true,data:{selectedId:'steam',versions:[{id:'steam',name:'当前 Steam 安装',version:'42.21',installed:true,selected:true}]}}));return;}if(m.action==='versionChoosePreserve'){preserveCalls.push(m);window.preservePending=m;return;}if(m.action==='cancel'){preserveCalls.push(m);queueMicrotask(()=>emitNative({id:m.id,ok:true,data:{message:'已请求取消'}}));return;}base(m);};});
+ await route(page,'versions');await page.waitForFunction(()=>orange.library.model.versions);await page.evaluate(()=>{orange.library.model.versions.versions[0].selected=true;orange.render();});await page.locator('[data-version-preserve]').click();
+ const dialog=page.locator('.version-dialog');await page.screenshot({path:path.join(out,'before-submit.png')});await dialog.locator('[data-version-dialog-cancel]').click();await dialog.waitFor({state:'detached'});assert.equal(await page.locator('[data-version-preserve]').isEnabled(),true,'initial Return removes its modal and leaves the page usable');await page.locator('[data-version-preserve]').click();
+ await dialog.locator('button[type=submit]').click();await page.waitForFunction(()=>!!window.preservePending);
+ await page.screenshot({path:path.join(out,'pending.png')});
+ assert.equal(await dialog.locator('[role=status]').isVisible(),true,'pending preserve shows its state inside the owning modal');
+ assert.equal(await dialog.locator('[data-version-dialog-cancel]').isEnabled(),true,'pending preserve retains an actionable cancellation button');
+ assert.match(await dialog.innerText(),/独立|游戏/);assert.match(await dialog.innerText(),/模组|快照/);
+ assert.equal(await dialog.locator('progress').getAttribute('value'),null,'picker wait has no invented percentage');
+ assert.match(await dialog.locator('[type=submit]').innerText(),/正在选择/);
+ await page.evaluate(()=>emitNative({event:'progress',data:{value:-1,text:'正在保存版本 · 正在核对原游戏 · 已核对 3 个文件 · 8.0 MiB'}}));
+ assert.match(await dialog.locator('[role=status]').innerText(),/3 个文件.*8.0 MiB/);
+ await page.evaluate(()=>emitNative({event:'progress',data:{value:50,text:'正在保存版本 · 正在复制 · 1 / 4 个文件 · 4.0 MiB / 8.0 MiB'}}));
+ assert.equal(await dialog.locator('progress').getAttribute('value'),'50');
+ assert.match(await dialog.locator('[type=submit]').innerText(),/正在保存/);
+ await page.evaluate(()=>emitNative({event:'progress',data:{active:false,value:0,text:'就绪'}}));assert.equal(await dialog.locator('progress').getAttribute('value'),'50','unrelated status refresh cannot clear owning copy progress');
+ await dialog.locator('form').evaluate(form=>form.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true})));assert.equal(await page.evaluate(()=>preserveCalls.filter(m=>m.action==='versionChoosePreserve').length),1,'duplicate submit cannot start a second copy');
+ for(const theme of ['dark','light'])for(const width of [1100,390]){await page.evaluate(t=>document.documentElement.classList.toggle('light',t==='light'),theme);await page.setViewportSize({width,height:850});await page.screenshot({path:path.join(out,`${theme}-${width}.png`)});assert.equal(await dialog.evaluate(e=>e.scrollWidth>e.clientWidth),false,'dialog content fits narrow viewport');}
+ await page.keyboard.press('Escape');assert.equal(await dialog.isVisible(),true,'Escape keeps cancellation and cleanup visible until native reply');await page.waitForFunction(()=>preserveCalls.some(m=>m.action==='cancel'));
+ assert.match(await dialog.locator('[role=status]').innerText(),/取消|清理/);assert.equal(await dialog.locator('[data-version-dialog-cancel]').isEnabled(),false);
+ await page.evaluate(()=>emitNative({id:preservePending.id,ok:false,error:'任务已取消'}));await page.waitForFunction(()=>!orange.library.model.working&&!orange.state.busy);
+ assert.equal(await dialog.locator('[data-version-dialog-cancel]').isEnabled(),true);assert.equal(await dialog.locator('button[type=submit]').isEnabled(),true);
+ await dialog.locator('[data-version-dialog-cancel]').click();await dialog.waitFor({state:'detached'});
+ await page.locator('[data-version-preserve]').click();await dialog.locator('button[type=submit]').click();await page.evaluate(()=>emitNative({event:'progress',data:{value:-1,text:'正在保存版本 · 正在核对原游戏 · 已核对 2 个文件 · 12 B'}}));await dialog.evaluate(e=>e.close());await page.waitForFunction(()=>document.querySelector('.version-dialog')?.open&&preserveCalls.filter(m=>m.action==='cancel').length===2);assert.match(await dialog.locator('[role=status]').innerText(),/取消|清理/,'programmatic close keeps cleanup visible');await page.evaluate(()=>emitNative({id:preservePending.id,ok:false,error:'任务已取消'}));await page.waitForFunction(()=>!orange.library.model.working&&!orange.state.busy);await dialog.locator('[data-version-dialog-cancel]').click();await dialog.waitFor({state:'detached'});
+ await page.locator('[data-version-preserve]').click();await dialog.locator('button[type=submit]').click();await page.evaluate(()=>emitNative({id:preservePending.id,ok:true,data:{cancelled:true}}));await page.waitForFunction(()=>!orange.library.model.working);
+ assert.equal(await dialog.locator('button[type=submit]').isEnabled(),true,'native picker cancellation allows retry');
+ await dialog.locator('[data-version-dialog-cancel]').click();await dialog.waitFor({state:'detached'});await page.locator('[data-version-preserve]').click();
+ await dialog.locator('button[type=submit]').click();await page.evaluate(()=>emitNative({id:preservePending.id,ok:false,error:'测试目标不可写'}));await page.waitForFunction(()=>!orange.library.model.working);assert.match(await dialog.locator('[role=alert]').innerText(),/不可写/);
+ await dialog.locator('button[type=submit]').click();await page.evaluate(()=>emitNative({id:preservePending.id,ok:true,data:{message:'独立版本已保存'}}));await dialog.waitFor({state:'detached'});await page.waitForFunction(()=>!orange.library.model.working&&!orange.state.busy);
+ assert.equal(await page.locator('[data-version-preserve]').isEnabled(),true);assert.deepEqual(errors,[]);
+ console.log('PASS real production DOM: pending status, stage progress, Escape cancellation, native picker cancellation, error, retry, success, dark/light/narrow. Native I/O in this test is synthetic.');
+ }finally{await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -91,7 +91,9 @@ namespace PZ3D {
    if((stamp??"").StartsWith("autoHouse:",StringComparison.Ordinal)){AutomaticHouseBinding binding;lock(automaticHousePreviews){if(!automaticHousePreviews.TryGetValue(stamp,out binding))throw new IOException("安全屋预览已失效，请重新预览。");automaticHousePreviews.Remove(stamp);}using(SafehouseCatalog.WithSelectionLease(engine,binding.SourceId,binding.CatalogStamp,binding.HouseId))return houseTransfer.Apply(binding.NativeStamp,true,cancel.Token);}
    return houseTransfer.Apply(stamp,true,cancel.Token);
   }
-  void CopyProgress(VersionCopyProgress value){Report(value.TotalBytes<=0?-1:(int)Math.Min(99,value.BytesCopied*100d/value.TotalBytes),"正在保存版本 · "+Path.GetFileName(value.File));}
+  string versionProgressStage;long versionProgressTick;
+  static string VersionBytes(long bytes){return bytes>=1073741824?(bytes/1073741824d).ToString("0.0")+" GiB":bytes>=1048576?(bytes/1048576d).ToString("0.0")+" MiB":bytes.ToString("N0")+" B";}
+  void CopyProgress(VersionCopyProgress value){long tick=System.Diagnostics.Stopwatch.GetTimestamp();if(versionProgressStage==value.Stage&&(tick-versionProgressTick)*1000d/System.Diagnostics.Stopwatch.Frequency<100&&!(value.TotalBytes>0&&value.BytesCopied==value.TotalBytes))return;versionProgressStage=value.Stage;versionProgressTick=tick;string stage=value.Stage=="scan"?"正在核对原游戏":value.Stage=="verifySource"?"正在复核原游戏":value.Stage=="verifyCopy"?"正在校验副本":value.Stage=="publish"?"正在加入版本库":value.Stage=="cleanup"?"正在清理未完成的副本":"正在复制";string counts=value.TotalFiles>0?value.FilesProcessed+" / "+value.TotalFiles+" 个文件":"已核对 "+value.FilesProcessed+" 个文件";string amount=VersionBytes(value.BytesCopied)+(value.TotalBytes>0?" / "+VersionBytes(value.TotalBytes):"");Report((value.Stage=="copy"||value.Stage==null)&&value.TotalBytes>0?(int)Math.Min(100,value.BytesCopied*100d/value.TotalBytes):-1,"正在保存版本 · "+stage+(value.Stage=="cleanup"||value.Stage=="publish"?"":" · "+counts+" · "+amount)+(string.IsNullOrEmpty(value.File)?"":" · "+Path.GetFileName(value.File)));}
   internal static void ValidateLibraryPayload(string action,Dictionary<string,object> p){
    if(!LibraryActions.Contains(action))return;string[] keys;
    switch(action){
