@@ -21,10 +21,12 @@ async function setup(browser,options={}){
   const saves=[{id:'Sandbox/demo',name:'河畔的第 28 天',mode:'Sandbox',modifiedUtc:'2026-10-22T12:00:00Z',modCount:3,editable:true},{id:'Sandbox/cabin',name:'林间小屋',mode:'Sandbox',modifiedUtc:'2026-10-20T12:00:00Z',modCount:2,editable:true}];
   const servers=[{id:'demo',name:'橘子镇 · 合作生存',host:'play.example.invalid',port:16261,queryPort:16262,username:'',hasUserPassword:false,hasServerPassword:false,useSteamRelay:false,description:'慢节奏探索，共同建造安全屋。示例连接，不会发起网络请求。'}];
   window.chrome={webview:{addEventListener:(e,f)=>window.reply=f,postMessage:m=>{
-   sent.push(m);if(options.hold===m.action){held.push(m);return;}
+   const wrapped=m.action==='configurationRequest'?m:null;if(wrapped)m={...m,action:m.payload.action,payload:m.payload.payload};sent.push(wrapped||m);if(options.hold===m.action){held.push(m);return;}
    let data={message:'操作完成 · 合成示例'};
    switch(m.action){
-    case'status':data=demoStatus;break;
+    case'launchConfigurations':data={selectedId:'launcher',configurations:[{id:'launcher',name:'启动器配置',kind:'builtin',available:options.validGame!==false,versionId:'steam',version:'42.21.0'}]};break;
+    case'versionList':data={selectedId:'steam',versions:[{id:'steam',name:'当前 Steam 安装',installed:true,version:'42.21.0'}]};break;
+    case'status':data={...demoStatus,configurationId:wrapped?.payload.id||'launcher',configurationName:'启动器配置'};break;
     case'coreUpdateStatus':data=core;break;
     case'coreUpdateCheck':
      data={...core,revision:2,state:'Checking'};
@@ -52,7 +54,7 @@ async function setup(browser,options={}){
     case'steamConnection':data={available:true,accountName:'示例会话',message:'由 Steam 管理登录状态'};break;
     case'steamSubscriptions':data={items:[],message:'没有已读取的订阅'};break;
    }
-   queueMicrotask(()=>reply({data:{id:m.id,ok:true,data:structuredClone(data)}}));
+   queueMicrotask(()=>reply({data:{id:m.id,ok:true,data:structuredClone(wrapped?{configurationId:wrapped.payload.id,data}:data)}}));
   }}};
  },{...options,covers});
  await page.goto('file:///'+path.resolve(__dirname,'index.html').replaceAll('\\','/')+(options.hash||''));

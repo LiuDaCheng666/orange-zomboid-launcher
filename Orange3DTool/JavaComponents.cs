@@ -17,6 +17,7 @@ namespace PZ3D {
  // Explicit-page inventory and reversible local changes. Construction never scans or starts Java/Steam.
  sealed class JavaComponents:IDisposable {
   internal sealed class Row {
+   public string sourceLabel="";
    public string token,modId,name,version,packageName,workshopId,sourceKind,managedKey="",preloadState="unknown",approvalState="notChecked",jarState="missing",receiptId="";
    public bool enabled,defaultEnabled,canEnable,canDisable,canUninstall,canRestore,canBlock,javaBlocked;
    public string[] requires=new string[0],conflicts=new string[0],limitations=new string[0];
@@ -51,7 +52,7 @@ namespace PZ3D {
   static JavaScriptSerializer Json(){return new JavaScriptSerializer{MaxJsonLength=2097152,RecursionLimit=32};}
   internal JavaComponents(Engine e):this(e,null){}
   internal JavaComponents(Engine e,Action<int,string> report):this(e,report,null,null){}
-  internal JavaComponents(Engine e,Action<int,string> report,string takeoverOwner,byte[] cleanedLaunch){if(takeoverOwner!=null&&!Opaque(takeoverOwner))throw new IOException("接管编号无效。");forceOwner=takeoverOwner;launchOverride=cleanedLaunch==null?null:(byte[])cleanedLaunch.Clone();engine=new Engine(e.Game,e.User,e.Data,e.TestMode,e.ReadSteamOptions,e.ProcessInventory){BuddySource=e.BuddySource,ViewSource=e.ViewSource,ModelsSource=e.ModelsSource,ManagedVersion=e.ManagedVersion,FrozenEnvironment=e.FrozenEnvironment};progress=report;folder=Path.Combine(engine.Data,"java-components",Hash(Utf8.GetBytes(Full(e.Game).ToUpperInvariant()+"\n"+Full(e.User).ToUpperInvariant())).Substring(0,20));storePath=Path.Combine(folder,"records.json");pendingPath=Path.Combine(folder,"pending.json");}
+  internal JavaComponents(Engine e,Action<int,string> report,string takeoverOwner,byte[] cleanedLaunch){if(takeoverOwner!=null&&!Opaque(takeoverOwner))throw new IOException("接管编号无效。");if(e.FrozenEnvironment!=null&&(!VersionLibrary.Same(e.Game,e.FrozenEnvironment.GamePath)||!VersionLibrary.Same(e.User,e.FrozenEnvironment.UserPath)))throw new IOException("快照绑定与克隆目标不一致。");forceOwner=takeoverOwner;launchOverride=cleanedLaunch==null?null:(byte[])cleanedLaunch.Clone();engine=new Engine(e.Game,e.User,e.Data,e.TestMode,e.ReadSteamOptions,e.ProcessInventory,e.FrozenEnvironment==null){BuddySource=e.BuddySource,ViewSource=e.ViewSource,ModelsSource=e.ModelsSource,ManagedVersion=e.ManagedVersion,FrozenEnvironment=e.FrozenEnvironment};progress=report;folder=Path.Combine(engine.Data,"java-components",Hash(Utf8.GetBytes(Full(e.Game).ToUpperInvariant()+"\n"+Full(e.User).ToUpperInvariant())).Substring(0,20));storePath=Path.Combine(folder,"records.json");pendingPath=Path.Combine(folder,"pending.json");}
   public void Dispose(){lock(gate){disposed=true;plans.Clear();}}
   void Ready(){if(disposed)throw new ObjectDisposedException("JavaComponents");}
   static string Full(string path){return Path.GetFullPath(path).TrimEnd('\\','/');}

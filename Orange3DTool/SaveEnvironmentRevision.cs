@@ -48,9 +48,14 @@ namespace PZ3D {
   static string OptionalHash(byte[] bytes){return bytes==null?null:Hash(bytes);}
   // Called only inside the short catalog boundary. A terminated writer cannot leave
   // readers with a new manifest and old pointer (or the reverse).
-  string[] RecoverRevision(Pointer pointer){
-   string path=Child(pointer.RootPath,RevisionJournalPath);byte[] bytes=Read(path,MaxManifest);if(bytes==null)return new string[0];
-   RevisionJournal journal;try{journal=Json().Deserialize<RevisionJournal>(Utf8.GetString(bytes));}catch(Exception error){throw new IOException("快照配置恢复记录无法读取，已保留现场。",error);}
+  string[] RecoverRevision(Pointer pointer){return RecoverRevision(pointer,null,null);}
+  string[] RecoverRevision(Pointer pointer,RevisionJournal trusted,byte[] expectedBytes){
+   string path=Child(pointer.RootPath,RevisionJournalPath);byte[] bytes=Read(path,MaxManifest);if(bytes==null){if(trusted!=null)throw new IOException("快照配置恢复记录在保存后变化，已保留现场。");return new string[0];}
+   // A successful writer already owns the exact parsed journal. Reuse it only
+   // while disk bytes still match; crash/uncertain recovery keeps the disk parser.
+   RevisionJournal journal=trusted;
+   if(trusted!=null){if(!EqualBytes(bytes,expectedBytes))throw new IOException("快照配置恢复记录在保存后变化，已保留现场。");}
+   else try{journal=Json().Deserialize<RevisionJournal>(Utf8.GetString(bytes));}catch(Exception error){throw new IOException("快照配置恢复记录无法读取，已保留现场。",error);}
    if(journal==null||journal.Id!=pointer.Id||journal.RootIdentity!=Identity(pointer.RootPath)||!EqualBytes(Read(Child(pointer.RootPath,".owner"),64),Utf8.GetBytes(pointer.Id))||!Digest(journal.BeforeHash)||!Digest(journal.AfterHash)||journal.Outputs==null||journal.Outputs.Length>32||journal.Outputs.Select(o=>o.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=journal.Outputs.Length)throw new IOException("快照配置恢复身份不一致，已保留现场。");
    var manifestOutput=journal.Outputs.SingleOrDefault(o=>o.Path==ManifestName);if(manifestOutput==null||manifestOutput.BeforeHash!=journal.BeforeHash||manifestOutput.AfterHash!=journal.AfterHash||Hash(manifestOutput.Before)!=journal.BeforeHash||Hash(manifestOutput.After)!=journal.AfterHash)throw new IOException("快照恢复记录与配置版本不一致，已保留。");var beforeManifest=DecodeManifest(manifestOutput.Before);var afterManifest=DecodeManifest(manifestOutput.After);foreach(var manifest in new[]{beforeManifest,afterManifest})if(manifest.Record.Id!=pointer.Id||manifest.Record.RootIdentity!=journal.RootIdentity||!Same(manifest.Record.RootPath,pointer.RootPath))throw new IOException("快照恢复记录不属于此副本，已保留。");foreach(var output in journal.Outputs.Where(o=>o.Path!=ManifestName&&!Mutable(o.Path))){var beforeFile=beforeManifest.Files.SingleOrDefault(f=>f.Path==output.Path&&!f.Directory);var afterFile=afterManifest.Files.SingleOrDefault(f=>f.Path==output.Path&&!f.Directory);if((beforeFile==null?null:beforeFile.Hash)!=output.BeforeHash||(afterFile==null?null:afterFile.Hash)!=output.AfterHash)throw new IOException("快照恢复文件与登记内容不一致，已保留。");}
    bool committed=pointer.ManifestHash==journal.AfterHash;if(!committed&&pointer.ManifestHash!=journal.BeforeHash)throw new IOException("快照配置已存在另一版本，未覆盖恢复。");
@@ -107,7 +112,7 @@ namespace PZ3D {
     cancellation.ThrowIfCancellationRequested();string journalPath=Child(previous.RootPath,RevisionJournalPath);RevisionWrite(journalPath,journalBytes);
     try{foreach(var output in writes)RevisionWrite(Child(previous.RootPath,output.Path),output.After);pointer.ManifestHash=revised.ManifestHash;reader.Persist(catalog);}catch{var actual=reader.Load().Document.Records.Single(p=>p.Id==previous.Id);reader.RecoverRevision(actual);throw;}
     // The index is the commit point: late cancellation must not report rollback.
-    try{if(progress!=null)progress(new SaveEnvironmentProgress{stage="committed",text="快照配置已保存",completedFiles=writes.Count,totalFiles=writes.Count});revised.CleanupWarnings=reader.RecoverRevision(pointer);revised.Stamp=reader.Load().Stamp;}catch(Exception error){if(error is OutOfMemoryException||error is StackOverflowException)throw;revised.CleanupWarnings=new[]{"配置已保存，后续清理尚未完成："+error.Message};}return revised;
+    try{if(progress!=null)progress(new SaveEnvironmentProgress{stage="committed",text="快照配置已保存",completedFiles=writes.Count,totalFiles=writes.Count});revised.CleanupWarnings=reader.RecoverRevision(pointer,journal,journalBytes);revised.Stamp=reader.Load().Stamp;}catch(Exception error){if(error is OutOfMemoryException||error is StackOverflowException)throw;revised.CleanupWarnings=new[]{"配置已保存，后续清理尚未完成："+error.Message};}return revised;
    });
    try{var cleanup=RetryRevisionCleanup(published);published.CleanupWarnings=File.Exists(Child(published.RootPath,RevisionJournalPath))?published.CleanupWarnings.Concat(cleanup).ToArray():cleanup;}catch(Exception error){if(error is OutOfMemoryException||error is StackOverflowException)throw;published.CleanupWarnings=published.CleanupWarnings.Concat(new[]{"配置已保存，后续清理尚未完成："+error.Message}).ToArray();}return published;
   }

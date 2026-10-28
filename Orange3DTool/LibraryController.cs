@@ -8,7 +8,7 @@ namespace PZ3D {
   VersionLibrary versions;SteamVersionWorkflow versionInstall;RecommendedServers recommendations;SafehouseTransfer houseTransfer;JavaComponents javaComponents;ForceTakeover forceTakeover;
   sealed class AutomaticHouseBinding {internal string SourceId,CatalogStamp,HouseId,NativeStamp;}
   readonly Dictionary<string,AutomaticHouseBinding> automaticHousePreviews=new Dictionary<string,AutomaticHouseBinding>();
-  void ResetContentLibrary(){DisposeContentLibrary();lock(automaticHousePreviews)automaticHousePreviews.Clear();houseTransfer=new SafehouseTransfer(engine);javaComponents=new JavaComponents(engine,Report);forceTakeover=new ForceTakeover(engine,Report);}
+  void ResetContentLibrary(){DisposeContentLibrary();lock(automaticHousePreviews)automaticHousePreviews.Clear();houseTransfer=new SafehouseTransfer(engine);javaComponents=new JavaComponents(engine,Report);forceTakeover=new ForceTakeover(engine,Report,buddyEnvironment);}
   JavaComponentWorkflow JavaWorkflow(){return new JavaComponentWorkflow(engine,javaComponents,(id,report,token)=>{DownloadSnapshotWorkshop(engine,id,report,token);},(id,report,token)=>ResolveSnapshotWorkshop(engine,new SaveEnvironmentMissing{modId=id},report,token),key=>Components(key,"install",new Dictionary<string,object>{{"confirmed",true}}),Report);}
   void DisposeContentLibrary(){if(houseTransfer!=null)houseTransfer.Dispose();if(javaComponents!=null)javaComponents.Dispose();if(forceTakeover!=null)forceTakeover.Dispose();}
   string legacyGame,defaultUser;
@@ -20,8 +20,9 @@ namespace PZ3D {
   }
   internal static readonly HashSet<string> LibraryActions=new HashSet<string>{"javaComponentsInstall","javaComponentsEnable","javaComponentsReconcile","versionList","versionSelect","versionImport","versionPreserve","versionInstallBegin","versionInstallState","versionInstallComplete","versionInstallCancel","versionOpenSteam","recommendedServers","recommendedQuery","recommendedAdmin","backupInventory","backupList","backupCreate","backupRestore","backupDelete","backupSettings","backupSettingsSave","houseCatalogList","forceTakeoverPreview","forceTakeoverApply","forceTakeoverRecovery","forceTakeoverRecover","houseTransferPreview","houseTransferApply","javaComponentsList","javaComponentsPreview","javaComponentsApply","javaComponentsRecovery","javaComponentsRecover","javaComponentsInspectDownloaded","worldEditRecovery","worldEditRecover"};
   static readonly string[] LibraryReads={"versionList","versionInstallState","backupInventory","backupList","backupSettings","houseCatalogList","forceTakeoverPreview","forceTakeoverRecovery","houseTransferPreview","javaComponentsList","javaComponentsPreview","javaComponentsRecovery","javaComponentsInspectDownloaded","worldEditRecovery"};
-  void InitializeLibrary(string game,string originalUser){
+  void InitializeLibrary(string game,string originalUser,bool deferSelection=false){
    legacyGame=string.IsNullOrWhiteSpace(game)?Path.Combine(data,"unselected-game"):game;defaultUser=originalUser;versions=new VersionLibrary(data,legacyGame,defaultUser);versionInstall=new SteamVersionWorkflow(data,legacyGame,defaultUser);
+   if(deferSelection){SetEngine(legacyGame,defaultUser,false);return;}
    try{var selected=versions.Selected();SetEngine(selected.GamePath,selected.UserPath,selected.Managed);}catch(Exception error){journal.Diagnostic("版本库读取失败："+error.Message);SetEngine(legacyGame,defaultUser,false);}
   }
   static object VersionRow(LocalGameVersion row,string selected){return new{id=row.Id,name=row.Name,version=row.Version,gamePath=row.GamePath,userPath=row.UserPath,managed=row.Managed,installed=row.Installed,selected=row.Id==selected};}

@@ -1,6 +1,16 @@
 ﻿# Explicit release inputs: adding a C# file never silently expands production.
 function Get-OzlProductionSources {
     param([Parameter(Mandatory=$true)][string]$ProjectDirectory)
+    # This module is shipped inline in app.js by the explicit packaging allowlist.
+    $modulePath = Join-Path $ProjectDirectory 'Web/launch-configurations-module.inc.js'
+    $appPath = Join-Path $ProjectDirectory 'Web/app.js'
+    $moduleText = [IO.File]::ReadAllText($modulePath).Replace("`r`n", "`n").TrimEnd()
+    $appText = [IO.File]::ReadAllText($appPath).Replace("`r`n", "`n")
+    $moduleStart = $appText.IndexOf('// Source mirrored inline', [StringComparison]::Ordinal)
+    $moduleEnd = $appText.IndexOf('const modOrderingUi=', [StringComparison]::Ordinal)
+    if ($moduleStart -lt 0 -or $moduleEnd -le $moduleStart -or $appText.Substring($moduleStart, $moduleEnd - $moduleStart).TrimEnd() -cne $moduleText) {
+        throw 'Launch configuration module differs from shipped app.js; synchronize the inline source before building.'
+    }
     $names = @(
         'BuddyLaunchArguments.cs',
         'BuddyPresentationBridge.cs',

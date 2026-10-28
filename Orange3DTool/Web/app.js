@@ -106,7 +106,7 @@ const mutationActions=new Set(['profileRecover','javaSave','saveSave','profileLa
 ['loadingSetEnabled','loadingUninstall','forceCloseGame','modProfileSave','modProfileDelete','modProfileActivate','modAutoSort','steamDownload','favoriteImport','playtimeSettings','buddyTakeover','buddyRecover'].forEach(a=>mutationActions.add(a));
 Object.assign(state,{buddyPreview:null,buddyResult:null,buddyStage:'',buddyActive:false,buddyScanning:false,buddyEpoch:0,buddyInstall:null});
 function request(action,payload={}){if(preview)return Promise.resolve(logAnalysisFixture(action)??experienceFixture(action,payload)??richFixture(action,payload)??fixture(action,payload));if(!host)return Promise.reject(new Error('请从 OZL EXE 打开启动器。'));const id='ui-'+Date.now()+'-'+(++seq);return new Promise((resolve,reject)=>{const mutation=mutationActions.has(action),timer=['logAnalysisImport','logAnalysisFolder','logAnalysisExport','environmentPreview','environmentStorageChoose'].includes(action)?null:setTimeout(()=>{if(mutation){notify('任务仍在处理，请查看任务进度；也可取消后重试。');return;}pending.delete(id);reject(new Error('请求等待超时，请查看日志后重试。'));},mutation?7200000:['houseTransferPreview','worldEditRecovery','javaComponentsList','javaComponentsPreview'].includes(action)?600000:60000);pending.set(id,{resolve,reject,timer});host.postMessage({id,action,payload,protocol:1});});}
-if(host)host.addEventListener('message',event=>{let message=event.data;if(typeof message==='string'){try{message=JSON.parse(message);}catch{return;}}if(!message||typeof message!=='object')return;if(message.event==='environmentProgress'){document.dispatchEvent(new CustomEvent('ozl-environment-progress',{detail:message.data}));return;}if(message.event==='serverWorkshopProgress'){acceptServerWorkshop(message.data);return;}if(message.event==='coreUpdateProgress'){acceptCoreUpdate(message.data);return;}if(message.event==='progress'){task(message.data);return;}if(message.event==='hallBatch'){mergeHallBatch(message.data);return;}if(message.event==='networkProgress'){if(message.data?.requestId===state.hallRequestId&&state.loading.serverHall){state.hallProgress=message.data.text||'';renderHallResults();}return;}const waiter=pending.get(message.id);if(!waiter)return;clearTimeout(waiter.timer);pending.delete(message.id);message.ok?waiter.resolve(message.data||{}):waiter.reject(Object.assign(new Error(message.error||'操作失败'),{preflight:message.preflight}));});
+if(host)host.addEventListener('message',event=>{let message=event.data;if(typeof message==='string'){try{message=JSON.parse(message);}catch{return;}}if(!message||typeof message!=='object')return;if(['configurationProgress','frozenConfigurationProgress'].includes(message.event)){document.dispatchEvent(new CustomEvent('ozl-configuration-progress',{detail:message.data}));return;}if(message.event==='environmentProgress'){document.dispatchEvent(new CustomEvent('ozl-environment-progress',{detail:message.data}));return;}if(message.event==='serverWorkshopProgress'){acceptServerWorkshop(message.data);return;}if(message.event==='coreUpdateProgress'){acceptCoreUpdate(message.data);return;}if(message.event==='progress'){task(message.data);return;}if(message.event==='hallBatch'){mergeHallBatch(message.data);return;}if(message.event==='networkProgress'){if(message.data?.requestId===state.hallRequestId&&state.loading.serverHall){state.hallProgress=message.data.text||'';renderHallResults();}return;}const waiter=pending.get(message.id);if(!waiter)return;clearTimeout(waiter.timer);pending.delete(message.id);message.ok?waiter.resolve(message.data||{}):waiter.reject(Object.assign(new Error(message.error||'操作失败'),{preflight:message.preflight}));});
 function notify(text){state.notice=text;$('#notice').hidden=!text;$('#notice').textContent=text;}
 function task(data={}){if(data.active!==undefined)state.nativeBusy=!!data.active;state.busy=!!state.nativeBusy||state.pendingMutations>0;$('#task').hidden=!state.busy;$('#cancel').disabled=!state.busy;const staleIdle=data.active===false&&state.pendingMutations>0;if(!staleIdle){$('#task-text').textContent=data.text||'正在处理，请稍候…';if(state.busy&&data.value>=0)$('#progress').value=Math.min(100,data.value);else if(state.busy)$('#progress').removeAttribute('value');else $('#progress').value=0;}if(state.buddyActive&&!staleIdle&&data.text){state.buddyStage=data.text;const stage=$('[data-buddy-stage]');if(stage)stage.textContent=data.text;}disable();if($('#task-center')?.open)scheduleTasks();}
 const unsafeControls='[data-loading-toggle],[data-loading-remove],[data-buddy-scan],[data-buddy-takeover],[data-buddy-recover],[data-buddy-continue],[data-component],[data-core-install],[data-addons-install],[data-save-memory],[data-save-settings],[data-shader],[data-maintenance],[data-cache-all],[data-save-write],[data-profile-launch],[data-server-write],[data-server-delete],[data-mod-profile-save],[data-mod-profile-activate],[data-mod-profile-delete],[data-preflight-auto-sort],[data-workshop-download],[data-favorite-import],[data-reminder-save],[data-reminder-dismiss],[data-game-stop],[data-profile-recover],[data-mod-save-activate],[data-mod-membership],#theme';
@@ -345,7 +345,7 @@ function patchServerNode(current,next){
  const previous=[...current.childNodes],incoming=[...next.childNodes];for(let i=0;i<incoming.length;i++){if(previous[i])patchServerNode(previous[i],incoming[i]);else current.append(incoming[i].cloneNode(true));}for(let i=incoming.length;i<previous.length;i++)previous[i].remove();
 }
 function patchServerContent(current,next){const focused=document.activeElement;patchServerNode(current,next);applyRichDescription(current);if(focused?.isConnected&&document.activeElement!==focused)focused.focus({preventScroll:true});}
-function paintPersonalServer(id){if(state.route!=='servers'||state.serverTab!=='personal')return;const current=document.querySelector(`[data-server-card="${CSS.escape(id)}"]`);if(!current)return;const template=document.createElement('template');template.innerHTML=serverPage();const next=template.content.querySelector(`[data-server-card="${CSS.escape(id)}"]`);if(next)patchServerContent(current,next);}
+function paintPersonalServer(id){if(state.route!=='servers'||state.serverTab!=='personal')return;const current=document.querySelector(`[data-server-card="${CSS.escape(id)}"]`);if(!current)return;const template=document.createElement('template');template.innerHTML=serverPage();const next=template.content.querySelector(`[data-server-card="${CSS.escape(id)}"]`);if(next){patchServerContent(current,next);disable();}}
 const serverLive={key:'',generation:0,queue:[],pending:new Set(),active:0,activeIds:new Set()};
 function serverMetricView(){if(document.hidden||state.route!=='servers'||!['personal','recommended'].includes(state.serverTab)||state.busy||state.coreApplying)return '';return [state.serverTab,state.experienceEpoch||0,state.serverTab==='personal'?state.servers?.stamp:libraryUi.model.recommended?.revision].join('|');}
 function serverMetricRows(){return state.serverTab==='personal'?(state.servers?.servers||[]):(libraryUi.model.recommended?.servers||[]);}
@@ -559,10 +559,10 @@ function launcherTools(){return `<section class="launcher-tools" data-launcher-t
 function arrangeHome(){
  const page=$('#page'),launch=$('#page .play-launch'),cover=$('[data-home-cover]');if(!launch||!cover)return;
  const s=state.status,core=(s?.components||[]).filter(c=>['buddy','viewpoint','chinese','base'].includes(c.id));
- if(s&&(!s.validGame||core.some(c=>!c.configured))){const step=document.createElement('div');step.className='next-step';step.dataset.nextStep='';step.innerHTML=!s.validGame?'<strong>从游戏目录开始</strong><p>选择 Project Zomboid 的安装目录。</p><button data-action="chooseGame">选择游戏目录</button>':'<strong>选择你的游戏体验</strong><p>核心组件尚未配置，可按需要逐项安装。</p><button data-page="components">查看核心组件</button>';launch.querySelector('.launch-config').after(step);}
+ if(s&&!s.validGame){const step=document.createElement('div');step.className='next-step';step.dataset.nextStep='';step.innerHTML=!s.validGame?'<strong>从游戏目录开始</strong><p>选择 Project Zomboid 的安装目录。</p><button data-action="chooseGame">选择游戏目录</button>':'<strong>选择你的游戏体验</strong><p>核心组件尚未配置，可按需要逐项安装。</p><button data-page="components">查看核心组件</button>';launch.querySelector('.launch-config').after(step);}
  const layout=document.createElement('div');layout.className='home-layout';cover.before(layout);layout.append(cover,launch);
  const copy=document.createElement('div');copy.className='scene-copy';while(cover.firstChild)copy.append(cover.firstChild);cover.append(copy);cover.insertAdjacentHTML('beforeend',actualCover());
- const config=$('#page .current-config'),actions=launch.querySelector('.launch-config .actions'),manage=document.createElement('details');manage.className='home-manage';manage.dataset.homeManage='';manage.dataset.disclosure='home-manage';manage.innerHTML='<summary id="home-manage-summary">管理配置、Java 授权与详情</summary>';manage.append(actions);config.querySelector('h2').textContent='当前配置摘要';launch.append(config,manage);
+ const config=$('#page .current-config'),actions=launch.querySelector('.launch-config .actions'),manage=document.createElement('details');manage.className='home-manage';manage.dataset.homeManage='';manage.dataset.disclosure='home-manage';manage.innerHTML='<summary id="home-manage-summary">管理配置、Java 授权与详情</summary>';if(!actions.querySelector('[data-configuration-create]'))manage.append(actions);config.querySelector('h2').textContent='当前配置摘要';launch.append(config,manage);
  const evidence=config.querySelector('details');if(evidence)manage.append(evidence);
  const java=$('#page .java-entry');if(java){java.classList.add('compact-java');manage.append(java);}
  const details=document.createElement('details');details.className='home-details';details.dataset.homeDetails='';details.dataset.disclosure='home-details';details.innerHTML='<summary id="home-details-summary">游玩计时、最近存档、服务器与硬件详情</summary>';layout.after(details);
@@ -928,10 +928,10 @@ const libraryUi=(()=>{
  async function write(action,payload){const options={quiet:true,quietErrors:true},result=await run(action,payload,options);if(!result)throw new Error(options.error||'操作未完成，请重试。');return result;}
   async function inspectWorkshopComponent(id){if(model.javaLoading)return;model.java=null;model.javaRequested=true;model.javaMessage='正在识别已下载条目的标准组件元数据…';state.route='javaMods';location.hash='javaMods';render();await loadJavaComponents(String(id));if(!model.javaError){model.javaMessage=model.java?.rows?.length?'已识别 '+model.java.rows.length+' 个声明的 Java 组件。请核对来源后再启用；下载不会自动授权。':'没有找到声明标准 Java 元数据的组件。普通 Lua／模型资源可在本地模组清单核对，未自动判断为 3D 组件。';render();}}
   function componentDownloadDialog(){const dialog=document.createElement('dialog');dialog.id='workshop-component-dialog';dialog.className='library-dialog component-download-dialog';dialog.innerHTML='<h2>安装工坊组件</h2><p>填写作者的 Steam 工坊链接或条目 ID。将下载、识别并启用组件与所需依赖；含多个 Java 子模组时由你逐项选择。</p><form><label for="component-workshop-id">工坊链接 / 条目 ID</label><input id="component-workshop-id" required maxlength="2048" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=…"><p class="error-text" role="alert"></p><div class="actions"><button type="button" data-component-download-cancel>返回</button><button class="primary" data-component-download type="submit">下载并安装</button></div></form>';dialog.querySelector('[data-component-download-cancel]').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();if(blocked()){dialog.querySelector('[role=alert]').textContent='另一项组件操作正在进行，请等待完成或取消后，再提交此链接。';return;}const value=dialog.querySelector('input').value.trim();let id=value;try{if(!/^[0-9]{1,20}$/.test(id)){const url=new URL(value);if(url.protocol!=='https:'||url.hostname!=='steamcommunity.com'||url.username||url.password||url.port||!url.pathname.includes('/filedetails/'))throw new Error();id=url.searchParams.get('id')||'';}if(!/^[0-9]{1,20}$/.test(id)||!/[1-9]/.test(id))throw new Error();}catch{dialog.querySelector('[role=alert]').textContent='请输入有效的 Steam 工坊链接或数字条目 ID。';return;}dialog.close();dialog.remove();model.javaRequested=true;model.javaSearch='';state.route='javaMods';location.hash='javaMods';await javaWorkflow('javaComponentsInstall',{id,confirmed:true});};document.body.append(dialog);dialog.showModal();}
-  async function loadJavaComponents(workshopId){if(model.javaLoading)return;const epoch=model.epoch;model.javaLoading=true;model.javaRequested=true;model.javaError='';if(state.route==='javaMods')render();try{const result=await request(workshopId?'javaComponentsInspectDownloaded':'javaComponentsList',workshopId?{id:String(workshopId)}:{});if(epoch!==model.epoch)return;model.java=result;const javaRecovery=await request('javaComponentsRecovery');if(epoch!==model.epoch)return;model.javaRecovery=javaRecovery;const forceRecovery=await request('forceTakeoverRecovery');if(epoch!==model.epoch)return;model.forceRecovery=forceRecovery;}catch(error){if(epoch===model.epoch)model.javaError=error.message;}finally{model.javaLoading=false;if(state.route==='javaMods')render();}}
+  async function loadJavaComponents(workshopId){if(model.javaLoading)return;const epoch=model.epoch;model.javaLoading=true;model.javaRequested=true;model.javaError='';if(state.route==='javaMods')render();try{const result=await request(workshopId?'javaComponentsInspectDownloaded':'javaComponentsList',workshopId?{id:String(workshopId)}:{});if(epoch!==model.epoch)return;model.java=result;const javaRecovery=await request('javaComponentsRecovery');if(epoch!==model.epoch)return;model.javaRecovery=javaRecovery;const forceRecovery=state.status?.configurationId==='steam'?await request('forceTakeoverRecovery'):{pending:false};if(epoch!==model.epoch)return;model.forceRecovery=forceRecovery;}catch(error){if(epoch===model.epoch)model.javaError=error.message;}finally{model.javaLoading=false;if(state.route==='javaMods')render();}}
   function javaPage(){
    const search=model.javaSearch.trim().toLowerCase(),all=model.java?.rows||[],locked=blocked()||state.status?.running,rows=all.filter(row=>[row.name,row.modId,row.packageName].join(' ').toLowerCase().includes(search)),source=row=>row.workshopId?'Steam 工坊':row.sourceKind==='user'?'手动安装':row.sourceKind==='game'?'游戏目录':'手动组件',card=row=>{const managed=!!row.managedKey,component=state.status?.components?.find(c=>c.id===row.managedKey),on=managed?(component?.configured??row.enabled):row.enabled,restorable=row.canRestore&&row.receiptId,removed=row.jarState==='quarantined',limitations=(row.limitations||[]).filter(text=>text!=='请使用现有组件安装与移除流程。'&&text!=='启停作用于本地默认清单和 Buddy 预加载；独立存档或服务器清单可能再次选用此模组。');return `<article class="java-component-row" data-java-component="${esc(row.token)}"><div class="java-component-symbol" aria-hidden="true">J</div><div class="java-component-main"><div class="java-component-name"><h3>${esc(row.name||row.modId)}</h3>${managed?'<span class="badge">启动器组件</span>':''}<span class="badge ${on?'status-positive':''}">${removed?'已卸载':row.javaBlocked?'已屏蔽':row.jarState==='unverified'?'未核实':on?'已启用':'未启用'}</span></div><p class="small">${esc(source(row))}${row.version?' · '+esc(row.version):''}${row.modId?' · '+esc(row.modId):''}</p>${!managed&&!row.canEnable&&!on&&!removed&&limitations.length?`<p class="status-warning small">${limitations.map(esc).join('；')}</p>`:''}${row.conflicts?.length?`<p class="status-warning small">${row.conflicts.map(esc).join('；')}</p>`:''}${row.workshopId?`<button class="link-button" data-mod-workshop="${esc(row.workshopId)}">工坊原页</button>`:''}<details><summary>来源与加载信息</summary>${limitations.length?`<p class="small java-component-limitation">${limitations.map(esc).join('；')}</p>`:''}<dl><dt>Java 包</dt><dd>${esc(row.packageName||'未声明')}</dd><dt>预加载</dt><dd>${esc(({enabled:'已启用',disabled:'未启用',none:'无',unknown:'未读取'})[row.preloadState]||row.preloadState||'无')}</dd></dl>${row.requires?.length?`<p class="small">依赖：${row.requires.map(esc).join('、')}</p>`:''}</details></div><div class="actions java-component-actions">${managed?(component?`<button ${on?'':'class="primary"'} data-component="${esc(row.managedKey)}" data-operation="${on?'uninstall':'install'}" ${locked?'disabled':''}>${on?'关闭':'启用'}</button>`:''):`${row.canEnable&&!on?`<button class="primary" data-java-component-action="enable" data-token="${esc(row.token)}" ${locked?'disabled':''}>启用</button>`:''}${row.canDisable?`<button data-java-component-action="disable" data-token="${esc(row.token)}" ${locked?'disabled':''}>屏蔽 Java</button>`:''}${row.canBlock&&!row.canDisable?`<button data-java-component-action="block" data-token="${esc(row.token)}" ${locked?'disabled':''}>屏蔽 Java</button>`:''}${row.canUninstall?`<button class="danger" data-java-component-action="uninstall" data-token="${esc(row.token)}" ${locked?'disabled':''}>卸载</button>`:''}${restorable?`<button data-java-component-action="restore" data-token="${esc(row.token)}" ${locked?'disabled':''}>恢复</button>`:''}`}</div></article>`;};
-   return heading('<button class="primary" data-component-discover>安装工坊组件</button><button data-page="workshop">浏览创意工坊</button><button data-java-components-refresh>刷新</button><button data-force-takeover '+(locked?'disabled':'')+'>强制接管</button>')+forcePanel()+`<section class="card java-manager"><div class="java-manager-toolbar"><div><h2>已安装的 Java 模组</h2><p class="small">${all.length} 项 · ${all.filter(r=>r.enabled).length} 项启用</p></div><input type="search" id="java-components-search" aria-label="搜索 Java 模组" placeholder="搜索名称、模组 ID" value="${esc(model.javaSearch)}"></div>${javaWorkflowPanel()}${model.javaMessage?`<p class="library-feedback" role="status">${esc(model.javaMessage)}</p>`:''}${model.javaError?`<p class="error-text" role="alert">${esc(model.javaError)}</p>`:''}${model.java?.actionRequired?`<p class="library-feedback" role="status">${esc(model.java.actionRequired)}</p>`:''}${model.javaRecovery?.pending?`<div class="java-recovery"><p>上一次 Java 模组操作尚未完成。</p><button data-java-components-recover ${!model.javaRecovery.supported||blocked()?'disabled':''}>恢复上次操作</button></div>`:''}${model.javaLoading&&!model.java?'<p class="read-pending">正在读取 Java 模组…</p>':''}<div data-java-component-rows>${rows.map(card).join('')||(!model.javaLoading?'<div class="empty">没有找到 Java 模组。</div>':'')}</div>${model.java?.warnings?.some(w=>w!==model.java.actionRequired)?`<details class="java-scan-warnings"><summary>查看未能读取的来源</summary><ul>${model.java.warnings.filter(w=>w!==model.java.actionRequired).map(w=>`<li>${esc(w)}</li>`).join('')}</ul></details>`:''}</section>`;
+   return heading('<button class="primary" data-component-discover>安装工坊组件</button><button data-page="workshop">浏览创意工坊</button><button data-java-components-refresh>刷新</button>'+(state.status?.configurationId==='steam'?'<button data-force-takeover '+(locked?'disabled':'')+'>强制接管</button>':''))+forcePanel()+`<section class="card java-manager"><div class="java-manager-toolbar"><div><h2>已安装的 Java 模组</h2><p class="small">${all.length} 项 · ${all.filter(r=>r.enabled).length} 项启用</p></div><input type="search" id="java-components-search" aria-label="搜索 Java 模组" placeholder="搜索名称、模组 ID" value="${esc(model.javaSearch)}"></div>${javaWorkflowPanel()}${model.javaMessage?`<p class="library-feedback" role="status">${esc(model.javaMessage)}</p>`:''}${model.javaError?`<p class="error-text" role="alert">${esc(model.javaError)}</p>`:''}${model.java?.actionRequired?`<p class="library-feedback" role="status">${esc(model.java.actionRequired)}</p>`:''}${model.javaRecovery?.pending?`<div class="java-recovery"><p>上一次 Java 模组操作尚未完成。</p><button data-java-components-recover ${!model.javaRecovery.supported||blocked()?'disabled':''}>恢复上次操作</button></div>`:''}${model.javaLoading&&!model.java?'<p class="read-pending">正在读取 Java 模组…</p>':''}<div data-java-component-rows>${rows.map(card).join('')||(!model.javaLoading?'<div class="empty">没有找到 Java 模组。</div>':'')}</div>${model.java?.warnings?.some(w=>w!==model.java.actionRequired)?`<details class="java-scan-warnings"><summary>查看未能读取的来源</summary><ul>${model.java.warnings.filter(w=>w!==model.java.actionRequired).map(w=>`<li>${esc(w)}</li>`).join('')}</ul></details>`:''}</section>`;
   }
   function forcePanel(){const result=model.forceResult,recovery=model.forceRecovery;return `${model.forceError?`<p class="error-text" role="alert">${esc(model.forceError)}</p>`:''}${result?`<section class="card section" data-force-result><h2>${result.status==='completed'?'强制接管完成':result.status==='recovered'?'已恢复本次改动':result.status==='partial'?'接管部分完成':'接管未完成'}</h2><p>${esc(result.message||'')}</p>${result.unresolved?.length?`<ul>${result.unresolved.map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`:''}</section>`:''}${recovery?.pending?`<section class="card section"><h2>上次强制接管未完成</h2><p>${esc(recovery.message||'')}</p><button data-force-recover ${!recovery.supported||blocked()?'disabled':''}>恢复本次改动</button></section>`:''}`;}
   async function forceAction(recover=false){if(blocked()||state.status?.running)return;const epoch=model.epoch;model.working=true;model.forceError='';render();try{const plan=await request(recover?'forceTakeoverRecovery':'forceTakeoverPreview');if(epoch!==model.epoch)return;if(!plan.supported)throw new Error(plan.message||'暂时无法接管，请重新读取。');const dialog=document.createElement('dialog');dialog.id='force-takeover-dialog';dialog.className='library-dialog';dialog.innerHTML=`<h2>${recover?'恢复本次强制接管？':'强制接管启动参数与 Java 组件？'}</h2><p>${recover?'恢复这次接管前的配置。':'先备份，清空当前账号此游戏的全部 Steam 启动参数，并停用已识别的本地 Java／3D 加载入口。之后从组件中心安装或启用。'}</p><p>本次操作会正常退出并重新打开 Steam。</p>${plan.locations?.length?`<details><summary>查看处理范围</summary><ul>${plan.locations.map(v=>`<li>${esc(v)}</li>`).join('')}</ul></details>`:''}${plan.unresolved?.length?`<h3>仍需检查</h3><ul>${plan.unresolved.map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`:''}<div class="actions section"><button data-force-cancel>取消</button><button class="primary" data-force-confirm>${recover?'确认恢复':'备份并强制接管'}</button></div>`;document.body.append(dialog);dialog.showModal();const confirmed=await new Promise(resolve=>{dialog.querySelector('[data-force-cancel]').onclick=()=>resolve(false);dialog.querySelector('[data-force-confirm]').onclick=()=>resolve(true);dialog.oncancel=e=>{e.preventDefault();resolve(false);};});dialog.close();dialog.remove();if(!confirmed||epoch!==model.epoch)return;const result=await write(recover?'forceTakeoverRecover':'forceTakeoverApply',{stamp:plan.stamp,confirmed:true});if(epoch!==model.epoch)return;model.forceResult=result;model.javaRequested=false;await loadJavaComponents();await refresh();}catch(error){if(epoch===model.epoch)model.forceError=error.message;}finally{model.working=false;if(state.route==='javaMods')render();}}
@@ -975,7 +975,7 @@ const libraryUi=(()=>{
  async function queryRecommendations(){if(state.route==='servers'&&state.serverTab==='recommended')queueVisibleServerMetrics();}
  function recommendationImage(value){try{const uri=new URL(value);return uri.protocol==='https:'&&!uri.username&&!uri.password&&!uri.port&&['orangezl.com','images.steamusercontent.com','steamuserimages-a.akamaihd.net'].includes(uri.hostname)?uri.href:'';}catch{return '';}}
  function recommendedPage(){const rows=model.recommended?.servers||[];return `${model.versions?.localPreview?'<div class="actions recommendation-management"><button data-recommended-admin>管理推荐名单 ↗</button></div>':''}${model.recommendError?`<p class="error-text">${esc(model.recommendError)}</p>`:''}${model.recommended?.warning?`<p class="small" role="status">${esc(model.recommended.warning)}</p>`:''}<div class="recommended-grid">${rows.map((s,index)=>{const q=model.queries[s.id],cover=recommendationImage(s.cover),images=(s.screenshots||[]).map(recommendationImage).filter(Boolean).slice(0,8),actualName=q?.status==='online'&&q.name?q.name:s.name;return `<article class="card recommended-card" data-recommended-card="${esc(s.id)}"><div class="recommended-art art-${index%4}">${cover?`<img src="${esc(cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}<span class="recommended-rank">${String(index+1).padStart(2,'0')}</span><span class="badge">${esc(q?.version||s.version?'Build '+(q?.version||s.version):'推荐服务器')}</span></div><div class="recommended-body"><h2>${esc(actualName)}</h2><p class="small recommended-alias" ${actualName!==s.name?'':'hidden'}>推荐名称：${esc(s.name)}</p><p class="server-endpoint">${esc(s.host)}:${esc(s.port)}</p><div class="recommended-tags">${(s.tags||[]).map(t=>`<span>${esc(t)}</span>`).join('')}</div><p class="recommended-description">${esc(s.description||'')}</p><details class="recommended-introduction" data-disclosure="recommended-${esc(s.id)}"><summary>详细介绍与服务器公开信息</summary><p class="recommendation-extended" ${s.extendedDescription?'':'hidden'}>${esc(s.extendedDescription||'')}</p><h3>服务器公开介绍</h3><div class="server-description small">${richDescription(q?.descriptionSource==='server'?q.description:'服务器尚未返回公开介绍。')}</div><p class="small">${esc(q?.descriptionWarning||q?.error||'')}</p></details><div class="recommended-gallery" data-recommended-gallery ${images.length?'':'hidden'}>${images.map((image,i)=>`<button data-recommended-image="${esc(s.id)}" data-image-index="${i}" aria-label="查看服务器截图 ${i+1}"><img src="${esc(image)}" alt="服务器截图 ${i+1}" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}</div><div class="recommended-metrics"><span>在线 <strong>${q?.players==null?'—':esc(q.players)+' / '+esc(q.maxPlayers??'—')}</strong></span><span>延迟 <strong>${q?.latencyMs==null?'—':esc(q.latencyMs)+' ms'}</strong></span></div><div class="actions"><button class="primary" data-recommended-connect="${esc(s.id)}" ${blocked()?'disabled':''}>连接服务器</button><button data-recommended-import="${esc(s.id)}" ${blocked()?'disabled':''}>导入个人列表</button></div></div></article>`;}).join('')||`<div class="empty"><h3>${model.recommending?'正在读取推荐服务器…':'推荐名单暂时为空'}</h3>${!model.recommending?'<button data-recommended-refresh>刷新列表</button>':''}</div>`}</div>`;}
- function paintRecommendedCards(){const current=$('#page .recommended-grid');if(!current)return;const template=document.createElement('template');template.innerHTML=recommendedPage();const next=template.content.querySelector('.recommended-grid');if(next)patchServerContent(current,next);}
+ function paintRecommendedCards(){const current=$('#page .recommended-grid');if(!current)return;const template=document.createElement('template');template.innerHTML=recommendedPage();const next=template.content.querySelector('.recommended-grid');if(next){patchServerContent(current,next);disable();}}
  async function importRecommendation(id){const row=model.recommended?.servers.find(value=>value.id===id);if(!row||blocked())return;if(!state.servers)await load('servers');const saved=state.servers?.servers.find(value=>value.host.toLowerCase()===row.host.toLowerCase()&&value.port===row.port);serverDialog(saved?.id||'',{name:model.queries[id]?.name||row.name,host:row.host,port:row.port,queryPort:row.queryPort||0,useSteamRelay:!!row.useSteamRelay,description:row.description||''});const dialog=$('#server-editor');if(dialog){dialog.querySelector('h2').textContent='导入个人列表';dialog.querySelector('[data-server-write]').textContent='保存到个人列表';}}
  async function connectRecommendation(id){const row=model.recommended?.servers.find(value=>value.id===id);if(!row||blocked())return;if(!state.servers)await load('servers');const saved=state.servers?.servers.find(value=>value.host.toLowerCase()===row.host.toLowerCase()&&value.port===row.port);if(saved?.username){await launchExperience('server',saved.id);return;}serverDialog(saved?.id||'',{name:model.queries[id]?.name||row.name,host:row.host,port:row.port,queryPort:row.queryPort||0,useSteamRelay:!!row.useSteamRelay,description:row.description||''});const dialog=$('#server-editor');if(dialog){dialog.dataset.recommendedConnection='true';dialog.querySelector('h2').textContent='连接服务器';dialog.querySelector('[data-server-write]').textContent='保存并连接';}}
  function showRecommendationImage(id,index){const row=model.recommended?.servers.find(value=>value.id===id),images=(row?.screenshots||[]).map(recommendationImage).filter(Boolean).slice(0,8),image=images[index];if(!image)return;const dialog=document.createElement('dialog');dialog.className='recommendation-image-dialog';dialog.innerHTML=`<div class="row"><h2>${esc(row.name)} · 截图 ${index+1}</h2><button type="button">关闭图片</button></div><img src="${esc(image)}" alt="服务器截图 ${index+1}" referrerpolicy="no-referrer">`;dialog.querySelector('button').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();}
@@ -992,7 +992,7 @@ const libraryUi=(()=>{
  async function backupOperation(action,backupId){if(blocked())return;const id=model.backupId,label=$('[data-backup-label]')?.value||'';if(action==='backupRestore'&&!await confirm('恢复这份存档？','当前存档会先保留一份恢复前备份。'))return;if(action==='backupDelete'&&!await confirm('删除这份备份？','确认后移除所选备份。'))return;model.working=true;model.backupError='';model.backupMessage='';paintBackup();try{const result=await write(action,{id,...(action==='backupCreate'?{label}:{backupId,confirmed:true})});model.backupMessage=result.message||'操作完成';await history();if(action==='backupRestore')await load('saves');}catch(e){model.backupError=e.message;}finally{model.working=false;if(action==='backupRestore')await loadWorldRecovery();paintBackup();}}
  function settingValues(){return{directory:model.backupSettings.directory,retention:Number($('[data-backup-retention]')?.value??model.backupSettings.retention),afterExit:!!$('[data-backup-auto]')?.checked};}
  function versionDialog(kind){const dialog=document.createElement('dialog');dialog.className='library-dialog version-dialog';dialog.innerHTML=`<h2>${kind==='install'?'安装游戏版本':kind==='import'?'添加已有版本':'保存独立版本'}</h2><form><label>版本名称<input name="name" value="${kind==='preserve'?esc(current()?.name+' · 独立副本'):'我的游戏版本'}" maxlength="80" required></label>${kind==='install'?'<label>目标版本<select name="major"><option value="42">Build 42</option><option value="41">Build 41</option></select></label><p>先保留当前 Steam 版本，再打开 Steam 下载所选版本。</p>':''}<div class="actions"><button type="button" data-version-dialog-cancel>返回</button><button type="submit" class="primary">${kind==='import'?'选择游戏文件夹':kind==='install'?'选择位置并打开 Steam':'选择保存位置'}</button></div><p class="error-text" role="alert"></p></form>`;document.body.append(dialog);dialog.querySelector('[data-version-dialog-cancel]').onclick=()=>{dialog.close();dialog.remove();};dialog.addEventListener('cancel',()=>dialog.remove());dialog.querySelector('form').onsubmit=async e=>{e.preventDefault();if(blocked())return;const name=dialog.querySelector('[name=name]').value.trim(),major=Number(dialog.querySelector('[name=major]')?.value||42);model.working=true;dialog.querySelectorAll('button').forEach(b=>b.disabled=true);try{const result=await write({import:'versionChooseImport',preserve:'versionChoosePreserve',install:'versionChooseInstall'}[kind],{name,...(kind==='install'?{major}:{})});if(result.cancelled){dialog.querySelectorAll('button').forEach(b=>b.disabled=false);return;}model.message=result.message||'版本任务已完成';dialog.close();dialog.remove();await loadVersions();}catch(error){dialog.querySelector('[role=alert]').textContent=error.message;dialog.querySelectorAll('button').forEach(b=>b.disabled=false);}finally{model.working=false;render();}};dialog.showModal();}
- const baseRenderLibrary=render;render=function(){baseRenderLibrary();syncJavaTaskPanel();const selected=current();if(state.route==='javaMods'&&!model.javaRequested&&!model.javaLoading)queueMicrotask(()=>loadJavaComponents());if(state.route==='home'&&!$('#home-version-select')){const launch=$('#page .home-launch')||$('#page .launch-config')||$('#page .home-scene');if(launch){const bar=document.createElement('div');bar.className='home-version-picker';bar.innerHTML=`<label for="home-version-select">游戏版本</label><select id="home-version-select" ${blocked()||state.status?.running?'disabled':''}>${(model.versions?.versions||[]).filter(v=>v.installed).map(v=>`<option value="${esc(v.id)}" ${v.selected?'selected':''}>${esc(v.name)} · ${esc(v.version)}</option>`).join('')||'<option>正在读取版本…</option>'}</select><button data-page="versions">管理版本</button>`;launch.before(bar);}}if(state.route==='saves'){if(!model.worldRequested){model.worldRequested=true;void loadWorldRecovery();}if(model.worldRecoveryError&&!model.worldRecovery?.pending&&!$('.world-read-error'))$('#page .heading')?.insertAdjacentHTML('afterend',`<div class="card section world-read-error"><p>${esc(model.worldRecoveryError)}</p><button data-world-retry>重新读取存档状态</button></div>`);if(model.worldRecovery?.pending&&!$('.world-recovery'))$('#page .heading')?.insertAdjacentHTML('afterend',worldRecoveryPanel());if(!$('[data-backup-inventory]'))$('#page .heading .actions')?.insertAdjacentHTML('afterbegin','<button data-backup-inventory>备份记录</button>');for(const card of document.querySelectorAll('.save-card')){const id=card.querySelector('[data-save-open]')?.dataset.saveOpen;if(id&&!card.querySelector('[data-save-backups]'))card.querySelector('.actions')?.insertAdjacentHTML('beforeend',`<button data-save-backups="${esc(id)}">备份与恢复</button>`);}if(model.backupSettings&&!$('.backup-settings'))$('#page .heading')?.insertAdjacentHTML('afterend',backupSettingsPanel());}if(state.route==='servers'&&state.serverTab==='recommended'&&!model.recommended&&!model.recommending)queueMicrotask(()=>recommendations());if(state.route==='saves'&&!model.backupSettings&&!model.settingsRead){model.settingsRead=true;void loadBackupSettings();}syncServerMetrics();};
+ const baseRenderLibrary=render;render=function(){baseRenderLibrary();syncJavaTaskPanel();const selected=current();if(state.route==='javaMods'&&!model.javaRequested&&!model.javaLoading)queueMicrotask(()=>loadJavaComponents());if(state.route==='home'&&!$('#launch-configuration-select')&&!$('#home-version-select')){const launch=$('#page .home-launch')||$('#page .launch-config')||$('#page .home-scene');if(launch){const bar=document.createElement('div');bar.className='home-version-picker';bar.innerHTML=`<label for="home-version-select">游戏版本</label><select id="home-version-select" ${blocked()||state.status?.running?'disabled':''}>${(model.versions?.versions||[]).filter(v=>v.installed).map(v=>`<option value="${esc(v.id)}" ${v.selected?'selected':''}>${esc(v.name)} · ${esc(v.version)}</option>`).join('')||'<option>正在读取版本…</option>'}</select><button data-page="versions">管理版本</button>`;launch.before(bar);}}if(state.route==='saves'){if(!model.worldRequested){model.worldRequested=true;void loadWorldRecovery();}if(model.worldRecoveryError&&!model.worldRecovery?.pending&&!$('.world-read-error'))$('#page .heading')?.insertAdjacentHTML('afterend',`<div class="card section world-read-error"><p>${esc(model.worldRecoveryError)}</p><button data-world-retry>重新读取存档状态</button></div>`);if(model.worldRecovery?.pending&&!$('.world-recovery'))$('#page .heading')?.insertAdjacentHTML('afterend',worldRecoveryPanel());if(!$('[data-backup-inventory]'))$('#page .heading .actions')?.insertAdjacentHTML('afterbegin','<button data-backup-inventory>备份记录</button>');for(const card of document.querySelectorAll('.save-card')){const id=card.querySelector('[data-save-open]')?.dataset.saveOpen;if(id&&!card.querySelector('[data-save-backups]'))card.querySelector('.actions')?.insertAdjacentHTML('beforeend',`<button data-save-backups="${esc(id)}">备份与恢复</button>`);}if(model.backupSettings&&!$('.backup-settings'))$('#page .heading')?.insertAdjacentHTML('afterend',backupSettingsPanel());}if(state.route==='servers'&&state.serverTab==='recommended'&&!model.recommended&&!model.recommending)queueMicrotask(()=>recommendations());if(state.route==='saves'&&!model.backupSettings&&!model.settingsRead){model.settingsRead=true;void loadBackupSettings();}syncServerMetrics();};
  document.addEventListener('change',e=>{if(e.target.id==='home-version-select')void select(e.target.value);});
   document.addEventListener('input',e=>{const field=e.target.dataset.houseField;if(field&&e.target.matches('input[data-house-field]')){model.house[field]=e.target.value;invalidateHouse();$('.house-review')?.remove();$('.house-result')?.remove();}});
   document.addEventListener('input',e=>{if(e.target.id==='java-components-search'){model.javaSearch=e.target.value;render();}});
@@ -1022,26 +1022,1146 @@ const libraryUi=(()=>{
   const previousActualWritten=actualWritten;actualWritten=function(action,data){previousActualWritten(action,data);if(action==='chooseGame'&&!data.cancelled){selectedChanged();model.versions=null;void loadVersions();}if(['componentsAction','steamDownload'].includes(action)&&!data.cancelled){model.javaRequested=false;if(state.route==='javaMods')void loadJavaComponents();}};
   return {versionPage,transferPage,javaPage,recommendedPage,paintRecommendedCards,inspectWorkshopComponent,loadVersions,model};
 })();
+// Source mirrored inline in app.js; no separate runtime resource is required.
+const launchConfigurationUi = (() => {
+  const model = {
+    list: null,
+    versions: null,
+    selected: null,
+    selecting: "",
+    cover: null,
+    epoch: 0,
+    reading: null,
+    error: "",
+    editor: null,
+    jobs: new Map(),
+  };
+  const raw = request,
+    selectedId = () => model.selecting || model.list?.selectedId || "launcher";
+  const owned = new Set([
+    "savesList",
+    "serverList",
+    "status",
+    "modCatalog",
+    "modProfiles",
+    "memoryGet",
+    "memorySave",
+    "javaList",
+    "javaSave",
+    "javaComponentsList",
+    "javaComponentsInstall",
+    "javaComponentsEnable",
+    "javaComponentsPreview",
+    "javaComponentsApply",
+    "javaComponentsRecovery",
+    "javaComponentsRecover",
+    "javaComponentsReconcile",
+    "javaComponentsInspectDownloaded",
+    "componentsAction",
+    "modSort",
+    "steamDownload",
+    "forceTakeoverPreview",
+    "forceTakeoverApply",
+    "buddyPreview",
+    "buddyTakeover",
+  ]);
+  for (const action of [
+    "configurationRequest",
+    "configurationCreate",
+    "configurationRename",
+    "configurationVersion",
+    "configurationDelete",
+    "configurationSaveOrdinary",
+    "frozenConfigurationSave",
+    "frozenConfigurationApprove",
+    "frozenConfigurationUninstall",
+    "frozenConfigurationRecover",
+  ])
+    mutationActions.add(action);
+  const pureReads = new Set([
+    "status",
+    "modCatalog",
+    "modProfiles",
+    "memoryGet",
+    "javaList",
+    "javaComponentsList",
+    "javaComponentsRecovery",
+    "modSort",
+    "savesList",
+    "serverList",
+  ]);
+  const readId = () => crypto.randomUUID().replaceAll("-", "");
+  async function ownerRequest(id, action, payload = {}, editor = null) {
+    const token = pureReads.has(action) ? readId() : "";
+    if (editor && token) editor.readRequests.add(token);
+    let result;
+    try {
+      result = await raw("configurationRequest", {
+        id,
+        action,
+        payload,
+        ...(token ? { readId: token } : {}),
+      });
+    } finally {
+      if (editor && token) editor.readRequests.delete(token);
+    }
+    if (result.configurationId !== id)
+      throw Error("配置回复不匹配，请重新读取。");
+    return result.data;
+  }
+  request = async function (action, payload = {}) {
+    if (!owned.has(action)) return raw(action, payload);
+    const id = selectedId(),
+      epoch = model.epoch;
+    const data = await ownerRequest(id, action, payload);
+    if (
+      epoch !== model.epoch &&
+      [
+        "status",
+        "memoryGet",
+        "modCatalog",
+        "modProfiles",
+        "javaList",
+        "javaComponentsList",
+      ].includes(action)
+    )
+      throw Error("配置选择已变化，已忽略之前的读取。");
+    return data;
+  };
+  const kind = (row) =>
+    row?.kind === "frozen"
+      ? "快照配置"
+      : row?.kind === "live"
+        ? "普通配置"
+        : "内置配置";
+  const description = (row) =>
+    row?.id === "steam"
+      ? "使用 Steam 与原游戏的启动设置，可按需接管。"
+      : row?.id === "vanilla"
+        ? "使用原版游戏，不加载普通模组和可选 Java 组件。"
+        : row?.kind === "frozen"
+          ? "固定游戏与模组副本；工坊更新不会改变这份快照。"
+          : "使用所选游戏版本和当前模组文件。";
+  const versionOptions = (id) =>
+    (model.versions?.versions || [])
+      .filter((v) => v.installed)
+      .map(
+        (v) =>
+          `<option value="${esc(v.id)}" ${v.id === id ? "selected" : ""}>${esc(v.name)} · ${esc(v.version)}</option>`,
+      )
+      .join("");
+  async function readCover(id, epoch) {
+    const row = model.list?.configurations.find((r) => r.id === id);
+    model.selected = row;
+    model.cover = null;
+    if (!row?.available) return;
+    const [status, memory] = await Promise.all([
+      ownerRequest(id, "status"),
+      ownerRequest(id, "memoryGet"),
+    ]);
+    if (epoch !== model.epoch || id !== selectedId()) return;
+    if (status.components && independentCore(status.components))
+      status.components = status.components.filter((c) => c.id !== "base");
+    model.cover = { status, memory };
+    state.actual.memory = memory;
+    acceptStatus(status);
+  }
+  async function reload() {
+    if (model.reading) return model.reading;
+    const epoch = model.epoch;
+    model.error = "";
+    model.reading = (async () => {
+      try {
+        const [list, versions] = await Promise.all([
+          raw("launchConfigurations"),
+          raw("versionList"),
+        ]);
+        if (epoch !== model.epoch) return;
+        model.list = list;
+        model.versions = versions;
+        await readCover(list.selectedId, epoch);
+      } catch (error) {
+        if (epoch === model.epoch) model.error = error.message;
+      } finally {
+        model.reading = null;
+        if (state.route === "home" || state.route === "components") render();
+      }
+    })();
+    return model.reading;
+  }
+  async function select(id) {
+    const epoch = ++model.epoch;
+    model.selecting = id;
+    model.selected = model.list?.configurations.find((row) => row.id === id);
+    model.cover = null;
+    render();
+    model.error = "";
+    cancelLaunchAttempt();
+    state.playProfiles = null;
+    state.playPreview = null;
+    state.preflight = null;
+    state.actual = {};
+    state.java = null;
+    state.memory = null;
+    state.modCatalog = null;
+    libraryUi.model.javaRequested = false;
+    libraryUi.model.epoch++;
+    try {
+      const list = await raw("launchConfigurationSelect", { id });
+      if (epoch !== model.epoch) return;
+      model.list = list;
+      model.selected = list.configurations.find((r) => r.id === id);
+      render();
+      await readCover(id, epoch);
+    } catch (error) {
+      if (epoch === model.epoch) model.error = error.message;
+    } finally {
+      if (epoch === model.epoch) {
+        model.selecting = "";
+        render();
+      }
+    }
+  }
+  const previousEnsure = ensureExperience;
+  ensureExperience = function () {
+    if (!model.list && !model.reading && !model.error) void reload();
+    for (const [key, action] of [
+      ["memory", "memoryGet"],
+      ["saves", "savesList"],
+      ["servers", "serverList"],
+    ])
+      if (
+        !state.actual[key] &&
+        !state.experienceReads[key] &&
+        !state.experienceErrors[key]
+      )
+        experienceRead(key, action);
+  };
+  const previousHome = home;
+  home = function () {
+    const container = document.createElement("div");
+    container.innerHTML = previousHome();
+    const row =
+      model.selected ||
+      model.list?.configurations.find((r) => r.id === selectedId());
+    container.querySelector(".launch-config").innerHTML =
+      `<label for="launch-configuration-select">启动配置</label><select id="launch-configuration-select" ${!model.list ? "disabled" : ""}>${(model.list?.configurations || [{ id: "launcher", name: "启动器配置", kind: "builtin" }]).map((r) => `<option value="${esc(r.id)}" ${r.id === selectedId() ? "selected" : ""}>${esc(r.name)} · ${kind(r)}${r.version ? " · " + esc(r.version) : ""}${r.available === false ? " · 版本不可用" : ""}</option>`).join("")}</select><p data-configuration-description>${esc(description(row))}</p>${row?.available === false ? '<p class="status-warning">' + esc(row.message) + "</p>" : ""}${model.error ? '<p class="status-warning">' + esc(model.error) + "</p>" : ""}<div class="actions"><button data-configuration-create>新建配置</button><button data-configuration-edit ${!row ? "disabled" : ""}>编辑配置</button><button data-configuration-reload>重新读取</button>${row?.id === "steam" ? "<button data-configuration-steam>接管 Steam 配置</button><button data-force-takeover>强制接管</button>" : ""}</div>`;
+    const summary = container.querySelector("[data-current-config]"),
+      cover = model.cover,
+      currentStatus =
+        state.status?.configurationId === selectedId()
+          ? state.status
+          : cover?.status,
+      memory = state.actual.memory,
+      components = currentStatus?.components?.filter((c) => c.configured) || [];
+    summary.textContent = cover
+      ? `${memory ? memory.currentGiB + " GiB Java 堆" : "内存待读取"} · ${components.length} 个组件 · ${row?.version || cover.status.gameVersion?.value || "版本未读取"}`
+      : "正在读取所选配置…";
+    container.querySelector(".current-config h2").textContent = "下次启动配置";
+    const detail = container.querySelector(".current-config details");
+    if (detail)
+      detail.innerHTML =
+        "<summary>配置详情</summary><p>" +
+        esc(components.map((c) => c.title).join(" · ") || "未启用组件") +
+        "</p>";
+    const launch = container.querySelector("#launch");
+    if (!row?.available || !cover || model.selecting) launch.disabled = true;
+    container.insertAdjacentHTML(
+      "beforeend",
+      '<div class="configuration-jobs" data-configuration-jobs>' +
+        jobsMarkup() +
+        "</div>",
+    );
+    if (
+      cover?.status.runtimeConfigurationName &&
+      (cover.status.running || cover.status.startup?.pending) &&
+      cover.status.runtimeConfigurationId !== row?.id
+    )
+      container.insertAdjacentHTML(
+        "beforeend",
+        '<p class="small" data-configuration-runtime>正在运行：' +
+          esc(cover.status.runtimeConfigurationName) +
+          " · 下次启动：" +
+          esc(row?.name) +
+          "</p>",
+      );
+    if (
+      row?.id === "steam" &&
+      (libraryUi.model.forceResult || libraryUi.model.forceError)
+    )
+      container.insertAdjacentHTML(
+        "beforeend",
+        '<section class="card section" data-configuration-steam-result><h3>Steam 配置接管结果</h3><p>' +
+          esc(
+            libraryUi.model.forceResult?.message || libraryUi.model.forceError,
+          ) +
+          "</p></section>",
+      );
+    return container.innerHTML;
+  };
+  function jobsMarkup() {
+    return [...model.jobs.values()]
+      .map(
+        (job) =>
+          `<section class="card section" data-configuration-job-owner="${esc(job.id)}"><h3>${esc(job.name)} · ${job.active ? "正在处理" : "操作结果"}</h3><p role="status">${esc(job.message)}</p>${job.active ? '<progress aria-label="' + esc(job.name) + '操作进度"></progress><button data-configuration-job-cancel="' + esc(job.id) + '">取消此配置任务</button>' : '<button data-configuration-job-dismiss="' + esc(job.id) + '">关闭结果</button>'}</section>`,
+      )
+      .join("");
+  }
+  function paintJobs() {
+    const root = document.querySelector("[data-configuration-jobs]");
+    if (root) root.innerHTML = jobsMarkup();
+  }
+  actualCover = function () {
+    const row = model.selected,
+      cover = model.cover,
+      currentStatus =
+        state.status?.configurationId === selectedId()
+          ? state.status
+          : cover?.status,
+      memory = state.actual.memory,
+      components = currentStatus?.components?.filter((c) => c.configured) || [];
+    return `<aside class="scene-status" data-home-actual aria-label="所选启动配置摘要"><h3>${esc(row?.name || "启动配置")}</h3><dl><dt>游戏版本</dt><dd>${esc(row?.version || cover?.status.gameVersion?.value || "待读取")}</dd><dt>启动内存</dt><dd>${cover ? esc(cover.memory.currentGiB) + " GiB" : "待读取"}</dd><dt>下次启动启用组件</dt><dd>${cover ? components.length + " 项" : "待读取"}</dd></dl><p class="configured-names">${esc(components.map((c) => c.title).join(" · ") || (cover ? "未启用组件" : "正在读取"))}</p></aside>`;
+  };
+  function editorStatus(editor, text, busy = false) {
+    if (model.editor !== editor) return;
+    editor.message = text;
+    const root = editor.element,
+      feedback = root.querySelector("[data-configuration-editor-status]");
+    feedback.textContent = text;
+    root.querySelector("[data-configuration-progress]").hidden = !busy;
+    root.querySelector("[data-configuration-cancel]").hidden = !busy;
+    root
+      .querySelectorAll(
+        "[data-configuration-write],[data-configuration-up],[data-configuration-down],[data-configuration-remove],[data-configuration-add]",
+      )
+      .forEach((b) => {
+        if (busy) {
+          if (!b.disabled) {
+            b.dataset.configurationLock = "1";
+            b.disabled = true;
+          }
+        } else if (b.dataset.configurationLock) {
+          delete b.dataset.configurationLock;
+          b.disabled = false;
+        }
+      });
+  }
+  const frozenPayload = (editor) => ({
+    snapshotId: editor.id.slice(9),
+    manifestHash: editor.view.frozen.manifestHash,
+  });
+  function meta(editor, id) {
+    return (
+      [...(editor.catalog || []), ...(editor.sources || [])].find(
+        (r) => r.id === id,
+      ) || { id, name: id }
+    );
+  }
+  function paintMods() {
+    const editor = model.editor;
+    if (!editor) return;
+    const root = editor.element,
+      query = editor.search.toLowerCase();
+    root.querySelector("[data-configuration-mods]").innerHTML =
+      editor.ids
+        .filter((id) =>
+          `${meta(editor, id).name} ${id}`.toLowerCase().includes(query),
+        )
+        .map((id) => {
+          const row = meta(editor, id),
+            index = editor.ids.indexOf(id);
+          return `<li data-configuration-mod="${esc(id)}"><button class="mod-drag-handle" data-mod-drag="${esc(id)}" data-mod-drag-kind="configuration" aria-label="拖动 ${esc(row.name || id)} 调整顺序" ${editor.saving ? "disabled" : ""}>⠿</button><span class="order-number">${index + 1}.</span><div class="ordered-info"><div><h3>${esc(row.name || id)}</h3><span class="small">${esc(id)}</span>${row.workshopId ? `<button data-mod-workshop="${esc(row.workshopId)}">工坊原页 ↗</button>` : ""}</div></div><div class="actions"><button data-configuration-up="${esc(id)}" ${index === 0 || editor.saving ? "disabled" : ""} aria-label="上移 ${esc(row.name || id)}">↑</button><button data-configuration-down="${esc(id)}" ${index === editor.ids.length - 1 || editor.saving ? "disabled" : ""} aria-label="下移 ${esc(row.name || id)}">↓</button><button data-configuration-remove="${esc(id)}" ${editor.saving ? "disabled" : ""}>移除</button></div></li>`;
+        })
+        .join("") || "<li>没有符合搜索条件的模组。</li>";
+    root.querySelector("[data-configuration-available]").innerHTML =
+      (editor.sources || editor.catalog || [])
+        .filter(
+          (r) =>
+            !editor.ids.includes(r.id) &&
+            !editor.view.frozen?.managedIds.includes(r.id) &&
+            !r.componentManaged &&
+            !r.component,
+        )
+        .filter((r) => `${r.name} ${r.id}`.toLowerCase().includes(query))
+        .map(
+          (r, index) =>
+            `<div class="configuration-source"><span>${esc(r.name || r.id)} <small>${esc({ user: "本机模组", workshop: "工坊", local: "本机模组" }[r.sourceKind || r.source] || "当前来源")}${r.workshopId ? " · 工坊 " + esc(r.workshopId) : ""}</small></span><button data-configuration-add="${index}" data-source-key="${esc(r.token || r.id)}" ${editor.saving ? "disabled" : ""}>${editor.frozen ? "复制到快照" : "添加"}</button></div>`,
+        )
+        .join("") || '<p class="small">没有可添加的匹配项。</p>';
+  }
+  async function readComponents(editor, epoch = editor.epoch) {
+    const [inventory, approvals, status] = await Promise.all([
+      ownerRequest(editor.id, "javaComponentsList", {}, editor),
+      ownerRequest(editor.id, "javaList", {}, editor),
+      ownerRequest(editor.id, "status", {}, editor),
+    ]);
+    if (model.editor !== editor || epoch !== editor.epoch) return;
+    editor.inventory = inventory;
+    editor.approvals = approvals;
+    editor.status = status;
+    paintComponents(editor);
+  }
+  function paintComponents(editor) {
+    if (model.editor !== editor) return;
+    const rows = editor.inventory?.rows || [],
+      approvals = editor.approvals?.jars || [],
+      root = editor.element.querySelector("[data-configuration-components]");
+    const disclosure = root.querySelector(
+        "[data-known-component-sources]",
+      )?.open,
+      workshop = root.querySelector("[data-configuration-workshop]")?.value;
+    root.innerHTML = `<p class="small">${editor.frozen ? "停用保留副本；移除会删除最后一个未被引用的副本。" : "组件更改立即保存到此配置；从此配置移除会保留原工坊文件。"}模组草稿单独保存。</p><div class="configuration-component-grid">${
+      rows
+        .map((r, index) => {
+          const approval = r.enabled
+            ? approvals.find((j) => j.id === r.modId)
+            : null;
+          return `<article class="card" data-configuration-component="${esc(r.modId)}" data-configuration-source-token="${esc(r.token)}"><h3>${esc((editor.frozen ? meta(editor, r.modId).name : r.name) || r.name || r.modId)}</h3><p class="small">${esc(r.workshopId ? "工坊 " + r.workshopId : r.sourceLabel || (editor.frozen ? "快照副本" : "本地来源"))}</p><p>${r.enabled ? "已启用" : "未启用"}${r.jarState === "missing" ? " · 文件缺失" : ""}${r.jarState === "ready" ? " · Java " + (approval?.decision === true ? "已允许" : approval?.decision === false ? "已拒绝" : "待授权") : ""}</p><div class="actions"><button data-configuration-component-toggle="${index}" data-configuration-write>${r.enabled ? "停用" : "启用"}</button><button data-configuration-component-remove="${index}" data-configuration-write>${editor.frozen ? "移除副本" : "从此配置移除"}</button>${approval ? `<button data-configuration-approve="${esc(approval.approvalToken || approval.sha256)}" data-configuration-decision="${approval.decision !== true}" data-configuration-write>${approval.decision === true ? "拒绝 Java 文件" : "允许此 Java 文件"}</button>` : ""}</div>${approval ? `<details data-configuration-java-source><summary>来源与 Java 文件</summary><p>${editor.frozen ? "此快照中的固定副本" : "此配置所选的当前文件"}</p><p class="small">Java 包 ${esc(r.packageName || "未声明")}</p><p class="key">SHA-256 ${esc(approval.sha256)}</p></details>` : ""}${r.workshopId ? `<button data-mod-workshop="${esc(r.workshopId)}">工坊原页 ↗</button>` : ""}${(r.limitations || []).length ? '<p class="small">' + r.limitations.map(esc).join(" · ") + "</p>" : ""}</article>`;
+        })
+        .join("") || "<p>没有已读取的组件。</p>"
+    }</div><details data-known-component-sources><summary>已知组件与下载</summary><div class="actions">${(
+      editor.status?.components || []
+    )
+      .filter(
+        (r) =>
+          r.id !== "base" &&
+          ["buddy", "viewpoint", ...Object.keys(items)].includes(r.id),
+      )
+      .map(
+        (r) =>
+          `<button data-configuration-known="${esc(r.id)}" data-configuration-write>${r.configured ? "重新核对" : "安装 / 启用"} ${esc(r.title)}</button>`,
+      )
+      .join(
+        "",
+      )}</div><label>工坊项目 ID<input inputmode="numeric" data-configuration-workshop placeholder="输入工坊项目 ID"></label><button data-configuration-download data-configuration-write>下载并选择组件</button><p class="small">新 Java 文件需要单独授权；下载不会自动允许新文件。</p></details>`;
+    if (disclosure !== undefined)
+      root.querySelector("[data-known-component-sources]").open = disclosure;
+    if (workshop !== undefined)
+      root.querySelector("[data-configuration-workshop]").value = workshop;
+    if (editor.saving) editorStatus(editor, editor.message, true);
+  }
+  async function openEditor(id = selectedId(), tab = "mods") {
+    if (model.editor) return;
+    const element = document.createElement("dialog");
+    element.id = "configuration-editor";
+    element.className = "configuration-editor";
+    const editor = {
+      id,
+      element,
+      epoch: 0,
+      reading: true,
+      readRequests: new Set(),
+      ids: [],
+      catalog: [],
+      sources: null,
+      tokens: new Map(),
+      search: "",
+      dirty: false,
+      saving: false,
+      view: null,
+    };
+    model.editor = editor;
+    element.innerHTML =
+      '<div class="row"><h2>正在读取配置…</h2><div class="actions"><button data-configuration-editor-reload>重新读取</button><button data-configuration-close>关闭</button></div></div><p data-configuration-editor-status role="status">正在读取此配置…</p><progress data-configuration-progress aria-label="配置操作进度"></progress><button data-configuration-cancel>取消此操作</button><div data-configuration-editor-body></div>';
+    document.body.append(element);
+    element.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      void closeEditor();
+    });
+    element.showModal();
+    try {
+      const view = await raw("configurationRead", { id });
+      if (model.editor !== editor) return;
+      editor.view = view;
+      editor.frozen = view.kind === "frozen";
+      editor.ids = [...view.ordinaryIds];
+      const named = view.kind === "live";
+      element.querySelector("h2").textContent = view.name + " · " + kind(view);
+      element.querySelector("[data-configuration-editor-body]").innerHTML =
+        `${named ? `<div class="configuration-fields"><label>配置名称<input data-configuration-name maxlength="100" value="${esc(view.name)}"></label><button data-configuration-rename data-configuration-write>保存名称</button><label>游戏版本<select data-configuration-version>${versionOptions(view.versionId)}</select></label><button data-configuration-set-version data-configuration-write>保存版本</button></div>` : `<p>游戏版本：${esc(view.frozen?.gameVersion || model.selected?.version || view.versionId)}${editor.frozen ? " · 副本版本已固定" : ""}</p>`}${!view.available ? `<p class="status-warning">${esc(view.message)}</p>` : ""}<div class="configuration-tabs"><button data-configuration-tab="mods" aria-pressed="${tab === "mods"}">模组</button><button data-configuration-tab="components" aria-pressed="${tab === "components"}">组件</button></div><section data-configuration-area="mods" ${tab !== "mods" ? "hidden" : ""}><p>${editor.frozen ? "新增模组会保存当前文件；工坊更新不会改变这份快照。" : "使用所选版本和当前模组文件。普通模组清单保存后生效。"}</p><label>搜索模组<input type="search" data-configuration-search placeholder="搜索已选和可添加的模组"></label><ol class="enabled-mods configuration-mods" data-configuration-mods></ol><div class="actions"><button class="primary" data-configuration-save data-configuration-write ${!view.available || id === "steam" || id === "vanilla" ? "disabled" : ""}>保存模组清单</button><button data-configuration-sort data-configuration-write ${!view.available ? "disabled" : ""}>自动排序</button></div><details data-configuration-catalog open><summary>添加当前模组</summary><div data-configuration-available></div></details></section><section data-configuration-area="components" ${tab !== "components" ? "hidden" : ""}><div data-configuration-components>正在读取组件…</div></section>${named ? '<button class="danger" data-configuration-delete data-configuration-write>删除此配置</button>' : ""}`;
+      const saveActions = element
+        .querySelector("[data-configuration-save]")
+        ?.closest(".actions");
+      if (saveActions) {
+        saveActions.classList.add("configuration-editor-actions");
+        saveActions.hidden = tab !== "mods";
+        element.append(saveActions);
+      }
+      if (!view.available) {
+        editorStatus(editor, "此版本不可用；仍可修改名称或选择已安装版本。");
+        return;
+      }
+      if (editor.frozen) {
+        editor.catalog = view.frozen.copied;
+        const sources = await raw("frozenConfigurationSources", {
+          ...frozenPayload(editor),
+          readId: (editor.sourceReadId = readId()),
+        });
+        if (model.editor !== editor) return;
+        editor.sources = sources.sources;
+      } else {
+        const catalog = await ownerRequest(id, "modCatalog", {}, editor);
+        if (model.editor !== editor) return;
+        editor.catalog = catalog.mods || [];
+      }
+      paintMods();
+      if (tab === "components") await readComponents(editor);
+      editorStatus(editor, "模组清单尚未修改。组件操作会单独保存。");
+    } catch (error) {
+      editorStatus(editor, error.message);
+    } finally {
+      if (model.editor === editor) {
+        editor.reading = false;
+        element.querySelector("[data-configuration-progress]").hidden = true;
+        element.querySelector("[data-configuration-cancel]").hidden = true;
+      }
+    }
+  }
+  async function reloadEditor(editor) {
+    if (editor.reading || editor.saving) return;
+    const epoch = ++editor.epoch;
+    editor.reading = true;
+    editorStatus(editor, "正在读取此配置，模组草稿会保留…");
+    try {
+      const view = await raw("configurationRead", { id: editor.id });
+      let catalog, sources;
+      if (editor.frozen) {
+        const result = await raw("frozenConfigurationSources", {
+          snapshotId: editor.id.slice(9),
+          manifestHash: view.frozen.manifestHash,
+          readId: (editor.sourceReadId = readId()),
+        });
+        catalog = view.frozen.copied;
+        sources = result.sources;
+      } else {
+        catalog = (
+          await ownerRequest(editor.id, "modCatalog", { refresh: true }, editor)
+        ).mods;
+      }
+      if (model.editor !== editor || epoch !== editor.epoch) return;
+      editor.view = view;
+      editor.catalog = catalog;
+      editor.sources = sources;
+      if (!editor.dirty) editor.ids = [...view.ordinaryIds];
+      await readComponents(editor, epoch);
+      if (model.editor === editor && epoch === editor.epoch) {
+        paintMods();
+        editorStatus(editor, "已重新读取，未保存的模组草稿保留。");
+      }
+    } catch (error) {
+      if (model.editor === editor && epoch === editor.epoch)
+        editorStatus(editor, error.message + " 模组草稿已保留。");
+    } finally {
+      if (model.editor === editor && epoch === editor.epoch)
+        editor.reading = false;
+    }
+  }
+  async function closeEditor() {
+    const editor = model.editor;
+    if (!editor) return;
+    if (
+      !editor.saving &&
+      editor.dirty &&
+      !(await confirm(
+        "放弃未保存的模组清单？",
+        "仅放弃模组草稿。已完成的组件更改仍保留。",
+      ))
+    )
+      return;
+    model.editor = null;
+    for (const token of editor.readRequests)
+      void raw("configurationReadCancel", {
+        id: editor.id,
+        readId: token,
+      }).catch(() => {});
+    if (editor.reading && editor.sourceReadId)
+      void raw("frozenConfigurationReadCancel", {
+        snapshotId: editor.id.slice(9),
+        readId: editor.sourceReadId,
+      }).catch(() => {});
+    editor.element.close();
+    editor.element.remove();
+    if (editor.saving) {
+      paintJobs();
+      notify(editor.view.name + "的操作继续进行，可在首页查看或取消。");
+    }
+  }
+  async function write(editor, operation, message, options = {}) {
+    if (editor.saving) return;
+    editor.saving = true;
+    editor.epoch++;
+    const job = {
+      id: editor.id,
+      name: editor.view.name,
+      active: true,
+      message,
+      hash: editor.view.frozen?.manifestHash,
+    };
+    model.jobs.set(editor.id, job);
+    paintJobs();
+    editorStatus(editor, message, true);
+    let completedMessage = "";
+    try {
+      const result = await operation();
+      editor.message = result?.message || "此配置的操作已完成。";
+      completedMessage = editor.message;
+      if (result?.configuration && editor.frozen)
+        editor.view.frozen = result.configuration;
+      if (model.editor === editor && options.components !== false) {
+        if (editor.frozen) {
+          const current = await raw("frozenConfigurationRead", {
+            snapshotId: editor.id.slice(9),
+          });
+          editor.view.frozen = current;
+        }
+        await readComponents(editor);
+      }
+      if (editor.id === selectedId() && options.cover !== false)
+        await readCover(editor.id, model.epoch);
+    } catch (error) {
+      editor.message = completedMessage
+        ? completedMessage + " 状态读取未完成，请重新读取。"
+        : (/^无法原子保存快照元数据/.test(error.message)
+            ? "快照配置文件未能写入，文件可能被占用。"
+            : error.message) + " 模组草稿已保留，可重试。";
+    } finally {
+      editor.saving = false;
+      job.active = false;
+      job.message = editor.message;
+      paintJobs();
+      if (model.editor === editor) {
+        editorStatus(editor, editor.message);
+        paintMods();
+      }
+    }
+  }
+  async function save(editor) {
+    await write(
+      editor,
+      async () => {
+        let result;
+        if (editor.frozen) {
+          result = await raw("frozenConfigurationSave", {
+            ...frozenPayload(editor),
+            ordinaryIds: editor.ids,
+            componentIds: editor.view.frozen.componentIds,
+            sourceTokens: [...editor.tokens.values()],
+          });
+          editor.view.frozen = result.configuration;
+          editor.catalog = result.configuration.copied;
+        } else
+          result = await raw("configurationSaveOrdinary", {
+            id: editor.id,
+            ordinaryIds: editor.ids,
+          });
+        editor.dirty = false;
+        editor.tokens.clear();
+        return { ...result, message: "模组清单已保存；组件选择独立保留。" };
+      },
+      editor.frozen
+        ? "正在核对并复制所选当前文件…"
+        : "正在保存此配置的模组清单…",
+      { components: editor.frozen, cover: editor.frozen },
+    );
+  }
+  async function componentAction(editor, row, operation) {
+    await write(
+      editor,
+      async () => {
+        if (editor.frozen) {
+          let result;
+          if (operation === "uninstall")
+            result = await raw("frozenConfigurationUninstall", {
+              ...frozenPayload(editor),
+              componentIds: [row.modId],
+            });
+          else
+            result = await raw("frozenConfigurationSave", {
+              ...frozenPayload(editor),
+              ordinaryIds: editor.view.frozen.ordinaryIds.filter(
+                (id) => operation !== "enable" || id !== row.modId,
+              ),
+              componentIds:
+                operation === "enable"
+                  ? [
+                      ...new Set([
+                        ...editor.view.frozen.componentIds,
+                        row.modId,
+                      ]),
+                    ]
+                  : editor.view.frozen.componentIds.filter(
+                      (id) => id !== row.modId,
+                    ),
+              sourceTokens: [],
+            });
+          editor.view.frozen = result.configuration;
+          if (operation === "enable")
+            editor.ids = editor.ids.filter((id) => id !== row.modId);
+          return {
+            ...result,
+            message:
+              operation === "disable"
+                ? "组件已停用，副本保留。"
+                : result.message,
+          };
+        }
+        const plan = await ownerRequest(editor.id, "javaComponentsPreview", {
+          token: row.token,
+          operation,
+          stamp: editor.inventory.stamp,
+          receiptId: "",
+        });
+        return ownerRequest(editor.id, "javaComponentsApply", {
+          previewStamp: plan.previewStamp,
+          confirmed: true,
+        });
+      },
+      "正在保存此配置的组件更改…",
+    );
+  }
+  async function create() {
+    if (document.querySelector("#configuration-create")) return;
+    const dialog = document.createElement("dialog");
+    dialog.id = "configuration-create";
+    dialog.className = "configuration-editor";
+    dialog.innerHTML = `<h2>新建普通启动配置</h2><label>配置名称<input data-configuration-new-name maxlength="100" autofocus></label><label>游戏版本<select data-configuration-new-version>${versionOptions("steam")}</select></label><p>引用当前游戏与模组文件，不复制完整游戏。</p><p data-create-status role="status"></p><div class="actions"><button data-create-cancel>取消</button><button data-create-confirm class="primary">创建并编辑</button></div>`;
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => dialog.remove());
+    dialog.querySelector("[data-create-cancel]").onclick = () => dialog.close();
+    dialog.querySelector("[data-create-confirm]").onclick = async () => {
+      const button = dialog.querySelector("[data-create-confirm]");
+      button.disabled = true;
+      try {
+        const row = await raw("configurationCreate", {
+          name: dialog.querySelector("input").value,
+          versionId: dialog.querySelector("select").value,
+        });
+        dialog.close();
+        await select(row.id);
+        model.list = null;
+        await reload();
+        await openEditor(row.id);
+      } catch (error) {
+        dialog.querySelector("[data-create-status]").textContent =
+          error.message;
+      } finally {
+        button.disabled = false;
+      }
+    };
+    dialog.showModal();
+  }
+  document.addEventListener("input", (event) => {
+    const editor = model.editor;
+    if (!editor || !event.target.closest("#configuration-editor")) return;
+    if (event.target.matches("[data-configuration-search]")) {
+      editor.search = event.target.value;
+      paintMods();
+    }
+  });
+  document.addEventListener("change", (event) => {
+    if (event.target.id === "launch-configuration-select")
+      void select(event.target.value);
+  });
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("button");
+    if (!button || button.disabled) return;
+    const editor = model.editor;
+    try {
+      if (button.hasAttribute("data-configuration-create"))
+        return void create();
+      if (button.hasAttribute("data-configuration-edit"))
+        return void openEditor();
+      if (button.hasAttribute("data-configuration-components-open"))
+        return void openEditor(selectedId(), "components");
+      if (button.hasAttribute("data-configuration-reload"))
+        return void reload();
+      if (button.dataset.configurationJobDismiss) {
+        model.jobs.delete(button.dataset.configurationJobDismiss);
+        paintJobs();
+        return;
+      }
+      if (button.dataset.configurationJobCancel) {
+        const id = button.dataset.configurationJobCancel;
+        await raw(
+          id.startsWith("snapshot:")
+            ? "frozenConfigurationCancel"
+            : "configurationCancel",
+          id.startsWith("snapshot:") ? { snapshotId: id.slice(9) } : { id },
+        );
+        return;
+      }
+      if (button.hasAttribute("data-configuration-steam")) {
+        route("components");
+        await scanBuddy();
+        return;
+      }
+      if (!editor || !button.closest("#configuration-editor")) return;
+      if (button.hasAttribute("data-configuration-editor-reload"))
+        return void reloadEditor(editor);
+      if (button.hasAttribute("data-configuration-close"))
+        return void closeEditor();
+      if (button.hasAttribute("data-configuration-cancel")) {
+        await raw(
+          editor.frozen ? "frozenConfigurationCancel" : "configurationCancel",
+          editor.frozen
+            ? { snapshotId: editor.id.slice(9) }
+            : { id: editor.id },
+        );
+        return;
+      }
+      if (button.dataset.configurationTab) {
+        editor.element.querySelector(".configuration-editor-actions").hidden =
+          button.dataset.configurationTab !== "mods";
+        for (const area of editor.element.querySelectorAll(
+          "[data-configuration-area]",
+        ))
+          area.hidden =
+            area.dataset.configurationArea !== button.dataset.configurationTab;
+        for (const tab of editor.element.querySelectorAll(
+          "[data-configuration-tab]",
+        ))
+          tab.setAttribute("aria-pressed", String(tab === button));
+        if (
+          button.dataset.configurationTab === "components" &&
+          !editor.inventory &&
+          !editor.reading
+        ) {
+          editor.reading = true;
+          editorStatus(editor, "正在核对组件来源…");
+          try {
+            await readComponents(editor);
+            if (model.editor === editor)
+              editorStatus(editor, "组件更改会立即保存到此配置。");
+          } catch (error) {
+            if (model.editor === editor) editorStatus(editor, error.message);
+          } finally {
+            if (model.editor === editor) editor.reading = false;
+          }
+        }
+        return;
+      }
+      if (button.hasAttribute("data-configuration-save"))
+        return void save(editor);
+      if (button.hasAttribute("data-configuration-rename"))
+        return void write(
+          editor,
+          async () => {
+            const view = await raw("configurationRename", {
+              id: editor.id,
+              name: editor.element.querySelector("[data-configuration-name]")
+                .value,
+            });
+            editor.view.name = view.name;
+            editor.element.querySelector("h2").textContent =
+              view.name + " · " + kind(view);
+            model.list = null;
+            await reload();
+            return { message: "配置名称已保存。" };
+          },
+          "正在保存名称…",
+          { components: false, cover: false },
+        );
+      if (button.hasAttribute("data-configuration-set-version"))
+        return void write(
+          editor,
+          async () => {
+            const view = await raw("configurationVersion", {
+              id: editor.id,
+              versionId: editor.element.querySelector(
+                "[data-configuration-version]",
+              ).value,
+            });
+            editor.view = view;
+            if (!editor.dirty) editor.ids = [...view.ordinaryIds];
+            const catalog = await ownerRequest(
+              editor.id,
+              "modCatalog",
+              {},
+              editor,
+            );
+            editor.catalog = catalog.mods || [];
+            editor.element.querySelector("[data-configuration-save]").disabled =
+              false;
+            editor.element.querySelector("[data-configuration-sort]").disabled =
+              false;
+            editor.element.querySelector(".status-warning")?.remove();
+            model.list = null;
+            await reload();
+            return {
+              message: "游戏版本已保存，已读取该版本的当前模组。",
+            };
+          },
+          "正在保存版本…",
+          { cover: false },
+        );
+      if (button.hasAttribute("data-configuration-delete")) {
+        if (
+          !(await confirm(
+            "删除此启动配置？",
+            "仅删除此普通配置的登记；原游戏、工坊和存档保留。",
+          ))
+        )
+          return;
+        await raw("configurationDelete", { id: editor.id });
+        editor.dirty = false;
+        await closeEditor();
+        model.list = null;
+        await reload();
+        return;
+      }
+      if (button.hasAttribute("data-configuration-sort"))
+        return void write(
+          editor,
+          async () => {
+            const sorted = await ownerRequest(editor.id, "modSort", {
+              mods: editor.ids,
+            });
+            const valid =
+              !(sorted.errors || []).length &&
+              Array.isArray(sorted.mods) &&
+              sorted.mods.length === editor.ids.length &&
+              editor.ids.every((id) => sorted.mods.includes(id));
+            if (
+              valid &&
+              sorted.mods.some((id, index) => id !== editor.ids[index])
+            ) {
+              editor.ids = [...sorted.mods];
+              editor.dirty = true;
+            }
+            return {
+              message:
+                (valid ? "排序建议已载入草稿；" : "保留当前模组顺序；") +
+                [
+                  ...(sorted.warnings || []),
+                  ...(sorted.errors || []),
+                  ...(sorted.violations || []),
+                ].join("；") +
+                " 可调整后保存。",
+            };
+          },
+          "正在读取作者排序建议…",
+          { components: false, cover: false },
+        );
+      if (
+        button.hasAttribute("data-configuration-component-toggle") ||
+        button.hasAttribute("data-configuration-component-remove")
+      ) {
+        const row =
+            editor.inventory.rows[
+              Number(
+                button.dataset.configurationComponentToggle ??
+                  button.dataset.configurationComponentRemove,
+              )
+            ],
+          operation = button.hasAttribute("data-configuration-component-remove")
+            ? "uninstall"
+            : row.enabled
+              ? "disable"
+              : "enable";
+        if (
+          operation === "uninstall" &&
+          !(await confirm(
+            editor.frozen ? "移除这个组件副本？" : "从此配置移除组件？",
+            editor.frozen
+              ? "最后一个未被引用的副本将直接删除；被其他模组依赖的文件仍保留。"
+              : "原工坊文件保留，其他配置不受影响。",
+          ))
+        )
+          return;
+        return void componentAction(editor, row, operation);
+      }
+      if (button.dataset.configurationApprove)
+        return void write(
+          editor,
+          async () => {
+            const decision = button.dataset.configurationDecision === "true";
+            if (editor.frozen) {
+              const result = await raw("frozenConfigurationApprove", {
+                ...frozenPayload(editor),
+                approvalToken: button.dataset.configurationApprove,
+                decision,
+              });
+              editor.view.frozen = result.configuration;
+              return { ...result, message: "此副本的 Java 决定已保存。" };
+            }
+            await ownerRequest(editor.id, "javaSave", {
+              stamp: editor.approvals.stamp,
+              hash: button.dataset.configurationApprove,
+              decision,
+            });
+            return { message: "此来源的当前 Java 文件决定已保存。" };
+          },
+          "正在保存 Java 文件授权…",
+        );
+      if (button.hasAttribute("data-configuration-known"))
+        return void write(
+          editor,
+          () =>
+            ownerRequest(editor.id, "componentsAction", {
+              component: button.dataset.configurationKnown,
+              operation: "install",
+              confirmed: true,
+            }),
+          "正在核对、下载并选择组件…",
+        );
+      if (button.hasAttribute("data-configuration-download"))
+        return void write(
+          editor,
+          () =>
+            ownerRequest(editor.id, "javaComponentsInstall", {
+              id: editor.element.querySelector("[data-configuration-workshop]")
+                .value,
+              confirmed: true,
+            }),
+          "正在下载工坊组件…",
+        );
+      if (editor.saving) return;
+      const up = button.dataset.configurationUp,
+        down = button.dataset.configurationDown,
+        remove = button.dataset.configurationRemove;
+      if (up || down) {
+        const index = editor.ids.indexOf(up || down),
+          other = index + (up ? -1 : 1);
+        [editor.ids[index], editor.ids[other]] = [
+          editor.ids[other],
+          editor.ids[index],
+        ];
+        editor.dirty = true;
+        paintMods();
+      } else if (remove) {
+        editor.ids = editor.ids.filter((id) => id !== remove);
+        editor.tokens.delete(remove);
+        editor.dirty = true;
+        paintMods();
+      } else if (button.hasAttribute("data-configuration-add")) {
+        const key = button.dataset.sourceKey,
+          row = (editor.sources || editor.catalog).find(
+            (r) => (r.token || r.id) === key,
+          );
+        if (!row) return;
+        editor.ids.push(row.id);
+        if (
+          row.token &&
+          !editor.view.frozen?.copied.some((c) => c.id === row.id)
+        )
+          editor.tokens.set(row.id, row.token);
+        editor.dirty = true;
+        paintMods();
+      }
+    } catch (error) {
+      if (editor) editorStatus(editor, error.message);
+      else notify(error.message);
+    }
+  });
+  function progressLabel(progress) {
+    const count =
+      progress.completedFiles > 0 || progress.totalFiles > 0
+        ? "文件 " +
+          progress.completedFiles +
+          (progress.totalFiles > 0 ? " / " + progress.totalFiles : "")
+        : "";
+    const size =
+      progress.completedBytes > 0 || progress.totalBytes > 0
+        ? formatBytes(progress.completedBytes) +
+          (progress.totalBytes > 0
+            ? " / " + formatBytes(progress.totalBytes)
+            : "")
+        : "";
+    return [progress.text, count, size].filter(Boolean).join(" · ");
+  }
+  function formatBytes(value) {
+    return value >= 1048576
+      ? (value / 1048576).toFixed(1) + " MiB"
+      : value >= 1024
+        ? (value / 1024).toFixed(1) + " KiB"
+        : value + " B";
+  }
+  document.addEventListener("ozl-configuration-progress", (event) => {
+    const editor = model.editor,
+      data = event.detail;
+    const progress = data.progress || data;
+    if (data.readId) {
+      if (
+        editor?.reading &&
+        (editor.readRequests.has(data.readId) ||
+          editor.sourceReadId === data.readId)
+      )
+        editorStatus(editor, progressLabel(progress), true);
+      return;
+    }
+    const ownedJob = model.jobs.get(data.configurationId);
+    if (
+      ownedJob?.hash &&
+      data.manifestHash &&
+      ownedJob.hash !== data.manifestHash
+    )
+      return;
+    const job = model.jobs.get(data.configurationId);
+    if (job?.active) {
+      job.message = progressLabel(progress) || job.message;
+      paintJobs();
+    }
+    if (!editor || data.configurationId !== editor.id || !editor.saving) return;
+    editorStatus(editor, progressLabel(progress) || "正在处理此配置…", true);
+    const bar = editor.element.querySelector("[data-configuration-progress]");
+    if (progress.value >= 0) {
+      bar.max = 100;
+      bar.value = progress.value;
+    } else bar.removeAttribute("value");
+  });
+  const previousDrafts = hasUnsavedDrafts;
+  hasUnsavedDrafts = (options) =>
+    previousDrafts(options) ||
+    !!model.editor?.dirty ||
+    [...model.jobs.values()].some(
+      (job) => job.active && job.id === selectedId(),
+    );
+  const previousComponents = components;
+  components = function () {
+    return (
+      heading(
+        '<button data-configuration-components-open class="primary">编辑此配置的组件</button>',
+      ) +
+      `<section class="card"><h2>${esc(model.selected?.name || "启动配置")}</h2><p>${esc(description(model.selected))}</p><p>组件启用与 Java 授权属于此启动配置。普通模组清单在同一个编辑器中单独保存。</p><button data-configuration-components-open>管理组件与授权</button>${selectedId() === "steam" ? "<button data-buddy-scan>扫描 Steam 配置</button><button data-force-takeover>强制接管</button>" + buddyPanel() : ""}</section>`
+    );
+  };
+  return {
+    model,
+    reload,
+    select,
+    openEditor,
+    ownerRequest,
+    paintMods,
+    editor: () => model.editor,
+    dragIds: () => model.editor?.ids || [],
+    dragCommit(ids) {
+      if (!model.editor) return;
+      model.editor.ids = ids;
+      model.editor.dirty = true;
+    },
+  };
+})();
+
 const modOrderingUi=(()=>{
  let drag=null;
  const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
  const locked=()=>state.busy||state.coreApplying||state.modSorting||state.loading.modProfile||editorSaves.has('modProfileSave')||editorSaves.has('saveSave');
- const ids=kind=>kind==='profile'?(state.modProfile?state.modProfileMods:ordinaryModIds(state.modProfiles?.activeMods)):state.saveMods;
- const owner=kind=>kind==='profile'?state.modProfile:state.saveDetail;
- const rowId=row=>row.dataset.modRow||row.dataset.enabledId||row.dataset.profileModId;
- const selector=kind=>kind==='profile'?'.mod-workspace-list':'.save-editor .enabled-mods';
+ const ids=kind=>kind==='configuration'?launchConfigurationUi.dragIds():kind==='profile'?(state.modProfile?state.modProfileMods:ordinaryModIds(state.modProfiles?.activeMods)):state.saveMods;
+ const owner=kind=>kind==='configuration'?launchConfigurationUi.editor():kind==='profile'?state.modProfile:state.saveDetail;
+ const rowId=row=>row.dataset.configurationMod||row.dataset.modRow||row.dataset.enabledId||row.dataset.profileModId;
+ const selector=kind=>kind==='configuration'?'[data-configuration-mods]':kind==='profile'?'.mod-workspace-list':'.save-editor .enabled-mods';
  const focusSelector=t=>`[data-mod-drag-kind="${t.kind}"][data-mod-drag="${CSS.escape(t.id)}"]`;
- function valid(t){return !locked()&&t.context===modWorkspaceKey()&&t.route===state.route&&t.owner===owner(t.kind)&&t.readSequence===(t.kind==='profile'?state.modProfileReadSequence:state.saveReadSequence)&&JSON.stringify(ids(t.kind))===t.initial&&(t.kind!=='save'||state.saveDetail?.editable!==false);}
+ function valid(t){if(t.kind==='configuration')return !launchConfigurationUi.editor()?.saving&&t.owner===owner(t.kind)&&JSON.stringify(ids(t.kind))===t.initial;return !locked()&&t.context===modWorkspaceKey()&&t.route===state.route&&t.owner===owner(t.kind)&&t.readSequence===(t.kind==='profile'?state.modProfileReadSequence:state.saveReadSequence)&&JSON.stringify(ids(t.kind))===t.initial&&(t.kind!=='save'||state.saveDetail?.editable!==false);}
  function merged(t){const visible=new Set(t.visible),order=[...t.order];return t.ids.map(id=>visible.has(id)?order.shift():id);}
  function clean(t){if(drag!==t)return;drag=null;cancelAnimationFrame(t.frame);for(const animation of t.animations)animation.cancel();t.row.classList.remove('is-drag-placeholder');t.list.classList.remove('is-mod-dragging');document.body.classList.remove('mod-ordering-active');t.handle.removeAttribute('aria-pressed');if(t.handle.hasPointerCapture(t.pointerId))t.handle.releasePointerCapture(t.pointerId);t.ghost?.remove();}
- function finish(t,paint=true){if(drag!==t)return;const scroll=t.list.scrollTop;clean(t);if(paint){render();const list=document.querySelector(selector(t.kind));if(list)list.scrollTop=scroll;document.querySelector(focusSelector(t))?.focus({preventScroll:true});}}
+ function finish(t,paint=true){if(drag!==t)return;const scroll=t.list.scrollTop;clean(t);if(paint){if(t.kind==='configuration')launchConfigurationUi.paintMods();else render();const list=document.querySelector(selector(t.kind));if(list)list.scrollTop=scroll;document.querySelector(focusSelector(t))?.focus({preventScroll:true});}}
  function cancel(paint=true){if(drag)finish(drag,paint);}
  function start(t){t.started=true;const rect=t.row.getBoundingClientRect(),ghost=t.row.cloneNode(true);t.originTop=rect.top;t.originLeft=rect.left;t.startY=t.y;t.ghost=ghost;for(const element of [ghost,...ghost.querySelectorAll('*')]){element.removeAttribute('id');for(const attribute of [...element.attributes])if(attribute.name.startsWith('data-'))element.removeAttribute(attribute.name);if(element.matches('button,input,select')){element.disabled=true;element.tabIndex=-1;}}ghost.classList.add('mod-drag-ghost');ghost.setAttribute('aria-hidden','true');Object.assign(ghost.style,{top:rect.top+'px',left:rect.left+'px',width:rect.width+'px'});document.body.append(ghost);t.row.classList.add('is-drag-placeholder');t.list.classList.add('is-mod-dragging');document.body.classList.add('mod-ordering-active');t.handle.setAttribute('aria-pressed','true');t.frame=requestAnimationFrame(()=>scrollFrame(t));}
  function place(t){if(drag!==t||!t.started||t.released)return;const others=t.order.filter(id=>id!==t.id),position=others.filter(id=>{const rect=t.rows.get(id).getBoundingClientRect();return t.y>rect.top+rect.height/2;}).length,next=[...others];next.splice(position,0,t.id);if(next.join('\u0000')===t.order.join('\u0000'))return;const children=[...t.list.children],before=new Map(children.map(row=>[row,row.getBoundingClientRect().top]));for(const animation of t.animations)animation.cancel();t.animations=[];t.order=next;let index=0;const reordered=children.map(row=>t.rows.has(rowId(row))?t.rows.get(next[index++]):row);t.list.append(...reordered);if(!t.released)t.handle.setPointerCapture(t.pointerId);const draft=merged(t),ghostNumber=t.ghost.querySelector('.mod-order,.order-number');if(ghostNumber)ghostNumber.textContent=(draft.indexOf(t.id)+1)+(ghostNumber.classList.contains('order-number')?'.':'');for(const row of reordered){const number=row.querySelector('.mod-order,.order-number');if(number&&draft.includes(rowId(row)))number.textContent=(draft.indexOf(rowId(row))+1)+(number.classList.contains('order-number')?'.':'');if(row===t.row||reduced())continue;const offset=before.get(row)-row.getBoundingClientRect().top;if(Math.abs(offset)>.5)t.animations.push(row.animate([{transform:`translateY(${offset}px)`},{transform:'translateY(0)'}],{duration:170,easing:'cubic-bezier(.2,.75,.25,1)'}));}}
  function move(t,x,y){if(!valid(t)){cancel();return;}t.x=x;t.y=y;if(!t.started&&Math.hypot(x-t.downX,y-t.downY)<5)return;if(!t.started)start(t);t.ghost.style.transform=`translateY(${y-t.startY}px)`;place(t);}
  function scrollFrame(t){if(drag!==t||t.released||!t.started)return;const rect=t.list.getBoundingClientRect(),top=Math.max(0,rect.top),bottom=Math.min(innerHeight,rect.bottom),edge=Math.min(44,(bottom-top)/3),speed=t.y<top+edge?-Math.min(15,(top+edge-t.y)*.38):t.y>bottom-edge?Math.min(15,(t.y-bottom+edge)*.38):0;if(speed){const old=t.list.scrollTop;t.list.scrollTop+=speed;if(old!==t.list.scrollTop)place(t);}t.frame=requestAnimationFrame(()=>scrollFrame(t));}
- function drop(t){if(drag!==t)return;if(!valid(t)){cancel();return;}t.released=true;cancelAnimationFrame(t.frame);if(t.handle.hasPointerCapture(t.pointerId))t.handle.releasePointerCapture(t.pointerId);if(!t.started){finish(t,false);return;}const next=merged(t);if(JSON.stringify(next)!==t.initial){if(t.kind==='profile'){ensureModDraft();state.modProfileMods=next;state.modProfileDirty=true;state.modSortReport=null;}else{state.saveMods=next;state.saveDirty=true;}state.sortPreview=null;}t.committed=true;if(reduced()){finish(t);return;}const target=t.row.getBoundingClientRect().top-t.originTop,animation=t.ghost.animate([{transform:t.ghost.style.transform,opacity:1},{transform:`translateY(${target}px)`,opacity:.55}],{duration:180,easing:'cubic-bezier(.2,.75,.25,1)',fill:'forwards'});t.animations.push(animation);animation.finished.then(()=>finish(t)).catch(()=>{});}
- function controls(){for(const handle of document.querySelectorAll('[data-mod-drag]')){const kind=handle.dataset.modDragKind,id=handle.dataset.modDrag;handle.disabled=!!locked()||!ids(kind).includes(id)||!!modInfo(id).componentManaged||modSourceConflict(id)||kind==='save'&&state.saveDetail?.editable===false;}if(drag&&!drag.committed&&!valid(drag))cancel();}
+ function drop(t){if(drag!==t)return;if(!valid(t)){cancel();return;}t.released=true;cancelAnimationFrame(t.frame);if(t.handle.hasPointerCapture(t.pointerId))t.handle.releasePointerCapture(t.pointerId);if(!t.started){finish(t,false);return;}const next=merged(t);if(JSON.stringify(next)!==t.initial){if(t.kind==='configuration'){launchConfigurationUi.dragCommit(next);}else if(t.kind==='profile'){ensureModDraft();state.modProfileMods=next;state.modProfileDirty=true;state.modSortReport=null;}else{state.saveMods=next;state.saveDirty=true;}state.sortPreview=null;}t.committed=true;if(reduced()){finish(t);return;}const target=t.row.getBoundingClientRect().top-t.originTop,animation=t.ghost.animate([{transform:t.ghost.style.transform,opacity:1},{transform:`translateY(${target}px)`,opacity:.55}],{duration:180,easing:'cubic-bezier(.2,.75,.25,1)',fill:'forwards'});t.animations.push(animation);animation.finished.then(()=>finish(t)).catch(()=>{});}
+ function controls(){for(const handle of document.querySelectorAll('[data-mod-drag]')){const kind=handle.dataset.modDragKind,id=handle.dataset.modDrag;handle.disabled=kind==='configuration'?!!launchConfigurationUi.editor()?.saving||!ids(kind).includes(id):!!locked()||!ids(kind).includes(id)||!!modInfo(id).componentManaged||modSourceConflict(id)||kind==='save'&&state.saveDetail?.editable===false;}if(drag&&!drag.committed&&!valid(drag))cancel();}
  document.addEventListener('pointerdown',event=>{const handle=event.target.closest('[data-mod-drag]');if(!handle||handle.disabled||event.button!==0||locked()||drag)return;const kind=handle.dataset.modDragKind,list=handle.closest(selector(kind));if(!list)return;const selected=[...list.children].filter(row=>{const h=row.querySelector('[data-mod-drag]');return h&&!h.disabled;});const currentIds=[...ids(kind)],visible=selected.map(rowId);if(!visible.includes(handle.dataset.modDrag))return;event.preventDefault();handle.focus({preventScroll:true});drag={kind,id:handle.dataset.modDrag,list,row:handle.closest('li'),handle,route:state.route,owner:owner(kind),context:modWorkspaceKey(),readSequence:kind==='profile'?state.modProfileReadSequence:state.saveReadSequence,ids:currentIds,initial:JSON.stringify(currentIds),visible,order:[...visible],rows:new Map(selected.map(row=>[rowId(row),row])),pointerId:event.pointerId,downX:event.clientX,downY:event.clientY,x:event.clientX,y:event.clientY,started:false,released:false,animations:[]};handle.setPointerCapture(event.pointerId);},true);
  document.addEventListener('pointermove',event=>{if(!drag||drag.pointerId!==event.pointerId||drag.released)return;event.preventDefault();move(drag,event.clientX,event.clientY);},true);
  document.addEventListener('pointerup',event=>{if(drag?.pointerId===event.pointerId&&!drag.released){event.preventDefault();drop(drag);}},true);
@@ -1050,7 +2170,7 @@ const modOrderingUi=(()=>{
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&drag){event.preventDefault();event.stopImmediatePropagation();cancel();}},true);
  for(const name of ['input','change'])document.addEventListener(name,event=>{if(drag&&event.target.closest('#page'))cancel(false);},true);
  window.addEventListener('blur',()=>cancel());
- const previousRender=render;render=function(){cancel(false);previousRender();controls();};
+ const previousRender=render;render=function(){if(drag?.kind!=='configuration')cancel(false);previousRender();controls();};
  const previousDisable=disable;disable=function(){previousDisable();controls();};
  const previousRoute=route;route=function(name){if(name!==state.route)cancel(false);previousRoute(name);};
  const links=new Set();document.addEventListener('click',async event=>{const button=event.target.closest('[data-mod-workshop]');if(!button||button.disabled)return;event.preventDefault();event.stopImmediatePropagation();const id=button.dataset.modWorkshop;if(links.has(id))return;links.add(id);button.disabled=true;const feedback=button.parentElement.querySelector('[data-mod-workshop-feedback]'),context=modWorkspaceKey();try{await request('modOpenWorkshop',{workshopId:id});if(button.isConnected&&context===modWorkspaceKey()&&feedback)feedback.textContent='已打开工坊原页。';}catch(error){if(button.isConnected&&context===modWorkspaceKey()&&feedback)feedback.textContent=error.message;}finally{links.delete(id);if(button.isConnected)button.disabled=false;}},true);
@@ -1171,11 +2291,11 @@ const snapshotUi=(()=>{
 (()=>{
  'use strict';
  const chapters=[
-  {page:'home',title:'启动',intro:'从这里继续你的生存，或和朋友进入同一台服务器。',steps:['先选择要使用的游戏版本；尚未找到游戏时，点击顶部“选择游戏目录”。','在启动目标中选择“继续单人存档”或“连接服务器”，再选具体目标。','核对首页的当前配置，点击启动。需要的组件可以先到“模组与组件”安装。']},
-  {page:'components',title:'模组与组件',intro:'组件负责安装功能，模组配置负责决定启用哪些模组、按什么顺序加载。',steps:['在“组件管理”按需安装 Viewpoint、汉化或其他组件；需要 Java 授权时，按提示核对文件。','在“模组配置”整理启用清单，可保存多套配置，再应用到默认清单或指定存档。','自动排序会检查已知依赖与作者声明的冲突；普通模组可打开工坊原页，查看作者说明。']},
+  {page:'home',title:'启动',intro:'从这里继续你的生存，或和朋友进入同一台服务器。',steps:['先在首页“启动配置”选择启动器、Steam、原版，或自己的普通 / 快照配置；尚未找到游戏时，点击顶部“选择游戏目录”。','在启动目标中选择“继续单人存档”或“连接服务器”，再选具体目标。','点击“编辑配置”调整版本、组件和普通模组顺序，再从首页启动。普通配置使用当前文件；快照使用固定副本。']},
+  {page:'components',title:'模组与组件',intro:'组件与普通模组清单分别保存，属于首页选中的启动配置。',steps:['在“组件管理”按需安装 Viewpoint、汉化或其他组件；需要 Java 授权时，按提示核对文件。','在首页“编辑配置 → 模组”整理清单和顺序，明确保存后生效；组件在同一编辑器的“组件”中单独管理。','自动排序会检查已知依赖与作者声明的冲突；普通模组可打开工坊原页，查看作者说明。']},
   {page:'saves',title:'存档',intro:'查看单人生存进度，管理各存档使用的模组。',steps:['找到存档，查看名称、预览与已启用模组，再选择继续游戏。','需要改模组时先读取该存档的清单，调整后保存。','需要保留存档进度时，打开“备份与恢复”手动备份，也可单独设置自动备份。']},
   {page:'servers',title:'服务器',intro:'找服、收藏地址，再用对应的游戏版本连接。',steps:['从“推荐服务器”了解服务器，也可在“个人列表”添加朋友的地址。','查看服务器状态和人数，核对版本与工坊清单。','选中目标后连接；常用地址可保存到个人列表，也能从“游戏收藏”导入。']},
-  {page:'versions',title:'版本管理',intro:'给长期游玩的存档留下完整游戏与已启用模组的固定副本。',steps:['进入“版本管理 → 存档快照”，选择单人存档，点击“创建快照”。','核对游戏版本、模组数量和磁盘占用，再选择保存位置。快照会复制完整游戏和已启用模组的原文件，保留加载顺序。','以后选择该存档启动时会自动使用绑定的快照；检查更新后，可创建新快照，旧副本仍会保留。'],note:'原存档持续记录你的游玩进度。存档备份单独在“存档 → 备份与恢复”选择。'},
+  {page:'versions',title:'版本管理',intro:'给长期游玩的存档留下完整游戏与已启用模组的固定副本。',steps:['进入“版本管理 → 存档快照”，选择单人存档，点击“创建快照”。','核对游戏版本、模组数量和磁盘占用，确认记住的保存位置，也可更改。快照复制游戏与模组原文件，保留加载顺序。','以后继续该存档会自动使用绑定快照；首页也能选择同一快照进行编辑。新增模组复制当时的当前文件，工坊更新不会改变已保存的副本。'],note:'原存档持续记录你的游玩进度。存档备份单独在“存档 → 备份与恢复”选择。'},
   {page:'memory',title:'内存',intro:'为游戏分配合适的内存，给系统和其他程序留下余量。',steps:['先查看当前分配、可用内存和推荐值。','根据模组数量和电脑内存调整数值，点击保存。','下次启动游戏时使用新设置；出现内存不足时，可结合日志再调整。']},
   {page:'settings',title:'设置',intro:'调整 Viewpoint 的画面、视角快捷键和光影。',steps:['在“画面设置”找到要修改的参数或快捷键，改好后保存。','切到“光影选择”，查看已安装的方案，再选择要使用的光影。','调整完成后从启动页进入游戏，查看实际效果。']},
   {page:'diagnostics',title:'日志分析',intro:'启动失败、进服异常或游玩报错时，先从日志了解发生了什么。',steps:['点击“分析本机最近日志”，也可导入日志文件、ZIP 或选择日志文件夹。','先看分析摘要、发生阶段和相关模组，再展开具体证据。','按建议排查；需要求助时，可以复制或导出分析结果。']},
@@ -1201,7 +2321,7 @@ const snapshotUi=(()=>{
  }
  window.ozlGuide={mount,open(){instance?.open();}};
 })();
-window.orange={state,request,run,acceptStatus,hasUnsavedDrafts,library:libraryUi,render:()=>render()};
+window.orange={state,request,run,acceptStatus,hasUnsavedDrafts,library:libraryUi,launchConfigurationUi,render:()=>render()};
 window.ozlGuide.mount({request,ready:()=>!!state.status&&!state.busy&&!state.coreApplying&&!state.status?.task?.active&&!libraryUi.model.reading&&!!(libraryUi.model.versions||libraryUi.model.error),notify});
 route(location.hash.slice(1)||new URLSearchParams(location.search).get('page')||'home');refresh();void libraryUi.loadVersions();setInterval(()=>{if(!state.busy)refresh();pollPlaytime();if($('#task-center').open)loadTasks();},15000);
 })();
