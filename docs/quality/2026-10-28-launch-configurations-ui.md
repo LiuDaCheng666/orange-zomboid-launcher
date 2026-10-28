@@ -91,3 +91,13 @@ Task6 初次审查发现四项实际问题：扫描取消后重读失败、初�
 六个外来网站/部署跟踪文件SHA-256仍与既有基线一致。未改网站、服务器、线上更新清单或正式版本号。整目录 `git diff --check` 报告的是保留的外来 deploy/README.md CRLF/空白；限定本次源码提交范围检查通过，未为消除此报告改写外来文件。
 
 Task7实际游戏、正常存盘退出/再次启动、中文路径快照与来源变化后独立使用、多人连接和实际进程恢复仍未验收。本地已准备独立游戏副本与两个普通Lua标记模组，准备副本与编译/JVM/native测试均不计为进入游戏。首次Runtime377预览失效仍未归因；旧重跑通过不构成修复证明，保留输入未变化时若复现必须继续调查。
+
+## 完整便携容器与静默入口复核
+
+上节 `...-f4834e9/app` 是 Build-VelopackLauncher 的打包中间产物，并非可直接运行的完整分发容器。父代理从该目录静默启动时实际失败；Windows事件1026明确为 VelopackRuntime → Program.Main 的未处理 InvalidOperationException。源码对应“需要完整 Velopack 安装或便携分发包”，未进入 ModernForm 或游戏。该失败保存在 `task7-intermediate-startup-failure.json`，没有通过 LocalPreview 或绕过生产入口掩盖；这是验收包准备遗漏，不是已定位的新游戏启动逻辑缺陷。
+
+随后通过原有 Build-VelopackRelease 流程，仅在本地以 AllowUnsignedRelease 生成完整容器，无上传/安装/快捷方式操作，版本仍1.2.36。实际便携候选为 `E:\Projects\OrangeLauncher\dist\launch-configurations-local-20261028-f4834e9-container\portable`，包含 `.portable`、Update.exe、执行stub及current。标准发行归档清单/RSA验证、包容器图标检查均通过；解压后的current再次通过21项长度/SHA-256和bootstrap RSA验证，bootstrap SHA-256为 `CE9BBF3E0D945F08F155630F56FB67A7DFCBED283238B548AEAF7DE7CCB48F71`，Windows仍NotSigned。证据为 `task7-local-container-verification-f4834e9.json` 与 `task7-portable-integrity-f4834e9.json`，都在上述artifacts目录。
+
+用户要求继续后台，不占用前台。父代理用完整容器current中的实际生产EXE、空参数、WindowStyle Hidden静默启动；该进程持续响应，并产生真实msedgewebview2子进程，没有中间目录那项异常。未进行窗口激活、鼠标或键盘输入，也未启动游戏。观察后按PID、可执行文件路径和完整启动时间核对身份，仅结束这个新建的隐藏候选进程，未操作任何用户进程。证据为 `task7-background-portable-start.json` 与 `task7-background-portable-observation.json`。一次PowerShell7日期自动反序列化使最初的字符串身份比较误报，后续改为UTC ticks复核，确认进程身份一致；这不是产品进程识别故障。
+
+这只关闭完整容器的后台启动冒烟项。实际点击与实际游戏验收仍未完成，不发布更新。当前Windows工具的输入会自动激活目标窗口，用户当前后台限制保持；没有把后台启动存活、无头DOM或控制器调用说成完成游戏菜单、存盘和快照重启。
