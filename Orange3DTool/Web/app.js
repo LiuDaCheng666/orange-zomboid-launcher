@@ -1109,6 +1109,12 @@ const launchConfigurationUi = (() => {
       throw Error("配置回复不匹配，请重新读取。");
     return result.data;
   }
+  async function readView(editor) {
+    const token = readId();
+    editor.readRequests.add(token);
+    try { return await raw("configurationRead", { id: editor.id, readId: token }); }
+    finally { editor.readRequests.delete(token); }
+  }
   request = async function (action, payload = {}) {
     if (!owned.has(action)) return raw(action, payload);
     const id = selectedId(),
@@ -1471,7 +1477,7 @@ const launchConfigurationUi = (() => {
     });
     element.showModal();
     try {
-      const view = await raw("configurationRead", { id });
+      const view = await readView(editor);
       if (model.editor !== editor) return;
       editor.view = view;
       editor.frozen = view.kind === "frozen";
@@ -1509,7 +1515,10 @@ const launchConfigurationUi = (() => {
       if (editor.tab === "components") await readComponents(editor);
       editorStatus(editor, editor.tab === "components" ? "组件更改会立即保存到此配置。" : "模组清单尚未修改。组件操作会单独保存。");
     } catch (error) {
-      editorStatus(editor, error.message);
+      if (model.editor === editor) {
+        if (!editor.view) element.querySelector("h2").textContent = /取消/.test(error.message) ? "读取已取消" : "配置读取未完成";
+        editorStatus(editor, error.message);
+      }
     } finally {
       if (model.editor === editor) {
         editor.reading = false;
@@ -1520,11 +1529,12 @@ const launchConfigurationUi = (() => {
   }
   async function reloadEditor(editor) {
     if (editor.reading || editor.saving) return;
+    if (!editor.view) { const { id, tab } = editor; await closeEditor(); return openEditor(id, tab); }
     const epoch = ++editor.epoch;
     editor.reading = true;
     editorStatus(editor, "正在读取此配置，模组草稿会保留…");
     try {
-      const view = await raw("configurationRead", { id: editor.id });
+      const view = await readView(editor);
       let catalog, sources;
       if (editor.frozen) {
         const result = await raw("frozenConfigurationSources", {
@@ -1650,11 +1660,12 @@ const launchConfigurationUi = (() => {
           });
           editor.view.frozen = result.configuration;
           editor.catalog = result.configuration.copied;
-        } else
-          result = await raw("configurationSaveOrdinary", {
-            id: editor.id,
-            ordinaryIds: editor.ids,
-          });
+        } else {
+          const token = (editor.writeId = readId());
+          model.jobs.get(editor.id).readId = token;
+          try { result = await raw("configurationSaveOrdinary", { id: editor.id, ordinaryIds: editor.ids, readId: token }); }
+          finally { if (editor.writeId === token) editor.writeId = ""; }
+        }
         editor.dirty = false;
         editor.tokens.clear();
         return { ...result, message: "模组清单已保存；组件选择独立保留。" };
@@ -1782,12 +1793,10 @@ const launchConfigurationUi = (() => {
         return;
       }
       if (button.dataset.configurationJobCancel) {
-        const id = button.dataset.configurationJobCancel;
+        const id = button.dataset.configurationJobCancel, token = model.jobs.get(id)?.readId;
         await raw(
-          id.startsWith("snapshot:")
-            ? "frozenConfigurationCancel"
-            : "configurationCancel",
-          id.startsWith("snapshot:") ? { snapshotId: id.slice(9) } : { id },
+          token ? "configurationReadCancel" : id.startsWith("snapshot:") ? "frozenConfigurationCancel" : "configurationCancel",
+          token ? { id, readId: token } : id.startsWith("snapshot:") ? { snapshotId: id.slice(9) } : { id },
         );
         return;
       }
@@ -1807,6 +1816,10 @@ const launchConfigurationUi = (() => {
             ...[...editor.readRequests].map(token => raw("configurationReadCancel", { id: editor.id, readId: token })),
             ...(editor.sourceReadId ? [raw("frozenConfigurationReadCancel", { snapshotId: editor.id.slice(9), readId: editor.sourceReadId })] : []),
           ]);
+          return;
+        }
+        if (editor.writeId) {
+          await raw("configurationReadCancel", { id: editor.id, readId: editor.writeId });
           return;
         }
         await raw(
@@ -2090,6 +2103,9 @@ const launchConfigurationUi = (() => {
       data = event.detail;
     const progress = data.progress || data;
     if (data.readId) {
+      const job = model.jobs.get(data.configurationId);
+      if (job?.active && job.readId === data.readId) { job.message = progressLabel(progress); paintJobs(); }
+      if (editor?.saving && editor.id === data.configurationId && editor.writeId === data.readId) editorStatus(editor, progressLabel(progress), true);
       if (
         editor?.reading &&
         (editor.readRequests.has(data.readId) ||

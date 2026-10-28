@@ -17,7 +17,7 @@ namespace PZ3D {sealed partial class ModernController {
  internal static readonly HashSet<string> ConfigurationRequests=new HashSet<string>{"savesList","serverList","status","modCatalog","modProfiles","memoryGet","memorySave","javaList","javaSave","javaComponentsList","javaComponentsInstall","javaComponentsEnable","javaComponentsPreview","javaComponentsApply","javaComponentsRecovery","javaComponentsRecover","javaComponentsReconcile","javaComponentsInspectDownloaded","componentsAction","modSort","steamDownload","forceTakeoverPreview","forceTakeoverApply","buddyPreview","buddyTakeover"};
  internal static void ValidateConfigurationPayload(string action,Dictionary<string,object> p){
   string[] keys=action=="launchConfigurations"||action=="configurationTasks"?new string[0]:action=="configurationReadCancel"?new[]{"id","readId"}:action=="configurationCreate"?new[]{"name","versionId"}:action=="configurationRename"?new[]{"id","name"}:action=="configurationVersion"?new[]{"id","versionId"}:action=="configurationSaveOrdinary"?new[]{"id","ordinaryIds"}:action=="configurationRequest"?new[]{"id","action","payload"}:new[]{"id"};
-  if(action=="configurationRequest"&&p!=null&&p.ContainsKey("readId"))keys=keys.Concat(new[]{"readId"}).ToArray();
+  if(new[]{"configurationRequest","configurationRead","configurationSaveOrdinary"}.Contains(action)&&p!=null&&p.ContainsKey("readId"))keys=keys.Concat(new[]{"readId"}).ToArray();
   if(p==null||p.Count!=keys.Length||keys.Any(k=>!p.ContainsKey(k)))throw new IOException("启动配置操作只接受本机配置标识和明确选项。");
   foreach(string key in keys.Where(k=>k!="payload"&&k!="ordinaryIds"))if(!(p[key] is string)||((string)p[key]).Length>(key=="name"?100:64)||((string)p[key]).Any(char.IsControl))throw new IOException("启动配置参数无效。");
   if(p.ContainsKey("id")&&!System.Text.RegularExpressions.Regex.IsMatch((string)p["id"],@"\A(launcher|steam|vanilla|live:[a-f0-9]{32}|snapshot:[a-f0-9]{32})\z"))throw new IOException("启动配置标识无效。");
@@ -68,16 +68,20 @@ namespace PZ3D {sealed partial class ModernController {
   }return null;
  }
  object ConfigurationRows(){return ConfigurationMetadata(profiles=>new{selectedId=profiles.SelectedId,configurations=profiles.List().Select(r=>new{id=r.Id,name=r.Name,kind=r.Kind,versionId=r.VersionId,version=r.Snapshot!=null?r.Snapshot.GameVersion:r.Version==null?"":r.Version.Version,available=r.Available,errorCode=r.ErrorCode,message=r.Message}).ToArray()});}
- object ConfigurationView(string id){var row=ResolveConfiguration(id);var target=row.Available?BoundConfigurationController(row):null;return new{id=row.Id,name=row.Name,kind=row.Kind,versionId=row.VersionId,available=row.Available,message=row.Message,ordinaryIds=target==null?new string[0]:row.Snapshot!=null?row.Snapshot.DefaultModIds.Except(FrozenConfigurationEditor.Components(row.Snapshot)).ToArray():target.engine.OwnedLaunch?target.engine.OwnedComponents().OrdinaryIds():SaveProfiles.DefaultMods(SaveProfiles.DefaultBytes(target.engine)),frozen=row.Snapshot==null?null:target.FrozenView(row.Snapshot)};}
+ object ConfigurationView(string id){var row=ResolveConfiguration(id);return ConfigurationView(row,row.Available?BoundConfigurationController(row):null,System.Threading.CancellationToken.None);}
+ object ConfigurationView(LaunchConfigurationResolution row,ModernController target,System.Threading.CancellationToken token){return new{id=row.Id,name=row.Name,kind=row.Kind,versionId=row.VersionId,available=row.Available,message=row.Message,ordinaryIds=target==null?new string[0]:row.Snapshot!=null?row.Snapshot.DefaultModIds.Except(FrozenConfigurationEditor.Components(row.Snapshot)).ToArray():target.engine.OwnedLaunch?target.engine.OwnedComponents().OrdinaryIds(token):SaveProfiles.DefaultMods(SaveProfiles.DefaultBytes(target.engine)),frozen=row.Snapshot==null?null:target.FrozenView(row.Snapshot)};}
  object ConfigurationEdit(string action,Dictionary<string,object> p){
   ValidateConfigurationPayload(action,p);var profiles=ConfigurationProfiles();
-  if(action=="configurationRead")return ConfigurationView(Text(p,"id"));
+  if(action=="configurationRead"||action=="configurationSaveOrdinary"){
+   var selected=ResolveConfiguration(Text(p,"id"));var target=selected.Available?BoundConfigurationController(selected):null;
+   if(target==null){if(action=="configurationSaveOrdinary")throw new IOException(selected.Message);return ConfigurationView(selected,null,System.Threading.CancellationToken.None);}
+   return ReadConfiguration(selected,target,action,p,p.ContainsKey("readId")?Text(p,"readId"):Guid.NewGuid().ToString("N"));
+  }
   if(action=="configurationCreate"){var row=ConfigurationMetadata(store=>store.Create(Text(p,"name"),Text(p,"versionId"),new string[0]));return ConfigurationView(row.Id);}
   string id=Text(p,"id");
   if(action=="configurationRename")ConfigurationMetadata(store=>{store.Rename(id,Text(p,"name"));return true;});
   else if(action=="configurationVersion")ConfigurationMetadata(store=>{store.SetVersion(id,Text(p,"versionId"));return true;});
   else if(action=="configurationDelete"){ConfigurationMetadata(store=>{store.Delete(id);return true;});return ConfigurationRows();}
-  else if(action=="configurationSaveOrdinary")profiles.SaveOrdinary(id,FrozenIds(p["ordinaryIds"]),System.Threading.CancellationToken.None);
   return ConfigurationView(id);
  }
  Func<object> CaptureConfigurationRequest(Dictionary<string,object> p){
@@ -85,13 +89,21 @@ namespace PZ3D {sealed partial class ModernController {
   return ()=>new{configurationId=id,data=ConfigurationPureReads.Contains(action)?ReadConfiguration(row,target,action,body,p.ContainsKey("readId")?Text(p,"readId"):""):ExecuteConfiguration(target,action,body)};
  }
  object ReadConfiguration(LaunchConfigurationResolution row,ModernController target,string action,Dictionary<string,object> body,string readId){
-  // Each read has an immutable engine and its own cancellation lifetime. It never
-  // replaces a writer's CTS, clears shared display caches, or recovers a runtime.
+  // Each scoped read/ordinary save has an immutable engine and its own CTS.
+  // It never replaces another writer's CTS or recovers a runtime; ordinary
+  // writes still use the component service's existing per-list mutex.
   using(var reader=new ModernController(legacyGame,defaultUser,data,test,fetch,configurationNetworkFetch,buddyEnvironment,recycleSave,true,networkLane,true)){
    reader.SetEngine(target.engine.Game,target.engine.User,target.engine.ManagedVersion,row.Snapshot);reader.engine.BindConfiguration(row);reader.Progress=(value,text)=>{var callback=Event;if(callback!=null)callback("configurationProgress",new{configurationId=row.Id,configurationName=row.Name,readId,value,text});};
    lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");configurationReaders.Add(reader,new ConfigurationReader{Owner=row.Id,ReadId=readId});}
    try{
-    reader.cancel.Token.ThrowIfCancellationRequested();if(action=="modCatalog"&&Flag(body,"refresh"))SaveProfiles.InvalidateDisplay(reader.engine);object result=action=="modCatalog"?SaveProfiles.Catalog(reader.engine,reader.cancel.Token,(value,text)=>{var callback=Event;if(callback!=null)callback("configurationProgress",new{configurationId=row.Id,configurationName=row.Name,readId,value,text});}):reader.Dispatch(action,body);
+    reader.cancel.Token.ThrowIfCancellationRequested();
+    if(action=="configurationSaveOrdinary"){
+     ConfigurationProfiles().SaveOrdinary(row.Id,FrozenIds(body["ordinaryIds"]),reader.cancel.Token,reader.Progress);
+     // The writer's return is its committed/no-op boundary. A later cancel must
+     // not turn a completed save into an error or trigger another metadata scan.
+     return new{id=row.Id,saved=true};
+    }
+    if(action=="modCatalog"&&Flag(body,"refresh"))SaveProfiles.InvalidateDisplay(reader.engine);object result=action=="modCatalog"?SaveProfiles.Catalog(reader.engine,reader.cancel.Token,(value,text)=>{var callback=Event;if(callback!=null)callback("configurationProgress",new{configurationId=row.Id,configurationName=row.Name,readId,value,text});}):action=="configurationRead"?ConfigurationView(row,reader,reader.cancel.Token):reader.Dispatch(action,body);
     reader.cancel.Token.ThrowIfCancellationRequested();
     if(action=="memoryGet"){var json=new System.Web.Script.Serialization.JavaScriptSerializer();var value=json.Deserialize<Dictionary<string,object>>(json.Serialize(result));lock(target.gate)target.memorySnapshots.Add((string)value["stamp"]);}
     if(action=="status"){
