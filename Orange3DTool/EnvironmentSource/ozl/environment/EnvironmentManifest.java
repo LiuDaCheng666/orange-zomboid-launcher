@@ -13,11 +13,20 @@ public final class EnvironmentManifest {
     public final Path game,user,home,mods,bridge,snapshot;
     public final List<Path> roots;
     public final Map<String,String> choices;
+    public boolean executionConfigured;final Map<Path,String[]> javaRules=new LinkedHashMap<Path,String[]>();
     public final boolean activeConfigured;private final List<String> managed,components,order;
     private EnvironmentManifest(String id,Path game,Path user,Path home,Path mods,Path bridge,List<Path> roots,Map<String,String> choices,List<String> managed,List<String> components,List<String> order){
         this.id=id;this.game=game;this.user=user;this.home=home;this.mods=mods;this.bridge=bridge;this.snapshot=game.getParent();this.roots=Collections.unmodifiableList(new ArrayList<Path>(roots));
         this.choices=Collections.unmodifiableMap(new LinkedHashMap<String,String>(choices));this.activeConfigured=managed!=null;this.managed=managed;this.components=components;this.order=order;
     }
+    static final String BUDDY_HASH="eb79b9876332010733a8e0d7ce4fe0377846059a9e28859029e2a0fb449f6cf2";
+    private static String text(String encoded)throws IOException{return new String(Base64.getDecoder().decode(encoded),StandardCharsets.UTF_8);}
+    private void execution(String rules)throws IOException{
+        executionConfigured=rules!=null;if(rules==null||rules.length()==0)return;
+        for(String raw:rules.split(",",-1)){String[] row=raw.split(":",-1);if(row.length!=4)throw invalid("invalid copied Java rule");Path jar=SafePaths.canonical(path(row[0]),true,false);String pkg=text(row[1]),hash=text(row[2]),allowed=text(row[3]);if(!roots.stream().anyMatch(jar::startsWith)||!pkg.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*")||!hash.matches("[a-f0-9]{64}")||!allowed.matches("true|false")||javaRules.put(jar,new String[]{pkg,hash,allowed})!=null)throw invalid("invalid copied Java selection");}
+    }
+    static String sha(Path path)throws Exception{MessageDigest digest=MessageDigest.getInstance("SHA-256");try(InputStream in=Files.newInputStream(path)){byte[] block=new byte[65536];int n;while((n=in.read(block))>0)digest.update(block,0,n);}StringBuilder value=new StringBuilder();for(byte b:digest.digest())value.append(String.format("%02x",b&255));return value.toString();}
+    boolean allows(Path jar,String pkg){try{Path path=SafePaths.canonical(jar,true,false);String[] rule=javaRules.get(path);return rule!=null&&rule[0].equals(pkg)&&rule[2].equals("true")&&rule[1].equals(sha(path));}catch(Exception error){return false;}}
     private static IllegalArgumentException invalid(String reason){return new IllegalArgumentException(reason);}
     private static byte[] expectedHash(String text){
         if(text==null||!text.matches("[a-fA-F0-9]{64}"))throw invalid("missing or invalid manifest SHA-256");
@@ -73,7 +82,7 @@ public final class EnvironmentManifest {
         for(byte b:bytes)if((b&255)>127||(b<32&&b!='\n'&&b!='\r'))throw invalid("manifest must be plain ASCII properties");
         Map<String,String> values=new HashMap<String,String>();
         Set<String> required=new HashSet<String>(Arrays.asList("version","id","game","user","home","mods","roots","bridge"));
-        Set<String> allowed=new HashSet<String>(required);allowed.addAll(Arrays.asList("choices","activeManaged","activeComponents","activeOrder"));
+        Set<String> allowed=new HashSet<String>(required);allowed.addAll(Arrays.asList("choices","activeManaged","activeComponents","activeOrder","javaRules"));
         for(String line:new String(bytes,StandardCharsets.US_ASCII).split("\\r?\\n",-1)){
             if(line.length()==0||line.startsWith("#")||line.startsWith("!"))continue;
             int equals=line.indexOf('=');if(equals<1)throw invalid("invalid manifest property");String key=line.substring(0,equals);
@@ -90,7 +99,7 @@ public final class EnvironmentManifest {
         if(encodedRoots.length()>0){String[] entries=encodedRoots.split(",",-1);if(entries.length>4096)throw invalid("too many frozen mod roots");
             for(String entry:entries){Path root=SafePaths.canonical(path(entry),true,true);if(!root.startsWith(snapshot)||root.equals(snapshot)||root.equals(game)||root.startsWith(home)||!unique.add(root))throw invalid("invalid, duplicate or unfrozen mod root");SafePaths.tree(root);roots.add(root);}
         }
-        EnvironmentManifest manifest=new EnvironmentManifest(values.get("id"),game,user,home,mods,bridge,roots,choices(values.get("choices")),ids(values.get("activeManaged")),ids(values.get("activeComponents")),ids(values.get("activeOrder")));if(manifest.activeConfigured!=(manifest.components!=null)||manifest.activeConfigured!=(manifest.order!=null))throw invalid("partial active policy");if(manifest.activeConfigured&&!manifest.order.containsAll(manifest.components))throw invalid("component missing from active order");manifest.bridgePresent();return manifest;
+        EnvironmentManifest manifest=new EnvironmentManifest(values.get("id"),game,user,home,mods,bridge,roots,choices(values.get("choices")),ids(values.get("activeManaged")),ids(values.get("activeComponents")),ids(values.get("activeOrder")));if(manifest.activeConfigured!=(manifest.components!=null)||manifest.activeConfigured!=(manifest.order!=null))throw invalid("partial active policy");if(manifest.activeConfigured&&!manifest.order.containsAll(manifest.components))throw invalid("component missing from active order");manifest.bridgePresent();manifest.execution(values.get("javaRules"));return manifest;
     }
     /** The sole permitted live mod root is the launcher's journal-owned bridge. */
     public boolean bridgePresent()throws IOException {

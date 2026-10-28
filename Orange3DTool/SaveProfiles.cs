@@ -44,7 +44,7 @@ public static object Read(Engine e,string id){string path=ResolveSave(e,id);bool
   public static object Cover(Engine e,string token){if(token==null||!Regex.IsMatch(token,"^[a-f0-9]{64}$"))throw new Exception("无效封面标识。");var matches=DisplaySnapshot(e).Entries.Where(x=>x.coverToken==token).ToArray();if(matches.Length!=1)throw new Exception("封面不存在或标识冲突，请刷新目录。");var entry=matches[0];return new{token=token,cover=ReadCover(entry.posterRoot,entry.poster,new List<string>())};}
   static Dictionary<string,string> Info(string path,LaunchReadBudget budget=null){Safe(path);bool bom;var values=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);foreach(string line in Decode(Bytes(path,budget,budget==null?MaxText:262144),out bom).Split('\n')){int eq=line.IndexOf('=');if(eq>0)values[line.Substring(0,eq).Trim()]=line.Substring(eq+1).Trim();}return values;}
   static string Value(Dictionary<string,string> v,string k){string s;return v.TryGetValue(k,out s)?s:"";}
-  static Version Current(Engine e,List<string> w){var probed=GameVersionProbe.Read(e.Game);if(probed!=null&&(probed.Major==41||probed.Major==42))return probed;foreach(string relative in new[]{"game-version.txt","version.txt","media/version.txt"}){string path=Path.Combine(e.Game,relative);try{if(File.Exists(path)){bool bom;var m=Regex.Match(Decode(Bytes(path),out bom),@"\b((?:41|42)\.\d+(?:\.\d+)?)\b");Version v;if(m.Success&&Version.TryParse(m.Value,out v))return v;}}catch{w.Add("游戏版本文件无法安全读取。");}}w.Add("未读取到游戏小版本，使用 B42 通用目录。");return new Version(42,0);}
+  static Version Current(Engine e,List<string> w){var probed=e.ModCatalogVersion??GameVersionProbe.Read(e.Game);if(probed!=null&&(probed.Major==41||probed.Major==42))return probed;foreach(string relative in new[]{"game-version.txt","version.txt","media/version.txt"}){string path=Path.Combine(e.Game,relative);try{if(File.Exists(path)){bool bom;var m=Regex.Match(Decode(Bytes(path),out bom),@"\b((?:41|42)\.\d+(?:\.\d+)?)\b");Version v;if(m.Success&&Version.TryParse(m.Value,out v))return v;}}catch{w.Add("游戏版本文件无法安全读取。");}}w.Add("未读取到游戏小版本，使用 B42 通用目录。");return new Version(42,0);}
   internal static List<Entry> Entries(Engine e,List<string> w,bool knownPathsOnly=false,LaunchReadBudget budget=null){return Collect(e,w,knownPathsOnly,budget,null);}
   internal sealed class PreflightCatalog {
    internal readonly List<Entry> Entries=new List<Entry>();
@@ -60,13 +60,13 @@ public static object Read(Engine e,string id){string path=ResolveSave(e,id);bool
      if(matches.Length==0&&ModConfigurations.Managed(new[]{id}).Length>0)matches=Candidates.Where(c=>c.Id==id.TrimStart('\\')).ToArray();
      foreach(var candidate in matches){
       if(!materialized.Add(candidate))continue;
-      var values=ParseInfo(candidate.Common);foreach(var pair in ParseInfo(candidate.Active))values[pair.Key]=pair.Value;
-      var entry=MakeEntry(candidate.Root,candidate.Source,candidate.Workshop,candidate.Layout,candidate.CommonRoot,values,new List<string>(),false);
+      var entry=DescribeCandidate(candidate);
       entry.requires=entry.require=SnapshotModChoices.Apply(entry.requires,choices);Entries.Add(entry);foreach(string dependency in entry.requires)pending.Enqueue(dependency);
      }
     }
    }
   }
+  internal static Entry DescribeCandidate(Candidate candidate){var values=ParseInfo(candidate.Common);foreach(var pair in ParseInfo(candidate.Active))values[pair.Key]=pair.Value;return MakeEntry(candidate.Root,candidate.Source,candidate.Workshop,candidate.Layout,candidate.CommonRoot,values,new List<string>(),false);}
   internal sealed class Candidate {internal string Id,Root,Source,Workshop,Layout,CommonRoot;internal byte[] Common,Active;}
   internal static PreflightCatalog SnapshotEntries(Engine e,string[] mods,List<string> warnings,LaunchReadBudget budget,IDictionary<string,string> choices=null,bool ownSelection=false){budget=budget??new LaunchReadBudget(67108864,100000);var catalog=new PreflightCatalog();Collect(e,warnings,false,budget,catalog);if(ownSelection&&e.OwnedLaunch){var components=e.OwnedComponents();var selected=components.List(CancellationToken.None).Where(row=>row.Enabled||choices!=null&&choices.Values.Contains(row.Id)).ToArray();var managed=components.ManagedIds();catalog.Candidates.RemoveAll(row=>managed.Contains(row.Id)&&!selected.Any(item=>item.Id==row.Id&&VersionLibrary.Same(item.SourceRoot,row.Root)));}catalog.Select(mods??new string[0],choices??(e.FrozenEnvironment==null?null:e.FrozenEnvironment.ModChoices));return catalog;}
   internal static PreflightCatalog PreflightEntries(Engine e,string[] mods,List<string> warnings,LaunchReadBudget budget){budget=budget??new LaunchReadBudget(16777216);var catalog=new PreflightCatalog();Collect(e,warnings,true,budget,catalog);catalog.Select(mods??new string[0],e.FrozenEnvironment==null?null:e.FrozenEnvironment.ModChoices);return catalog;}

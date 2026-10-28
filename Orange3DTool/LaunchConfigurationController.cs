@@ -42,12 +42,13 @@ namespace PZ3D {sealed partial class ModernController {
  object ConfigurationRows(){var profiles=ConfigurationProfiles();return new{selectedId=profiles.SelectedId,configurations=profiles.List().Select(r=>new{id=r.Id,name=r.Name,kind=r.Kind,versionId=r.VersionId,available=r.Available,errorCode=r.ErrorCode,message=r.Message}).ToArray()};}
  object ConfigurationTasks(){return new{configurations=ConfigurationControllers().Select(c=>new{id=c.engine.LaunchConfiguration.Id,name=c.engine.LaunchConfiguration.Name,active=c.Busy,networkActive=c.NetworkBusy}).ToArray()};}
  internal Func<object> CaptureRequest(string action,Dictionary<string,object> payload){
-  if(!configurationDispatcher||ConfigurationIndependentAction(action)||ConfigurationAction(action)||new[]{"setGame","versionSelect","cancel","startupCancel","startupYield","startupResume","startupStatus","forceCloseGame","gameProcesses","profileRecover","serverWorkshopStatus","serverWorkshopCancel"}.Contains(action))return ()=>Execute(action,payload);
-  var target=StartupOwner(payload)??RequestConfigurationController(action);return ()=>ExecuteConfiguration(target,action,payload);
+  if(!configurationDispatcher||ConfigurationIndependentAction(action)||ConfigurationAction(action)||action=="frozenConfigurationCancel"||new[]{"setGame","versionSelect","cancel","startupCancel","startupYield","startupResume","startupStatus","forceCloseGame","gameProcesses","profileRecover","serverWorkshopStatus","serverWorkshopCancel"}.Contains(action))return ()=>Execute(action,payload);
+  var target=(FrozenConfigurationAction(action)?FrozenTarget(action,payload):StartupOwner(payload)??RequestConfigurationController(action));return ()=>ExecuteConfiguration(target,action,payload);
  }
  ModernController StartupOwner(Dictionary<string,object> payload){string startupId=payload==null||!payload.ContainsKey("startupId")?"":Text(payload,"startupId");if(startupId!="")foreach(var child in ConfigurationControllers())lock(child.startupGate)if(child.startupAttempt!=null&&child.startupAttempt.Launch.SessionId==startupId)return child;return null;}
 
  public object Execute(string action,Dictionary<string,object> payload){
+  if(configurationDispatcher&&action=="frozenConfigurationCancel"){ValidateFrozenConfigurationPayload(action,payload);foreach(var child in ConfigurationControllers().Where(c=>c.engine.FrozenEnvironment!=null&&c.engine.FrozenEnvironment.Id==Text(payload,"snapshotId")))child.FrozenRead(action,payload);return Message("已请求取消此快照操作。");}
   if(ConfigurationAction(action)){ValidateConfigurationPayload(action,payload??new Dictionary<string,object>());if(action=="configurationTasks")return ConfigurationTasks();if(action=="configurationCancel"){var matches=ConfigurationControllers().Where(c=>c.engine.LaunchConfiguration.Id==Text(payload,"id")).ToArray();foreach(var child in matches)child.Cancel();return Message("已请求取消此配置的任务。");}if(action=="launchConfigurationSelect")ConfigurationProfiles().Select(Text(payload,"id"));return ConfigurationRows();}
   if(!configurationDispatcher||ConfigurationIndependentAction(action))return ExecuteLocal(action,payload);
   if(action=="setGame"||action=="versionSelect"){var result=ExecuteLocal(action,payload);ConfigurationProfiles().Select("launcher");return result;}
@@ -58,7 +59,7 @@ namespace PZ3D {sealed partial class ModernController {
    if(owners.Length==1)return owners[0].ExecuteLocal(action,payload);if(requested!=null&&owners.Length==0)throw new IOException("未找到此配置的准备任务。");
   }
   // Capture once, before any user work or asynchronous download callback begins.
-  return ExecuteConfiguration(StartupOwner(payload)??RequestConfigurationController(action),action,payload);
+  return ExecuteConfiguration((FrozenConfigurationAction(action)?FrozenTarget(action,payload):StartupOwner(payload)??RequestConfigurationController(action)),action,payload);
  }
  object ExecuteConfiguration(ModernController target,string action,Dictionary<string,object> payload){bool producerAction=!NativeReads.Contains(action)&&!NativeNetworkReads.Contains(action);
   if(producerAction)lock(gate){int active;configurationProducers.TryGetValue(target,out active);configurationProducers[target]=active+1;}

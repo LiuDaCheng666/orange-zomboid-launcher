@@ -53,6 +53,7 @@ namespace PZ3D {
    if(value<1||value>policy.MaximumHeapGiB)throw new Exception("内存超出按总物理内存计算的设置上限；需为系统保留至少 4 GiB 或 25%。");
   }
   internal static string SetHeapGiB(Engine e,int value,Func<LauncherMemoryInfo> memoryProvider){
+   if(e.FrozenEnvironment!=null){var revised=FrozenConfigurationEditor.SetMemory(e,e.FrozenEnvironment.ManifestHash,value,memoryProvider);e.FrozenEnvironment=revised;return "此快照配置的最大堆内存已设为 "+value+" GiB。";}
    if(e.OwnedLaunch){e.GuardHeap();ValidateHeapBudget(value,memoryProvider);e.OwnedConfiguration.SetMemoryMb(checked(value*1024));return "此启动配置的最大堆内存已设为 "+value+" GiB。";}
    e.GuardHeap();ValidateHeapBudget(value,memoryProvider);NoReparse(e.Config);byte[] before=File.ReadAllBytes(e.Config);var config=Read(e);
    if(!before.SequenceEqual(File.ReadAllBytes(e.Config)))throw new Exception("启动配置已被其他程序修改；请刷新后重试。");

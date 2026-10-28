@@ -80,6 +80,7 @@ namespace PZ3D {
   internal LauncherComponents OwnedComponents(){if(!OwnedLaunch)throw new InvalidOperationException("未选择启动器配置。");return new LauncherComponents(OwnedConfiguration,GameVersionProbe.Read(Game)??new Version(42,0),Progress);}
 
   internal SaveEnvironmentRecord FrozenEnvironment;
+  internal Version ModCatalogVersion;
   public string BuddySource,ViewSource,ModelsSource;
   public Action<int,string> Progress;
   public string LastBackup;

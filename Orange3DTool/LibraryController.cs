@@ -38,6 +38,7 @@ namespace PZ3D {
   object ReadRecommendations(Dictionary<string,object> payload,CancellationToken token){if(recommendations==null)Interlocked.CompareExchange(ref recommendations,new RecommendedServers(data),null);return recommendations.Read(Flag(payload,"refresh"),token);}
   object QueryRecommendation(Dictionary<string,object> payload,CancellationToken token){if(recommendations==null)Interlocked.CompareExchange(ref recommendations,new RecommendedServers(data),null);return recommendations.Query(Text(payload,"id"),token);}
   object DispatchLibrary(string action,Dictionary<string,object> p){
+   if(engine.FrozenEnvironment!=null&&action.StartsWith("javaComponents",StringComparison.Ordinal))return FrozenJavaAction(action,p);
    if(engine.OwnedLaunch&&action.StartsWith("javaComponents",StringComparison.Ordinal))return OwnedJavaAction(action,p);
    switch(action){
     case "versionList":return VersionRows();

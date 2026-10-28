@@ -84,7 +84,7 @@ function Get-OzlProductionSources {
         'LibraryHost.cs',
         'RecommendedServers.cs',
         'SaveBackups.cs',
-        'SaveEnvironments.cs',
+        'SaveEnvironments.cs', 'SaveEnvironmentRevision.cs', 'FrozenConfigurationEditor.cs', 'FrozenJavaPolicy.cs', 'FrozenConfigurationController.cs',
         'SaveEnvironmentRuntime.cs',
         'SaveEnvironmentController.cs',
         'SaveEnvironmentLaunch.cs',
