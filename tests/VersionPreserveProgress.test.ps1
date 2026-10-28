@@ -1,4 +1,4 @@
-param([string]$EvidenceDirectory='')
+﻿param([string]$EvidenceDirectory='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 . (Join-Path $repo 'build/ProductionSources.ps1')

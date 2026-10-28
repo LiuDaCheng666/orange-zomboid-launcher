@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 . (Join-Path $repo 'build/ProductionSources.ps1')
 $out=Join-Path $repo 'artifacts/version-preserve-20261029'
