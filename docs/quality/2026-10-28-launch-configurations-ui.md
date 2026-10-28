@@ -101,3 +101,23 @@ Task7实际游戏、正常存盘退出/再次启动、中文路径快照与来�
 用户要求继续后台，不占用前台。父代理用完整容器current中的实际生产EXE、空参数、WindowStyle Hidden静默启动；该进程持续响应，并产生真实msedgewebview2子进程，没有中间目录那项异常。未进行窗口激活、鼠标或键盘输入，也未启动游戏。观察后按PID、可执行文件路径和完整启动时间核对身份，仅结束这个新建的隐藏候选进程，未操作任何用户进程。证据为 `task7-background-portable-start.json` 与 `task7-background-portable-observation.json`。一次PowerShell7日期自动反序列化使最初的字符串身份比较误报，后续改为UTC ticks复核，确认进程身份一致；这不是产品进程识别故障。
 
 这只关闭完整容器的后台启动冒烟项。实际点击与实际游戏验收仍未完成，不发布更新。当前Windows工具的输入会自动激活目标窗口，用户当前后台限制保持；没有把后台启动存活、无头DOM或控制器调用说成完成游戏菜单、存盘和快照重启。
+
+## 2026-10-28 实际点击与生产游戏入口检查
+
+用户本轮明确授权点击验收。使用完整便携容器的生产 EXE，无 LocalPreview、替代启动 main 或手工测试代理；原始 Steam 游戏、默认模组与存档不作破坏性测试。
+
+实际 Windows 操作（f4834e93 完整容器）：原生文件夹选择器导入独立中文路径游戏，创建“OZL 验收 A”命名配置，选择独立游戏版本，搜索并添加 OZLQAFirst / OZLQASecond 两个普通 Lua 测试模组，实际拖动顺序、点击自动排序、保存清单。最终 owned default.txt 顺序为 First → Second，组件状态没有被清单保存改动。物理路径选择器取消 → 返回 → 首页 → 编辑也能继续操作。首次成功导入后首页的一次不可点击/AX 缺失观察仍未归因；重启恢复及后续取消路径通过不能证明这项已修复。
+
+实际点击发现三个问题，均保留原失败证据并作限定修复与复核：
+
+- 自动排序夹带全目录封面/作者资料提示。be54a8b 仅去除排序过程的展示资料读取，保留所选模组依赖、循环和冲突信息。父代理在0dad012重新运行 `tests/UnifiedConfigurationNative.test.ps1 -FinalCase SortWarnings` 退出0；普通/快照真实DOM点击与生产控制器、隔离文件结果通过，三张 final-SortWarnings 截图已实际查看。该定点复测不是完整包窗口的再次点击。
+- 第一次实际生产 Launch 的 JVM 在 Steam 初始化后以78退出，原因是未启用工坊模组中的合法 namespace ID（如1299328280/ToadTraits）被 live 解析器拒绝。0dad012 修复后，重建实际 runtime agent 与完整便携包，再从首页实际点击 Launch。进程44152实际使用中文 QA 游戏自带 java.exe、16GiB 和生产 live/startup agent；参数保存在 task7-0dad012-game-processes.json。两个普通 Lua 版本A标记均进入真实 console，随后记录 `[OZL-STARTUP] menu-ready`。视觉只检查到首次启动警告页；菜单就绪来自日志，不能声称已点击主菜单或进入世界。用户随后关闭测试游戏。
+- 完整0dad012程序重启到持久化命名配置时，误报“游戏目录已变化”。cb91cae 修正首次目录异步加载前错误路由到内置 launcher 的状态请求，拒绝旧owner回复；真实外部路径/配置变化的失效处理保持。父代理新跑 `-FinalCase BootSelection` 退出0，覆盖持久化目录回复的两种时序，已查看两张 final-BootSelection 图片。独立限定复核通过。这是生产控制器与新DOM回归，最新完整 EXE 的重启点击仍待验证。
+
+测试游戏使用新导入版本的独立 user 目录，首次启动为全屏，干扰了用户前台。用户要求关闭后，已停止游戏验收，不再恢复或启动游戏；仅将该 QA user/options.ini 改为 fullScreen=false、borderless=false、1280×720。原用户游戏设置未改。游戏进程已不存在；仅终止精确路径和出生时间再次核对的测试候选进程。通过生产 LaunchConfigurationProfiles.Select 将仍选中的本次 QA 配置恢复为内置 launcher；命名条目完整保留，没有覆盖整个索引。清理步骤是原生API调用，不冒充界面点击验收。
+
+最新只供后续本地验收的候选为 `E:\Projects\OrangeLauncher\dist\launch-configurations-local-20261028-cb91cae-container\portable`，尚未启动。标准完整归档校验及current内RSA、21项长度/SHA-256验证通过，bootstrap SHA-256 `D0472D105D55BF7BF64AD71F7F7D8CAE07DDFFE240EBDFF66A50FED769341CD0`，Windows发布者签名仍为 **NotSigned**。没有安装、VERSION变更、GitHub/服务器上传或网站操作。
+
+对应证据位于 artifacts/owned-launch：task7-real-ui-preparation.json、task7-first-game-failed-console.txt、task7-0dad012-game-processes.json、task7-0dad012-menu-console.txt、task7-0dad012-candidate.json、task7-cb91cae-candidate.json、task7-qa-process-cleanup.json、task7-qa-cleanup-selection.json；相关后台点击截图和响应在 task6/。实际Windows画面通过当轮工具截图直接查看，未将后台DOM截图冒充Windows游戏画面。原始JSON/BAT/default.txt及原loaded.txt不存在状态逐项保持，六个外来网站/部署文件哈希保持。
+
+**仍未通过的最终门槛：** 最新包实际重启、选择Java组件并进入游戏、真实创建中文路径快照、从快照进入世界并保存退出/再次启动、来源变化后快照独立使用、多人连接与实际恢复/强制关闭。首次原生导入/Home观察及旧Runtime377预览失效仍未归因。Task7保持未完成，不能宣布全功能验收或正式发布。
