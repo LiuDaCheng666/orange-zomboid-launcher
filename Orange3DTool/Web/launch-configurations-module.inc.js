@@ -425,7 +425,10 @@ const launchConfigurationUi = (() => {
     if (editor.saving) editorStatus(editor, editor.message, true);
   }
   async function openEditor(id = selectedId(), tab = "mods") {
-    if (model.editor) return;
+    if (model.editor) {
+      if (model.editor.element.isConnected && model.editor.element.open) return;
+      releaseEditor(model.editor);
+    }
     const element = document.createElement("dialog");
     element.id = "configuration-editor";
     element.className = "configuration-editor";
@@ -453,7 +456,14 @@ const launchConfigurationUi = (() => {
       event.preventDefault();
       void closeEditor();
     });
-    element.showModal();
+    element.addEventListener("close", () => releaseEditor(editor));
+    try {
+      element.showModal();
+    } catch (error) {
+      releaseEditor(editor);
+      notify(error.message);
+      return;
+    }
     try {
       const view = await readView(editor);
       if (model.editor !== editor) return;
@@ -545,6 +555,26 @@ const launchConfigurationUi = (() => {
         editor.reading = false;
     }
   }
+  function releaseEditor(editor) {
+    if (editor.released) return;
+    editor.released = true;
+    if (model.editor === editor) model.editor = null;
+    for (const token of editor.readRequests)
+      void raw("configurationReadCancel", {
+        id: editor.id,
+        readId: token,
+      }).catch(() => {});
+    if (editor.reading && editor.sourceReadId)
+      void raw("frozenConfigurationReadCancel", {
+        snapshotId: editor.id.slice(9),
+        readId: editor.sourceReadId,
+      }).catch(() => {});
+    editor.element.remove();
+    if (editor.saving) {
+      paintJobs();
+      notify(editor.view.name + "的操作继续进行，可在首页查看或取消。");
+    }
+  }
   async function closeEditor() {
     const editor = model.editor;
     if (!editor) return;
@@ -557,23 +587,9 @@ const launchConfigurationUi = (() => {
       ))
     )
       return;
-    model.editor = null;
-    for (const token of editor.readRequests)
-      void raw("configurationReadCancel", {
-        id: editor.id,
-        readId: token,
-      }).catch(() => {});
-    if (editor.reading && editor.sourceReadId)
-      void raw("frozenConfigurationReadCancel", {
-        snapshotId: editor.id.slice(9),
-        readId: editor.sourceReadId,
-      }).catch(() => {});
+    if (model.editor !== editor) return;
     editor.element.close();
-    editor.element.remove();
-    if (editor.saving) {
-      paintJobs();
-      notify(editor.view.name + "的操作继续进行，可在首页查看或取消。");
-    }
+    releaseEditor(editor);
   }
   async function write(editor, operation, message, options = {}) {
     if (editor.saving) return;

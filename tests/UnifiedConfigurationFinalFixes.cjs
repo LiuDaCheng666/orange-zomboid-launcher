@@ -28,13 +28,13 @@ assert.equal(
 // Each case needs an untouched installation; keep its real files independent.
 if (!process.argv[4] || process.argv[4] === "all") {
   const { spawnSync } = require("node:child_process");
-  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection"]) {
+  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection", "EditorLifecycle"]) {
     const result = spawnSync(process.execPath, [__filename, process.argv[2], process.argv[3], name], { stdio: "inherit", windowsHide: true });
     if (result.status !== 0) process.exit(result.status || 1);
   }
   process.exit(0);
 }
-assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection"].includes(process.argv[4]), "unknown final review case");
+assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic", "OrdinaryCancel", "SortWarnings", "BootSelection", "EditorLifecycle"].includes(process.argv[4]), "unknown final review case");
 const out = path.resolve(process.argv[3]),
   child = spawn(
     path.join(process.argv[2], "NativeUi.exe"),
@@ -221,6 +221,58 @@ if(chosen('Generic')){
  const finalBytes=bytes(info.ownedDefault),finalMtime=fs.statSync(info.ownedDefault).mtimeMs;await saved();assert.equal(bytes(info.ownedDefault),finalBytes);assert.equal(fs.statSync(info.ownedDefault).mtimeMs,finalMtime);
  await page.screenshot({path:path.join(out,'final-Generic-ordinary.png')});await page.locator('[data-configuration-tab="components"]').click();await idle();assert.equal(bytes(info.selection),componentBytes);await page.screenshot({path:path.join(out,'final-Generic-components.png')});await page.locator('[data-configuration-close]').click();
  console.log('PASS Generic actual DOM/native Java entry separation, selected/unselected projection, Lua add/order, no-op bytes/mtime and exact component approvals');
+}
+if(chosen('EditorLifecycle')){
+ await page.locator('nav [data-page="components"]').click();
+ for(let i=0;i<8;i++){
+  await page.locator('[data-configuration-components-open]').nth(i%2).click();
+  await idle();
+  assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),['B','A']);
+  if(i%2)await page.keyboard.press('Escape');
+  else await page.locator('#configuration-editor').evaluate(element=>new Promise(resolve=>{
+   element.addEventListener('close',()=>queueMicrotask(resolve),{once:true});element.close();
+  }));
+  assert.equal(await page.evaluate(()=>orange.launchConfigurationUi.editor()),null);
+  assert.equal(await page.locator('#configuration-editor').count(),0);
+  await page.locator('nav [data-page="saves"]').click();
+  await page.locator('nav [data-page="components"]').click();
+ }
+ await page.screenshot({path:path.join(out,'final-EditorLifecycle-repeated-navigation.png')});
+ const b=await ask('configurationCreate',{name:'窗口关闭后独立配置',versionId:'steam'});
+ await page.evaluate(()=>orange.launchConfigurationUi.reload());
+ await page.locator('nav [data-page="home"]').click();
+ await page.locator('[data-home-manage]').evaluate(element=>element.open=true);
+ const start=events.length;await ask('fixtureHoldOrdinary');
+ await page.locator('[data-configuration-edit]').click();
+ const deadline=Date.now()+10000;
+ while(!events.slice(start).some(event=>event.ev==='fixtureOrdinaryHeld')){
+  assert.ok(Date.now()<deadline,'native metadata read must reach its checkpoint');
+  await page.waitForTimeout(20);
+ }
+ const heldRead=events.slice(start).find(event=>event.ev==='fixtureOrdinaryHeld').data;
+ await page.locator('#configuration-editor').evaluate(element=>new Promise(resolve=>{
+  element.addEventListener('close',()=>queueMicrotask(resolve),{once:true});element.close();
+ }));
+ let cancelled=false;
+ while(Date.now()<deadline){
+  if((await ask('fixtureOrdinaryState')).some(row=>row.readId===heldRead.readId&&row.cancelled)){cancelled=true;break;}
+  await page.waitForTimeout(20);
+ }
+ assert.equal(cancelled,true,'native Close cancels only its matching real pending read');
+ await page.locator('#launch-configuration-select').selectOption(b.id);await opened();
+ await page.locator('[data-source-key="Added"]').click();await saved();
+ assert.deepEqual((await ask('configurationRead',{id:b.id})).ordinaryIds,['Added']);
+ assert.equal(fs.existsSync(info.ownedDefault),false,'reading/closing the original owner does not rewrite its defaults');
+ assert.equal(fs.existsSync(info.selection),false,'ordinary edits do not initialize component selection');
+ await ask('fixtureReleaseOrdinary');
+ await page.waitForFunction(id=>orange.launchConfigurationUi.editor()?.id===id&&!orange.launchConfigurationUi.editor().reading,b.id);
+ assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),['Added']);
+ await page.locator('[data-configuration-editor-body]').evaluate(element=>element.scrollTop=0);
+ await page.evaluate(()=>Promise.all(document.getAnimations().filter(animation=>Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation=>animation.finished.catch(()=>{}))));
+ await page.screenshot({path:path.join(out,'final-EditorLifecycle-independent-save.png')});
+ await page.locator('[data-configuration-close]').click();await ask('fixtureCanRestart');
+ assert.deepEqual(await ask('fixtureOrdinaryState'),[]);
+ console.log('PASS EditorLifecycle 8 native read/open/close/navigation cycles, scoped native cancellation, late read isolation and independent durable save; original files preserved');
 }
 if(chosen('OrdinaryCancel')){
  const b=await ask('configurationCreate',{name:'独立配置 B',versionId:'steam'});await page.evaluate(()=>orange.launchConfigurationUi.reload());

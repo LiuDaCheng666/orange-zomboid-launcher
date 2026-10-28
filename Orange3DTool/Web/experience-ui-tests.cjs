@@ -1,7 +1,7 @@
 /* Real DOM/events; only native WebView and clipboard I/O are synthetic. */
 const {chromium}=require('./playwright-runtime.cjs');
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
-const url='file:///'+path.resolve(__dirname,'index.html').replaceAll('\\','/');
+const url='file:///'+path.resolve(process.env.OZL_TEST_WEB_ROOT||__dirname,'index.html').replaceAll('\\','/');
 const profileId='a'.repeat(32),otherId='b'.repeat(32),tests=[];
 const test=(name,run)=>tests.push({name,run});
 async function setup(browser,theme='dark'){
