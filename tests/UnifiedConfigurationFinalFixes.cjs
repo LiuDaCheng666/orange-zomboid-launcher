@@ -28,13 +28,13 @@ assert.equal(
 // Each case needs an untouched installation; keep its real files independent.
 if (!process.argv[4] || process.argv[4] === "all") {
   const { spawnSync } = require("node:child_process");
-  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins"]) {
+  for (const name of ["R1", "R2", "R3", "Minor1", "Builtins", "Generic"]) {
     const result = spawnSync(process.execPath, [__filename, process.argv[2], process.argv[3], name], { stdio: "inherit", windowsHide: true });
     if (result.status !== 0) process.exit(result.status || 1);
   }
   process.exit(0);
 }
-assert.ok(["R1", "R2", "R3", "Minor1", "Builtins"].includes(process.argv[4]), "unknown final review case");
+assert.ok(["R1", "R2", "R3", "Minor1", "Builtins", "Generic"].includes(process.argv[4]), "unknown final review case");
 const out = path.resolve(process.argv[3]),
   child = spawn(
     path.join(process.argv[2], "NativeUi.exe"),
@@ -147,8 +147,13 @@ const owner=(action,payload={})=>ask('configurationRequest',{id:'launcher',actio
 const bytes=f=>fs.readFileSync(f).toString('base64');
 // A managed row makes the original Steam read distinct from owned projection.
 if(cases==='Builtins')fs.writeFileSync(path.join(info.user,'mods/default.txt'),'mods\n{\n mod = B,\n mod = ZombieBuddy,\n mod = A,\n}\nmaps\n{\n}\n');
+if(cases==='Generic'){
+ fs.writeFileSync(path.join(info.user,'mods/default.txt'),'mods\n{\n mod = B,\n mod = Twin,\n mod = Java,\n mod = A,\n}\nmaps\n{\n}\n');
+ const file=path.join(info.user,'mods/Java/42/mod.info');fs.writeFileSync(file,'id=Java\nname=测试 Java 组件\n'+Array.from({length:70},(_,i)=>'extra'+i+'=display filler\n').join('')+'javaPkgName=fixture.component\njavaJarFile=payload.jar\n');
+}
 const originalPaths=[path.join(info.user,'mods/default.txt'),path.join(info.game,'ProjectZomboid64.json'),path.join(info.game,'ProjectZomboid64.bat'),path.join(info.root,'steam/userdata/44/config/localconfig.vdf')];
 for(const item of ['999111','999112'])originalPaths.push(path.join(info.root,'steam/steamapps/workshop/content/108600',item,'mods/Java/42/mod.info'));
+if(cases==='Generic')for(const item of ['999111','999112'])originalPaths.push(path.join(info.root,'steam/steamapps/workshop/content/108600',item,'mods/Java/42/payload.jar'));
 const originals=Object.fromEntries(originalPaths.map(f=>[f,bytes(f)]));
 if(chosen('Builtins')){
  for(const [id,expected] of [['launcher',['B','A']],['steam',['B','ZombieBuddy','A']],['vanilla',['B','A']]]){
@@ -156,6 +161,32 @@ if(chosen('Builtins')){
  }
  assert.equal(fs.existsSync(info.ownedDefault),false,'builtin reads do not initialize owned defaults');assert.equal(fs.existsSync(info.selection),false,'builtin reads do not initialize component state');
  console.log('PASS Builtins native launcher/steam/vanilla reads; Steam retains source managed rows, owned modes project, originals unchanged');
+}
+if(chosen('Generic')){
+ await opened();
+ const twinAdd=page.locator('.configuration-source').filter({hasText:'工坊 999111'}).locator('[data-configuration-add]');
+ if(await twinAdd.count()){
+  await twinAdd.click();await saved();const view=await ask('configurationRead',{id:'launcher'}),inventory=await owner('javaComponentsList');
+  fs.writeFileSync(path.join(out,'final-Generic-red-reproduction.json'),JSON.stringify({info,view,inventory,ownedText:fs.readFileSync(info.ownedDefault,'utf8')},null,2));
+  console.log('REPRO actual ordinary Add/Save:',view.ordinaryIds,'Twin component enabled:',inventory.rows.some(r=>r.modId==='Twin'&&r.enabled));
+  assert.fail('unselected generic Java source was accepted by ordinary Add/Save without a component selection');
+ }
+ assert.equal(await page.locator('[data-source-key="Twin"],[data-source-key="Java"]').count(),0,'unselected generic Java sources are excluded from ordinary Add');
+ assert.deepEqual((await ask('configurationRead',{id:'steam'})).ordinaryIds,['B','Twin','Java','A'],'Steam retains its raw source selection despite generic Java classification');
+ const nativeCatalog=await owner('modCatalog'),java=nativeCatalog.mods.find(r=>r.id==='Java');assert.equal(java.javaComponent,true);assert.ok(!Object.keys(java.metadata).some(k=>k.startsWith('java')),'classification survives truncated display metadata');
+ assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),['B','A'],'unselected generic source defaults project before first Save');assert.equal(fs.existsSync(info.ownedDefault),false);assert.equal(fs.existsSync(info.selection),false);
+ await saved();assert.equal(bytes(info.ownedDefault),originals[path.join(info.user,'mods/default.txt')]);const initialMtime=fs.statSync(info.ownedDefault).mtimeMs;await saved();assert.equal(fs.statSync(info.ownedDefault).mtimeMs,initialMtime);assert.equal(fs.existsSync(info.selection),false,'unchanged imported generic IDs do not enable components');
+ await page.locator('[data-configuration-tab="components"]').click();await idle();
+ assert.equal(await page.locator('[data-configuration-component="Twin"]').count(),2,'both generic sources remain available in component center');
+ await page.locator('[data-configuration-component="Java"] [data-configuration-component-toggle]').click();await idle();await page.locator('[data-configuration-component="Java"] [data-configuration-approve]').click();await idle();const componentBytes=bytes(info.selection);
+ await page.locator('[data-configuration-tab="mods"]').click();assert.equal(await page.locator('[data-source-key="Twin"],[data-source-key="Java"]').count(),0,'selected and unselected Java are not ordinary Add candidates');await page.locator('[data-configuration-close]').click();
+ fs.writeFileSync(info.ownedDefault,'mods\n{\n mod = B,\n mod = Twin,\n mod = Java,\n mod = A,\n}\nmaps\n{\n}\n');const imported=bytes(info.ownedDefault),mtime=fs.statSync(info.ownedDefault).mtimeMs;
+ await opened();assert.deepEqual(await page.evaluate(()=>orange.launchConfigurationUi.editor().ids),['B','A'],'effective reads project selected and unselected generic Java');await saved();assert.equal(bytes(info.ownedDefault),imported);assert.equal(fs.statSync(info.ownedDefault).mtimeMs,mtime);assert.equal(bytes(info.selection),componentBytes);
+ const forged=await native({action:'configurationSaveOrdinary',payload:{id:'launcher',ordinaryIds:['B','Twin','A','Added']}});assert.equal(forged.ok,false,'native ordinary writer rejects unselected Java IDs');assert.match(forged.error,/组件/);assert.equal(bytes(info.ownedDefault),imported);assert.equal(fs.statSync(info.ownedDefault).mtimeMs,mtime);assert.equal(bytes(info.selection),componentBytes);
+ await page.locator('[data-source-key="Added"]').click();await page.locator('[data-configuration-mod="Added"] [data-configuration-up]').click();await saved();assert.deepEqual((await ask('configurationRead',{id:'launcher'})).ordinaryIds,['B','Added','A']);assert.equal(bytes(info.selection),componentBytes);
+ const finalBytes=bytes(info.ownedDefault),finalMtime=fs.statSync(info.ownedDefault).mtimeMs;await saved();assert.equal(bytes(info.ownedDefault),finalBytes);assert.equal(fs.statSync(info.ownedDefault).mtimeMs,finalMtime);
+ await page.screenshot({path:path.join(out,'final-Generic-ordinary.png')});await page.locator('[data-configuration-tab="components"]').click();await idle();assert.equal(bytes(info.selection),componentBytes);await page.screenshot({path:path.join(out,'final-Generic-components.png')});await page.locator('[data-configuration-close]').click();
+ console.log('PASS Generic actual DOM/native Java entry separation, selected/unselected projection, Lua add/order, no-op bytes/mtime and exact component approvals');
 }
 if(chosen('R1')){
  await opened();await page.locator('[data-configuration-tab="components"]').click();await idle();

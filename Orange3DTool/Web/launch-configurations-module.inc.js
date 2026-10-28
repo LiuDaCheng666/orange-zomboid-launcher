@@ -355,7 +355,8 @@ const launchConfigurationUi = (() => {
             !editor.ids.includes(r.id) &&
             !editor.view.frozen?.managedIds.includes(r.id) &&
             !r.componentManaged &&
-            !r.component,
+            !r.component &&
+            (editor.frozen || editor.id === "steam" || !r.javaComponent),
         )
         .filter((r) => `${r.name} ${r.id}`.toLowerCase().includes(query))
         .map(
@@ -1022,7 +1023,7 @@ const launchConfigurationUi = (() => {
           row = (editor.sources || editor.catalog).find(
             (r) => (r.token || r.id) === key,
           );
-        if (!row) return;
+        if (!row || (!editor.frozen && editor.id !== "steam" && row.javaComponent)) return;
         editor.ids.push(row.id);
         if (
           row.token &&
