@@ -113,7 +113,7 @@ namespace PZ3D {
    string reason=LauncherLaunch.PreparationReason(e,busy,running);items.Add(Item("launch-config",reason==""?"ok":"error","启动配置",reason==""?"启动器配置已就绪。":reason,"home"));
    try{e.GuardLaunch();if(LaunchProfiles.Pending(e))throw new IOException("上一次启动会话尚未结束或清理。");
     if(e.OwnedConfiguration.Mode!="vanilla"){
-     var components=e.OwnedComponents();var current=components.CaptureCurrent(System.Threading.CancellationToken.None);var warnings=new List<string>();var catalog=SaveProfiles.Entries(e,warnings);string[] ordinary=kind=="save"&&e.OwnedConfiguration.ProfileId==null?SaveProfiles.LaunchMods(e,target,new LaunchReadBudget(1048576)):null;
+     var components=e.OwnedComponents();string[] ordinary=kind=="save"&&e.OwnedConfiguration.ProfileId==null?SaveProfiles.LaunchMods(e,target,new LaunchReadBudget(1048576)):null;var current=components.CaptureCurrent(System.Threading.CancellationToken.None,ordinary);var warnings=new List<string>();var catalog=SaveProfiles.Entries(e,warnings);
      var plan=components.PlanEnabled(current,catalog.ToArray(),System.Threading.CancellationToken.None,ordinary);
      foreach(var row in current.Rows.Where(r=>r.Enabled&&r.Jar!=null&&r.Id!="ZombieBuddy"))if(row.Decision!=true)throw new IOException(row.Name+"：请先确认当前 Java 文件授权。");
      if(evidence!=null)evidence.Expect(()=>components.RequireCurrent(current));

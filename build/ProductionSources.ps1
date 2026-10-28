@@ -68,7 +68,7 @@ function Get-OzlProductionSources {
         'LauncherContact.cs',
         'LauncherConfiguration.cs',
         'LaunchConfigurationProfiles.cs',
-        'LauncherComponents.cs',
+        'LauncherComponents.cs', 'OwnedSupportInstallations.cs',
         'LiveModDiscovery.cs',
         'LauncherDiagnostics.cs',
         'LauncherFeatures.cs',

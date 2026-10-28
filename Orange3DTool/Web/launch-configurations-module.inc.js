@@ -19,9 +19,13 @@ const launchConfigurationUi = (() => {
     "serverList",
     "status",
     "modCatalog",
+    "modDetail",
+    "modCover",
+    "saveGet",
     "modProfiles",
     "memoryGet",
     "memorySave",
+    "saveSave",
     "javaList",
     "javaSave",
     "javaComponentsList",
@@ -57,6 +61,9 @@ const launchConfigurationUi = (() => {
   const pureReads = new Set([
     "status",
     "modCatalog",
+    "modDetail",
+    "modCover",
+    "saveGet",
     "modProfiles",
     "memoryGet",
     "javaList",
@@ -98,18 +105,11 @@ const launchConfigurationUi = (() => {
     const id = selectedId(),
       epoch = model.epoch;
     const data = await ownerRequest(id, action, payload);
-    if (
-      (epoch !== model.epoch || id !== selectedId()) &&
-      [
-        "status",
-        "memoryGet",
-        "modCatalog",
-        "modProfiles",
-        "javaList",
-        "javaComponentsList",
-      ].includes(action)
-    )
-      throw Error("配置选择已变化，已忽略之前的读取。");
+    if ((epoch !== model.epoch || id !== selectedId()) && pureReads.has(action)) {
+      const superseded=Error("配置选择已变化，已忽略之前的读取。");
+      superseded.supersededConfiguration=true;
+      throw superseded;
+    }
     return data;
   };
   const kind = (row) =>
@@ -139,16 +139,17 @@ const launchConfigurationUi = (() => {
     model.selected = row;
     model.cover = null;
     if (!row?.available) return;
-    const [status, memory] = await Promise.all([
-      ownerRequest(id, "status"),
-      ownerRequest(id, "memoryGet"),
-    ]);
-    if (epoch !== model.epoch || id !== selectedId()) return;
-    if (status.components && independentCore(status.components))
-      status.components = status.components.filter((c) => c.id !== "base");
-    model.cover = { status, memory };
-    state.actual.memory = memory;
-    acceptStatus(status, { intentionalSelection: intentionalSelection ? id : null });
+    const [statusResult,memoryResult]=await Promise.allSettled([ownerRequest(id,"status"),ownerRequest(id,"memoryGet")]);
+    if(epoch!==model.epoch||id!==selectedId())return;
+    if(statusResult.status==='fulfilled'){
+      const status=statusResult.value,memory=memoryResult.status==='fulfilled'?memoryResult.value:null;
+      if(status.components&&independentCore(status.components))status.components=status.components.filter(c=>c.id!=='base');
+      model.cover={status,memory};
+      if(memory)state.actual.memory=memory;else delete state.actual.memory;
+      acceptStatus(status,{intentionalSelection:intentionalSelection?id:null});
+    }
+    if(statusResult.status==='rejected')throw statusResult.reason;
+    if(memoryResult.status==='rejected')throw memoryResult.reason;
   }
   async function reload(intentionalSelection = false) {
     if (model.reading) return model.reading;
@@ -174,8 +175,15 @@ const launchConfigurationUi = (() => {
     return model.reading;
   }
   async function select(id) {
+    state.notice='';state.noticeRoute='';
     const epoch = ++model.epoch;
+    const oldSelected=model.selected,oldCover=model.cover,oldList=model.list,oldId=selectedId();
+    const draftKeys=['modProfile','modProfileMods','modProfileDirty','modProfileName','modProfileSaveFeedback','modProfileSaveError','modSortReport'];
+    let selectionCommitted=false;
+    const before={};for(const key of [...draftKeys,'modProfiles','modCatalog','java','memory','actual','playProfiles','playPreview','preflight'])before[key]=state[key];
+    model.modWorkspaces ||= new Map();model.modWorkspaces.set(oldId,Object.fromEntries(draftKeys.map(key=>[key,state[key]])));
     model.selecting = id;
+    libraryUi.invalidateJavaComponents();
     model.selected = model.list?.configurations.find((row) => row.id === id);
     model.cover = null;
     render();
@@ -188,17 +196,27 @@ const launchConfigurationUi = (() => {
     state.java = null;
     state.memory = null;
     state.modCatalog = null;
-    libraryUi.model.javaRequested = false;
-    libraryUi.model.epoch++;
+    state.modProfiles = null;
+    state.modProfile = null;
+    state.modProfileMods = [];
+    state.modProfileDirty = false;
+    state.modProfileReadSequence++;
+    state.modSortReport = null;
+    state.modReadRevision=(state.modReadRevision||0)+1;
+    state.javaRevision=(state.javaRevision||0)+1;
+    state.loading.modProfiles=false;state.loading.modCatalog=false;state.loading.modProfile=false;state.loading.java=false;
+    const cached=model.modWorkspaces.get(id);if(cached)Object.assign(state,cached);
     try {
       const list = await raw("launchConfigurationSelect", { id });
       if (epoch !== model.epoch) return;
+      selectionCommitted=true;
       model.list = list;
       model.selected = list.configurations.find((r) => r.id === id);
       render();
       await readCover(id, epoch, true);
+      if(epoch===model.epoch&&state.route==='mods'){void load('modProfiles',true);void load('modCatalog',true);}
     } catch (error) {
-      if (epoch === model.epoch) model.error = error.message;
+      if (epoch === model.epoch) {model.error=error.message;if(!selectionCommitted){model.selected=oldSelected;model.cover=oldCover;model.list=oldList;Object.assign(state,before);}}
     } finally {
       if (epoch === model.epoch) {
         model.selecting = "";
@@ -344,34 +362,34 @@ const launchConfigurationUi = (() => {
     const editor = model.editor;
     if (!editor) return;
     const root = editor.element,
-      query = editor.search.toLowerCase();
+      query = editor.search.toLowerCase(),
+      enabledQuery = (editor.enabledSearch || "").toLowerCase();
+    root.querySelector("[data-configuration-mods]").closest(".mod-pane").querySelector("h2").textContent=editor.dirty?"待保存清单":editor.frozen?"快照已启用":"已启用";
+    root.querySelector("[data-configuration-available]").closest(".mod-pane").querySelector("h2").textContent=editor.frozen?"当前来源":"全部模组";
     root.querySelector("[data-configuration-mods]").innerHTML =
       editor.ids
         .filter((id) =>
-          `${meta(editor, id).name} ${id}`.toLowerCase().includes(query),
+          `${meta(editor, id).name} ${id}`.toLowerCase().includes(enabledQuery),
         )
         .map((id) => {
-          const row = meta(editor, id),
+          const rawRow = meta(editor, id),row=rawRow.mod||rawRow,
             index = editor.ids.indexOf(id);
-          return `<li data-configuration-mod="${esc(id)}"><button class="mod-drag-handle" data-mod-drag="${esc(id)}" data-mod-drag-kind="configuration" aria-label="拖动 ${esc(row.name || id)} 调整顺序" ${editor.saving ? "disabled" : ""}>⠿</button><span class="order-number">${index + 1}.</span><div class="ordered-info"><div><h3>${esc(row.name || id)}</h3><span class="small">${esc(id)}</span>${row.workshopId ? `<button data-mod-workshop="${esc(row.workshopId)}">工坊原页 ↗</button>` : ""}</div></div><div class="actions"><button data-configuration-up="${esc(id)}" ${index === 0 || editor.saving ? "disabled" : ""} aria-label="上移 ${esc(row.name || id)}">↑</button><button data-configuration-down="${esc(id)}" ${index === editor.ids.length - 1 || editor.saving ? "disabled" : ""} aria-label="下移 ${esc(row.name || id)}">↓</button><button data-configuration-remove="${esc(id)}" ${editor.saving ? "disabled" : ""}>移除</button></div></li>`;
+          return `<li data-configuration-mod="${esc(id)}" data-mod-row="${esc(id)}"><button class="mod-drag-handle" data-mod-drag="${esc(id)}" data-mod-drag-kind="configuration" aria-label="拖动 ${esc(row.name || id)} 调整顺序" ${editor.saving ? "disabled" : ""}>⠿</button><span class="order-number">${index + 1}.</span><div class="ordered-info"><div><h3>${esc(row.name || id)}</h3>${buddyDependencyBadge(row,[...(editor.catalog||[]),...(editor.sources||[])])}${modDependencyStates(row,editor.ids,[...(editor.catalog||[]),...(editor.sources||[])],editor.status)}<span class="small">${esc(id)}</span>${row.workshopId ? `<button data-mod-workshop="${esc(row.workshopId)}">工坊原页 ↗</button>` : ""}</div></div><div class="actions"><button data-configuration-up="${esc(id)}" ${index === 0 || editor.saving ? "disabled" : ""} aria-label="上移 ${esc(row.name || id)}">↑</button><button data-configuration-down="${esc(id)}" ${index === editor.ids.length - 1 || editor.saving ? "disabled" : ""} aria-label="下移 ${esc(row.name || id)}">↓</button><button data-configuration-remove="${esc(id)}" ${editor.saving ? "disabled" : ""}>移除</button></div>${modDetailsMarkup(row,editor.frozen&&!editor.catalog.some(item=>item.id===id)?'configuration-source':'configuration-enabled')}</li>`;
         })
         .join("") || "<li>没有符合搜索条件的模组。</li>";
     root.querySelector("[data-configuration-available]").innerHTML =
       (editor.sources || editor.catalog || [])
         .filter(
           (r) =>
-            !editor.ids.includes(r.id) &&
-            !editor.view.frozen?.managedIds.includes(r.id) &&
-            !r.componentManaged &&
-            !r.component &&
-            (editor.frozen || editor.id === "steam" || !r.javaComponent),
+            r.installationComponent !== true && r.id !== "ZombieBuddy",
         )
         .filter((r) => `${r.name} ${r.id}`.toLowerCase().includes(query))
         .map(
           (r, index) =>
-            `<div class="configuration-source"><span>${esc(r.name || r.id)} <small>${esc({ user: "本机模组", workshop: "工坊", local: "本机模组" }[r.sourceKind || r.source] || "当前来源")}${r.workshopId ? " · 工坊 " + esc(r.workshopId) : ""}</small></span><button data-configuration-add="${index}" data-source-key="${esc(r.token || r.id)}" ${editor.saving ? "disabled" : ""}>${editor.frozen ? "复制到快照" : "添加"}</button></div>`,
+            `<div class="configuration-source" data-mod-row="${esc(r.id)}"><span>${esc(r.name || r.id)} ${buddyDependencyBadge(r,[...(editor.catalog||[]),...(editor.sources||[])])}<small>${esc({ user: "本机模组", workshop: "工坊", local: "本机模组" }[r.sourceKind || r.source] || "当前来源")}${r.workshopId ? " · 工坊 " + esc(r.workshopId) : ""}</small></span><button data-configuration-add="${index}" data-source-key="${esc(r.token || r.id)}" ${editor.saving || editor.ids.includes(r.id) ? "disabled" : ""}>${editor.ids.includes(r.id) ? editor.dirty?"已选":"已启用" : editor.frozen ? "复制到快照" : "添加"}</button>${modDetailsMarkup(r.mod||r,'configuration-source')}</div>`,
         )
         .join("") || '<p class="small">没有可添加的匹配项。</p>';
+    applyRichDescription(root);observeCovers();
   }
   async function readComponents(editor, epoch = editor.epoch) {
     const [inventory, approvals, status] = await Promise.all([
@@ -381,48 +399,21 @@ const launchConfigurationUi = (() => {
     ]);
     if (model.editor !== editor || epoch !== editor.epoch) return;
     editor.inventory = inventory;
+    libraryUi.acceptJavaComponents(editor.id, inventory, approvals);
     editor.approvals = approvals;
     editor.status = status;
     paintComponents(editor);
   }
   function paintComponents(editor) {
-    if (model.editor !== editor) return;
-    const rows = editor.inventory?.rows || [],
-      approvals = editor.approvals?.jars || [],
-      root = editor.element.querySelector("[data-configuration-components]");
-    const disclosure = root.querySelector(
-        "[data-known-component-sources]",
-      )?.open,
-      workshop = root.querySelector("[data-configuration-workshop]")?.value;
-    root.innerHTML = `<p class="small">${editor.frozen ? "停用保留副本；移除会删除最后一个未被引用的副本。" : "组件更改立即保存到此配置；从此配置移除会保留原工坊文件。"}模组草稿单独保存。</p><div class="configuration-component-grid">${
-      rows
-        .map((r, index) => {
-          const approval = r.enabled
-            ? approvals.find((j) => j.id === r.modId)
-            : null;
-          return `<article class="card" data-configuration-component="${esc(r.modId)}" data-configuration-source-token="${esc(r.token)}"><h3>${esc((editor.frozen ? meta(editor, r.modId).name : r.name) || r.name || r.modId)}</h3><p class="small">${esc(r.workshopId ? "工坊 " + r.workshopId : r.sourceLabel || (editor.frozen ? "快照副本" : "本地来源"))}</p><p>${r.enabled ? "已启用" : "未启用"}${r.jarState === "missing" ? " · 文件缺失" : ""}${r.jarState === "ready" ? " · Java " + (approval?.decision === true ? "已允许" : approval?.decision === false ? "已拒绝" : "待授权") : ""}</p><div class="actions"><button data-configuration-component-toggle="${index}" data-configuration-write>${r.enabled ? "停用" : "启用"}</button><button data-configuration-component-remove="${index}" data-configuration-write ${r.canUninstall ? "" : "disabled"}>${editor.frozen ? "移除副本" : "从此配置移除"}</button>${approval ? `<button data-configuration-approve="${esc(approval.approvalToken || approval.sha256)}" data-configuration-decision="${approval.decision !== true}" data-configuration-write>${approval.decision === true ? "拒绝 Java 文件" : "允许此 Java 文件"}</button>` : ""}</div>${approval ? `<details data-configuration-java-source><summary>来源与 Java 文件</summary><p>${editor.frozen ? "此快照中的固定副本" : "此配置所选的当前文件"}</p><p class="small">Java 包 ${esc(r.packageName || "未声明")}</p><p class="key">SHA-256 ${esc(approval.sha256)}</p></details>` : ""}${r.workshopId ? `<button data-mod-workshop="${esc(r.workshopId)}">工坊原页 ↗</button>` : ""}${(r.limitations || []).length ? '<p class="small">' + r.limitations.map(esc).join(" · ") + "</p>" : ""}</article>`;
-        })
-        .join("") || "<p>没有已读取的组件。</p>"
-    }</div><details data-known-component-sources><summary>已知组件与下载</summary><div class="actions">${(
-      editor.status?.components || []
-    )
-      .filter(
-        (r) =>
-          r.id !== "base" &&
-          ["buddy", "viewpoint", ...Object.keys(items)].includes(r.id),
-      )
-      .map(
-        (r) =>
-          `<button data-configuration-known="${esc(r.id)}" data-configuration-write>${r.configured ? "重新核对" : "安装 / 启用"} ${esc(r.title)}</button>`,
-      )
-      .join(
-        "",
-      )}</div><label>工坊项目 ID<input inputmode="numeric" data-configuration-workshop placeholder="输入工坊项目 ID"></label><button data-configuration-download data-configuration-write>下载并选择组件</button><p class="small">新 Java 文件需要单独授权；下载不会自动允许新文件。</p></details>`;
-    if (disclosure !== undefined)
-      root.querySelector("[data-known-component-sources]").open = disclosure;
-    if (workshop !== undefined)
-      root.querySelector("[data-configuration-workshop]").value = workshop;
-    if (editor.saving) editorStatus(editor, editor.message, true);
+    if(model.editor!==editor)return;
+    const all=editor.inventory?.rows||[],isFramework=row=>row.installationComponent===true||row.componentKind==='framework'||row.modId==='ZombieBuddy',rows=all.filter(isFramework),approvals=editor.approvals?.jars||[],root=editor.element.querySelector('[data-configuration-components]');
+    const rowMarkup=row=>{const index=all.indexOf(row),approval=row.enabled?approvals.find(j=>j.id===row.modId):null,key=Object.keys(componentModIds).find(key=>componentModIds[key]===row.modId),item=row.workshopId||editor.status?.components?.find(c=>c.id===key)?.item;
+      return `<article class="configuration-component-row" data-configuration-component="${esc(row.modId)}" data-configuration-source-token="${esc(row.token)}">${item?componentCover(key,item,row.name):'<span class="configuration-component-symbol" aria-hidden="true">⚙</span>'}<div class="configuration-component-info"><h3>${esc(knownComponentDetails[key]?.[0]||row.name||row.modId)}</h3><p class="small">${esc(row.modId)}${row.workshopId?' · 工坊 '+esc(row.workshopId):''}</p><p class="small ${row.enabled?'status-positive':''}">${row.enabled?'已启用':'未启用'}${row.jarState==='missing'?' · 文件缺失':''}</p>${approval?`<details data-configuration-java-source><summary>Java 文件与授权</summary><p class="small">Java 包 ${esc(row.packageName||'未声明')}</p><p class="key">SHA-256 ${esc(approval.sha256)}</p></details>`:''}${row.limitations?.length?'<p class="small status-warning">'+row.limitations.map(esc).join(' · ')+'</p>':''}</div><div class="actions">${approval?`<button data-configuration-approve="${esc(approval.approvalToken||approval.sha256)}" data-configuration-decision="${approval.decision!==true}" data-configuration-write>${approval.decision===true?'拒绝 Java 文件':'允许此 Java 文件'}</button>`:''}<button data-configuration-component-toggle="${index}" data-configuration-write ${row.enabled?'':'class="primary"'}>${row.enabled?'停用':'启用'}</button>${row.canUninstall?`<button data-configuration-component-remove="${index}" data-configuration-write>${editor.frozen?'移除副本':'从此配置移除'}</button>`:''}</div></article>`;
+    };
+    const missing=(editor.status?.components||[]).filter(c=>c.installationComponent===true||c.componentKind==='framework'||c.id==='buddy').filter(c=>!rows.some(row=>row.modId===componentModIds[c.id]));
+    if(!root)return;
+    root.innerHTML=`<div class="configuration-component-toolbar"><div><strong>加载框架与安装组件</strong><p class="small">这里只管理需要单独安装的框架。依赖 Buddy 的模组在模组清单中启用和排序。</p></div></div>${rows.map(rowMarkup).join('')}${missing.map(c=>`<article class="configuration-component-row">${componentCover(c.id,c.item,c.title)}<div class="configuration-component-info"><h3>${esc(knownComponentDetails[c.id]?.[0]||c.title)}</h3><p class="small">${c.configured?'已启用':'尚未安装'}</p></div><button data-configuration-known="${esc(c.id)}" data-configuration-write>${c.configured?'重新应用':'安装并启用'}</button></article>`).join('')}${!rows.length&&!missing.length?'<p class="small">此配置没有需要单独安装的框架。</p>':''}`;
+    if(editor.saving)editorStatus(editor,editor.message,true);
   }
   async function openEditor(id = selectedId(), tab = "mods") {
     if (model.editor) {
@@ -436,7 +427,7 @@ const launchConfigurationUi = (() => {
       id,
       element,
       epoch: 0,
-      tab,
+      tab: "mods",
       reading: true,
       readRequests: new Set(),
       ids: [],
@@ -471,15 +462,15 @@ const launchConfigurationUi = (() => {
       editor.frozen = view.kind === "frozen";
       editor.ids = [...view.ordinaryIds];
       const named = view.kind === "live";
-      element.querySelector("h2").textContent = view.name + " · " + kind(view);
+      element.querySelector("h2").textContent = (editor.frozen ? "快照 " + view.name + " 的模组" : view.name + " · " + kind(view));
       element.querySelector("[data-configuration-editor-body]").innerHTML =
-        `${named ? `<div class="configuration-fields"><label>配置名称<input data-configuration-name maxlength="100" value="${esc(view.name)}"></label><button data-configuration-rename data-configuration-write>保存名称</button><label>游戏版本<select data-configuration-version>${versionOptions(view.versionId)}</select></label><button data-configuration-set-version data-configuration-write>保存版本</button></div>` : `<p>游戏版本：${esc(view.frozen?.gameVersion || model.selected?.version || view.versionId)}${editor.frozen ? " · 副本版本已固定" : ""}</p>`}${!view.available ? `<p class="status-warning">${esc(view.message)}</p>` : ""}<div class="configuration-tabs"><button data-configuration-tab="mods" aria-pressed="${tab === "mods"}">模组</button><button data-configuration-tab="components" aria-pressed="${tab === "components"}">组件</button></div><section data-configuration-area="mods" ${tab !== "mods" ? "hidden" : ""}><p>${editor.frozen ? "新增模组会保存当前文件；工坊更新不会改变这份快照。" : "使用所选版本和当前模组文件。普通模组清单保存后生效。"}</p><label>搜索模组<input type="search" data-configuration-search placeholder="搜索已选和可添加的模组"></label><ol class="enabled-mods configuration-mods" data-configuration-mods></ol><div class="actions"><button class="primary" data-configuration-save data-configuration-write ${!view.available || id === "steam" || id === "vanilla" ? "disabled" : ""}>保存模组清单</button><button data-configuration-sort data-configuration-write ${!view.available ? "disabled" : ""}>自动排序</button></div><details data-configuration-catalog open><summary>添加当前模组</summary><div data-configuration-available></div></details></section><section data-configuration-area="components" ${tab !== "components" ? "hidden" : ""}><div data-configuration-components>正在读取组件…</div></section>${named ? '<button class="danger" data-configuration-delete data-configuration-write>删除此配置</button>' : ""}`;
+        `${named ? `<div class="configuration-fields"><label>配置名称<input data-configuration-name maxlength="100" value="${esc(view.name)}"></label><button data-configuration-rename data-configuration-write>保存名称</button><label>游戏版本<select data-configuration-version>${versionOptions(view.versionId)}</select></label><button data-configuration-set-version data-configuration-write>保存版本</button></div>` : `<p>游戏版本：${esc(view.frozen?.gameVersion || model.selected?.version || view.versionId)}${editor.frozen ? " · 副本版本已固定" : ""}</p>`}${!view.available ? `<p class="status-warning">${esc(view.message)}</p>` : ""}<section data-configuration-area="mods"><p>${editor.frozen ? "右侧使用此快照保存的副本；左侧为当前来源，新增时复制到此快照。启动继续使用该副本。" : "勾选要使用的模组，在右侧调整顺序后保存。"}</p><div class="mod-dual-pane configuration-dual-pane"><section class="mod-pane"><div class="mod-pane-heading"><h2>全部模组</h2></div><input type="search" data-configuration-search aria-label="搜索全部模组" placeholder="搜索名称或 ID"><div class="configuration-source-list" data-configuration-available></div></section><section class="mod-pane"><div class="mod-pane-heading"><h2>已启用</h2><button data-configuration-sort data-configuration-write ${!view.available ? "disabled" : ""}>自动排序</button></div><input type="search" data-configuration-enabled-search aria-label="搜索已启用模组" placeholder="在已启用模组中搜索"><ol class="enabled-mods configuration-mods" data-configuration-mods></ol></section></div><div class="actions"><button class="primary" data-configuration-save data-configuration-write ${!view.available || id === "steam" || id === "vanilla" ? "disabled" : ""}>保存模组清单</button></div></section>${named ? '<button class="danger" data-configuration-delete data-configuration-write>删除此配置</button>' : ""}`;
       const saveActions = element
         .querySelector("[data-configuration-save]")
         ?.closest(".actions");
       if (saveActions) {
         saveActions.classList.add("configuration-editor-actions");
-        saveActions.hidden = tab !== "mods";
+        saveActions.hidden = false;
         element.append(saveActions);
       }
       if (!view.available) {
@@ -500,8 +491,11 @@ const launchConfigurationUi = (() => {
         editor.catalog = catalog.mods || [];
       }
       paintMods();
-      if (editor.tab === "components") await readComponents(editor);
-      editorStatus(editor, editor.tab === "components" ? "组件更改会立即保存到此配置。" : "模组清单尚未修改。组件操作会单独保存。");
+      observeCovers();
+      editor.status = await ownerRequest(editor.id, "status", {}, editor);
+      if (model.editor !== editor) return;
+      paintMods();
+      editorStatus(editor, "模组清单尚未修改。");
     } catch (error) {
       if (model.editor === editor) {
         if (!editor.view) element.querySelector("h2").textContent = /取消/.test(error.message) ? "读取已取消" : "配置读取未完成";
@@ -520,7 +514,7 @@ const launchConfigurationUi = (() => {
     if (!editor.view) { const { id, tab } = editor; await closeEditor(); return openEditor(id, tab); }
     const epoch = ++editor.epoch;
     editor.reading = true;
-    editorStatus(editor, "正在读取此配置，模组草稿会保留…");
+    editorStatus(editor, "正在读取此配置，模组草稿会保留…", true);
     try {
       const view = await readView(editor);
       let catalog, sources;
@@ -542,7 +536,7 @@ const launchConfigurationUi = (() => {
       editor.catalog = catalog;
       editor.sources = sources;
       if (!editor.dirty) editor.ids = [...view.ordinaryIds];
-      await readComponents(editor, epoch);
+      editor.status = await ownerRequest(editor.id, "status", {}, editor);
       if (model.editor === editor && epoch === editor.epoch) {
         paintMods();
         editorStatus(editor, "已重新读取，未保存的模组草稿保留。");
@@ -583,7 +577,7 @@ const launchConfigurationUi = (() => {
       editor.dirty &&
       !(await confirm(
         "放弃未保存的模组清单？",
-        "仅放弃模组草稿。已完成的组件更改仍保留。",
+        "尚未保存的模组选择和顺序将被放弃。",
       ))
     )
       return;
@@ -608,6 +602,7 @@ const launchConfigurationUi = (() => {
     let completedMessage = "";
     try {
       const result = await operation();
+      if(model.componentView?.id===editor.id)model.componentView=null;
       editor.message = result?.message || "此配置的操作已完成。";
       completedMessage = editor.message;
       if (result?.configuration && editor.frozen)
@@ -628,7 +623,7 @@ const launchConfigurationUi = (() => {
         ? completedMessage + " 状态读取未完成，请重新读取。"
         : (/^无法原子保存快照元数据/.test(error.message)
             ? "快照配置文件未能写入，文件可能被占用。"
-            : error.message) + " 模组草稿已保留，可重试。";
+            : error.message) + (editor.dirty ? " 模组草稿已保留，可重试。" : "");
     } finally {
       editor.saving = false;
       job.active = false;
@@ -667,7 +662,7 @@ const launchConfigurationUi = (() => {
       editor.frozen
         ? "正在核对并复制所选当前文件…"
         : "正在保存此配置的模组清单…",
-      { components: editor.frozen, cover: editor.frozen },
+      { components: false, cover: true },
     );
   }
   async function componentAction(editor, row, operation) {
@@ -759,6 +754,10 @@ const launchConfigurationUi = (() => {
   document.addEventListener("input", (event) => {
     const editor = model.editor;
     if (!editor || !event.target.closest("#configuration-editor")) return;
+    if (event.target.matches("[data-configuration-enabled-search]")) {
+      editor.enabledSearch = event.target.value;
+      paintMods();
+    }
     if (event.target.matches("[data-configuration-search]")) {
       editor.search = event.target.value;
       paintMods();
@@ -778,7 +777,7 @@ const launchConfigurationUi = (() => {
       if (button.hasAttribute("data-configuration-edit"))
         return void openEditor();
       if (button.hasAttribute("data-configuration-components-open"))
-        return void openEditor(selectedId(), "components");
+        return void openEditor(selectedId(), "mods");
       if (button.hasAttribute("data-configuration-reload"))
         return void reload();
       if (button.dataset.configurationJobDismiss) {
@@ -869,7 +868,7 @@ const launchConfigurationUi = (() => {
             });
             editor.view.name = view.name;
             editor.element.querySelector("h2").textContent =
-              view.name + " · " + kind(view);
+              (editor.frozen ? "快照 " + view.name + " 的模组" : view.name + " · " + kind(view));
             model.list = null;
             await reload();
             return { message: "配置名称已保存。" };
@@ -1054,7 +1053,7 @@ const launchConfigurationUi = (() => {
           row = (editor.sources || editor.catalog).find(
             (r) => (r.token || r.id) === key,
           );
-        if (!row || (!editor.frozen && editor.id !== "steam" && row.javaComponent)) return;
+        if (!row || row.installationComponent === true || row.id === "ZombieBuddy") return;
         editor.ids.push(row.id);
         if (
           row.token &&
@@ -1137,12 +1136,10 @@ const launchConfigurationUi = (() => {
     );
   const previousComponents = components;
   components = function () {
-    return (
-      heading(
-        '<button data-configuration-components-open class="primary">编辑此配置的组件</button>',
-      ) +
-      `<section class="card"><h2>${esc(model.selected?.name || "启动配置")}</h2><p>${esc(description(model.selected))}</p><p>组件启用与 Java 授权属于此启动配置。普通模组清单在同一个编辑器中单独保存。</p><button data-configuration-components-open>管理组件与授权</button>${selectedId() === "steam" ? "<button data-buddy-scan>扫描 Steam 配置</button><button data-force-takeover>强制接管</button>" + buddyPanel() : ""}</section>`
-    );
+    const id=selectedId(),row=model.list?.configurations.find(row=>row.id===id),name=row?.name||'启动配置';
+    const label=`<section class="component-configuration-label" data-component-configuration><label for="launch-configuration-select">启动配置<select id="launch-configuration-select" ${!model.list?'disabled':''}>${(model.list?.configurations||[{id:'launcher',name:'启动器配置'}]).map(option=>`<option value="${esc(option.id)}" ${option.id===id?'selected':''}>${esc(option.name)}${option.version?' · '+esc(option.version):''}${option.available===false?' · 版本不可用':''}</option>`).join('')}</select></label><button data-page="mods">查看模组配置</button></section>`;
+    if(state.status?.configurationId!==id)return heading()+label+'<p class="read-pending">正在读取当前配置…</p>';
+    return previousComponents().replace('<div data-quick-config-slot></div>',label);
   };
   return {
     model,

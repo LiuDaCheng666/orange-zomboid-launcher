@@ -23,15 +23,16 @@ const settled = page => page.evaluate(() => Promise.all(document.getAnimations()
   .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime))
   .map(animation => animation.finished.catch(() => {}))));
 const open = async page => {
-  await page.locator('[data-configuration-components-open]').first().click();
+  await page.locator('[data-configuration-edit]').first().click();
   await ready(page);
 };
 const revisit = async page => {
   await page.locator('nav [data-page="saves"]').click();
   await page.locator('nav [data-page="components"]').click();
+  await page.locator('nav [data-page="home"]').click();
 };
 
-test('native close releases the editor and both component entry buttons reopen it', async page => {
+test('native close releases the editor and the current edit entry reliably reopens it', async page => {
   await open(page);
   // Exercise HTMLDialogElement's actual close event, rather than the custom Close handler.
   await nativeClose(page);
@@ -40,7 +41,7 @@ test('native close releases the editor and both component entry buttons reopen i
   assert.equal(await page.locator('#configuration-editor').count(), 0);
   await revisit(page);
   for (let i=0; i<2; i++) {
-    await page.locator('[data-configuration-components-open]').nth(i).click();
+    await page.locator('[data-configuration-edit]').first().click();
     await ready(page);
     await page.locator('[data-configuration-close]').click();
     assert.equal(await current(page), null);
@@ -62,13 +63,13 @@ test('a queued old close cannot clear the replacement editor', async page => {
     'reopen must recover even before the previous close event is delivered');
   await page.waitForFunction(() => !previousEditor.element.isConnected);
   assert.equal(await page.locator('#configuration-editor[open]').count(), 1);
-  await page.locator('[data-configuration-tab="mods"]').click();
+  assert.equal(await page.locator('[data-configuration-area="mods"]').isVisible(),true);
   assert.equal(await page.locator('[data-configuration-search]').isVisible(), true);
 });
 
 test('closed pending reads are cancelled and late responses cannot change a new editor', async page => {
   await page.evaluate(() => fx.hold='configurationRead');
-  await page.locator('[data-configuration-components-open]').first().click();
+  await page.locator('[data-configuration-edit]').first().click();
   await page.waitForFunction(() => held.some(message => message.action==='configurationRead'));
   const readId = await page.evaluate(() => held.find(message => message.action==='configurationRead').payload.readId);
   await nativeClose(page);
@@ -78,7 +79,7 @@ test('closed pending reads are cancelled and late responses cannot change a new 
   await page.evaluate(() => fx.hold='');
   await revisit(page);
   await open(page);
-  await page.locator('[data-configuration-tab="mods"]').click();
+  assert.equal(await page.locator('[data-configuration-area="mods"]').isVisible(),true);
   await page.locator('[data-configuration-search]').fill('保留新窗口输入');
   await page.evaluate(() => held.splice(0).forEach(replyNative));
   await page.waitForFunction(() => !orange.launchConfigurationUi.editor().readRequests.size);
@@ -102,7 +103,7 @@ test('failed dialog presentation clears ownership and the next click retries', a
       throw new DOMException('测试：窗口未能打开', 'InvalidStateError');
     };
   });
-  await page.locator('[data-configuration-components-open]').first().click();
+  await page.locator('[data-configuration-edit]').first().click();
   await page.waitForFunction(() => document.querySelector('#notice')?.textContent.includes('测试：窗口未能打开'));
   assert.equal(await current(page), null);
   assert.equal(await page.locator('#configuration-editor').count(), 0);
@@ -111,8 +112,8 @@ test('failed dialog presentation clears ownership and the next click retries', a
 
 test('a delayed discard confirmation cannot close a different editor', async page => {
   await open(page);
-  await page.locator('[data-configuration-tab="mods"]').click();
-  await page.locator('[data-configuration-available] button').first().click();
+  assert.equal(await page.locator('[data-configuration-area="mods"]').isVisible(),true);
+  await page.locator('[data-configuration-available] button:not(:disabled)').first().click();
   await page.locator('[data-configuration-close]').click();
   await page.locator('#confirm[open]').waitFor();
   await nativeClose(page);
@@ -128,8 +129,8 @@ test('a delayed discard confirmation cannot close a different editor', async pag
 
 test('Escape keeps a dirty draft until one explicit discard and ordinary Close reopens', async page => {
   await open(page);
-  await page.locator('[data-configuration-tab="mods"]').click();
-  await page.locator('[data-configuration-available] button').first().click();
+  assert.equal(await page.locator('[data-configuration-area="mods"]').isVisible(),true);
+  await page.locator('[data-configuration-available] button:not(:disabled)').first().click();
   const ids = await page.evaluate(() => [...orange.launchConfigurationUi.editor().ids]);
   await page.keyboard.press('Escape');
   await page.locator('#confirm-no').click();
@@ -152,7 +153,7 @@ test('Escape keeps a dirty draft until one explicit discard and ordinary Close r
       const {page, errors} = await setup(browser);
       await page.evaluate(() => addEventListener('unhandledrejection', event => {window.lifecycleRejections ||= [];lifecycleRejections.push(String(event.reason));}));
       try {
-        await route(page, 'components');
+        await route(page, 'home');
         await item.run(page);
         assert.deepEqual(errors, []);
         assert.deepEqual(await page.evaluate(() => window.lifecycleRejections || []), []);

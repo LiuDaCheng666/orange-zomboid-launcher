@@ -19,7 +19,7 @@ namespace PZ3D {
   internal sealed class Row {
    public string sourceLabel="";
    public string token,modId,name,version,packageName,workshopId,sourceKind,managedKey="",preloadState="unknown",approvalState="notChecked",jarState="missing",receiptId="";
-   public bool enabled,defaultEnabled,canEnable,canDisable,canUninstall,canRestore,canBlock,javaBlocked;
+   public bool enabled,defaultEnabled,canEnable,canDisable,canUninstall,canRestore,canBlock,javaBlocked,installationComponent,requiresBuddy;
    public string[] requires=new string[0],conflicts=new string[0],limitations=new string[0];
   }
   internal sealed class Inventory {public string stamp,scannedUtc,actionRequired="";public bool incomplete;public string[] warnings;public Row[] rows;}

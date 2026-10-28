@@ -2,8 +2,11 @@ using System;using System.IO;using System.Linq;using System.Collections.Generic;
 namespace PZ3D {
  // All calls are pinned to a native-resolved Engine and a selected manifest generation.
  static class FrozenConfigurationEditor {
-  internal static string[] Components(SaveEnvironmentRecord row){return row.ActiveComponentIds??ModConfigurations.Managed(row.DefaultModIds).Concat(row.PreloadModIds).Distinct(StringComparer.Ordinal).ToArray();}
-  internal static string[] Managed(SaveEnvironmentRecord row){return row.ActiveManagedIds??Components(row);}
+  static string Canonical(string id){return id.TrimStart('\\');}
+  internal static bool ContainsId(IEnumerable<string> ids,string id){return ids.Any(value=>Canonical(value)==Canonical(id));}
+  internal static string[] Components(SaveEnvironmentRecord row){return (row.ActiveComponentIds??ModConfigurations.Managed(row.DefaultModIds).Concat(row.PreloadModIds)).Where(LauncherComponents.InstallationComponent).Select(Canonical).Distinct(StringComparer.Ordinal).ToArray();}
+  internal static string[] Managed(SaveEnvironmentRecord row){return (row.ActiveManagedIds??Components(row)).Where(LauncherComponents.InstallationComponent).Select(Canonical).Distinct(StringComparer.Ordinal).ToArray();}
+  internal static string[] Ordinary(SaveEnvironmentRecord row){var components=Components(row);return row.DefaultModIds.Where(id=>!ContainsId(components,id)).ToArray();}
   internal static SaveEnvironmentRecord Approve(Engine engine,string expected,string approvalToken,bool decision,CancellationToken cancellation,Action<SaveEnvironmentProgress> progress){
    using(SaveEnvironmentRuntime.AcquireRevisionEdit(engine)){var old=SaveEnvironments.FindOwned(engine.Data,engine.Game,engine.User);if(old.ManifestHash!=expected)throw new IOException("此快照配置已变化，请重新读取后授权。");SaveEnvironmentRuntime.ValidateOwnedRuntime(engine);var selected=(old.JavaRules??new FrozenJavaRule[0]).SingleOrDefault(r=>FrozenJavaPolicy.Token(r)==approvalToken);if(selected==null)throw new IOException("此 Java 文件尚未复制或来源已变化，请重新读取。");if(selected.Approved==decision)return old;var decisionSource=old.ShallowCopy();decisionSource.JavaRules=old.JavaRules.Select(r=>new FrozenJavaRule{ModId=r.ModId,JarPath=r.JarPath,Package=r.Package,Hash=r.Hash,Allowed=r.Allowed,Approved=r==selected?decision:r.Approved}).ToArray();var revised=old.ShallowCopy();FrozenJavaPolicy.Prepare(engine,decisionSource,revised,cancellation);return SaveEnvironments.PublishRevision(engine,old,revised,SaveEnvironmentRuntime.RevisionOutputs(old,revised),cancellation,progress);}
   }
@@ -14,7 +17,7 @@ namespace PZ3D {
   internal static SaveEnvironmentRecord SaveOrdinary(Engine engine,string expected,string[] ordinary,CancellationToken cancellation,Action<SaveEnvironmentProgress> progress){return Save(engine,expected,ordinary,Components(engine.FrozenEnvironment),new string[0],cancellation,progress);}
   internal static SaveEnvironmentRecord Save(Engine engine,string expected,string[] ordinary,string[] selectedComponents,string[] tokens,CancellationToken cancellation,Action<SaveEnvironmentProgress> progress){return SavePrepared(engine,expected,ordinary,selectedComponents,tokens,cancellation,progress,null);}
   internal static SaveEnvironmentRecord Recover(Engine engine,string expected){using(SaveEnvironmentRuntime.AcquireRevisionEdit(engine)){var row=SaveEnvironments.FindOwned(engine.Data,engine.Game,engine.User);if(row.ManifestHash!=expected)throw new IOException("快照配置已变化，请重新读取。");row.CleanupWarnings=SaveEnvironments.RetryRevisionCleanup(row);return row;}}
-  internal static SaveEnvironmentRecord Uninstall(Engine engine,string expected,string[] ids,CancellationToken cancellation,Action<SaveEnvironmentProgress> progress){var row=engine.FrozenEnvironment;ids=ModConfigurations.ValidatePreflightMods(ids);if(ids.Any(id=>!(Managed(row)).Contains(id)))throw new IOException("只能卸载此快照中已管理的组件。");var components=Components(row);return SavePrepared(engine,expected,row.DefaultModIds.Except(components).ToArray(),components.Except(ids).ToArray(),new string[0],cancellation,progress,null,ids);}
+  internal static SaveEnvironmentRecord Uninstall(Engine engine,string expected,string[] ids,CancellationToken cancellation,Action<SaveEnvironmentProgress> progress){var row=engine.FrozenEnvironment;ids=ModConfigurations.ValidatePreflightMods(ids).Select(Canonical).ToArray();if(ids.Any(id=>!(Managed(row)).Contains(id)))throw new IOException("只能卸载此快照中已管理的组件。");var components=Components(row);return SavePrepared(engine,expected,Ordinary(row),components.Except(ids).ToArray(),new string[0],cancellation,progress,null,ids);}
   static SaveEnvironmentMissing MissingPayload(Engine engine,SaveEnvironmentRecord owner,SaveEnvironments.RevisionSource source,CancellationToken cancellation){
    var catalog=new SaveProfiles.PreflightCatalog();
    catalog.Candidates.Add(source.Candidate);
@@ -43,25 +46,25 @@ namespace PZ3D {
     old.CleanupWarnings=SaveEnvironments.RetryRevisionCleanup(old);SaveEnvironmentRuntime.ValidateOwnedRuntime(engine);ordinary=ModConfigurations.ValidatePreflightMods(ordinary);
     if(ordinary.Any(id=>id=="OrangeLauncherSession"))throw new IOException("普通模组清单不能包含会话组件。");
     var managed=(Managed(old)).Except(uninstall??new string[0]).ToArray();var components=Components(old);
-    if(ordinary.Intersect(managed,StringComparer.Ordinal).Any())throw new IOException("组件启用请在组件选择中修改。");
-    components=ModConfigurations.ValidatePreflightMods(selectedComponents);managed=managed.Concat(components).Distinct().ToArray();if(ordinary.Intersect(components).Any())throw new IOException("普通模组与所选组件不能重复。");
+    if(ordinary.Any(id=>ContainsId(managed,id)))throw new IOException("组件启用请在组件选择中修改。");
+    components=ModConfigurations.ValidatePreflightMods(selectedComponents);if(components.Any(id=>!LauncherComponents.InstallationComponent(id)))throw new IOException("普通模组应在模组清单中选择："+string.Join("、",components.Where(id=>!LauncherComponents.InstallationComponent(id))));managed=managed.Concat(components).Distinct().ToArray();if(ordinary.Intersect(components).Any())throw new IOException("普通模组与所选组件不能重复。");
     var effective=ordinary.Concat(components).Distinct(StringComparer.Ordinal).ToArray();
-    if(ordinary.SequenceEqual(old.DefaultModIds.Except(Components(old)),StringComparer.Ordinal)&&components.SequenceEqual(Components(old))&&tokens.Length==0&&(uninstall==null||uninstall.Length==0))return old;
+    if(ordinary.SequenceEqual(Ordinary(old),StringComparer.Ordinal)&&components.SequenceEqual(Components(old))&&tokens.Length==0&&(uninstall==null||uninstall.Length==0))return old;
     var added=new List<SaveEnvironmentModRoot>();bool committed=false;
     try{
      var available=tokens.Length==0?new SaveEnvironments.RevisionSource[0]:Sources(engine,cancellation,progress);var chosen=tokens.Select(t=>{var source=available.SingleOrDefault(c=>c.token==t);if(source==null)throw new IOException("所选来源已变化或无法读取，请重新选择。");return source;}).ToArray();
-     if(chosen.Any(c=>old.ModRoots.Any(r=>r.ModIds.Contains(c.id))))throw new IOException("此模组已有独立副本，不能用当前来源覆盖。");
+     if(chosen.Any(c=>old.ModRoots.Any(r=>ContainsId(r.ModIds,c.id))))throw new IOException("此模组已有独立副本，不能用当前来源覆盖。");
      foreach(var group in chosen.GroupBy(c=>c.Candidate.Root,StringComparer.OrdinalIgnoreCase)){var source=PrepareNewSource(engine,old,group.First(),cancellation,resolve);added.Add(SaveEnvironments.CopyRevisionSource(old,source,group.Select(c=>c.id).Distinct().ToArray(),cancellation,progress));}
-     var roots=old.ModRoots.Concat(added).ToArray();foreach(string id in effective)if(!roots.Any(root=>root.ModIds.Contains(id,StringComparer.Ordinal)))throw new IOException("尚未复制所选模组："+id);
+     var roots=old.ModRoots.Concat(added).ToArray();foreach(string id in effective)if(!roots.Any(root=>ContainsId(root.ModIds,id)))throw new IOException("尚未复制所选模组："+id);
      var revised=old.ShallowCopy();revised.ModRoots=roots;revised.DefaultModIds=effective;revised.ActiveManagedIds=managed.ToArray();revised.ActiveComponentIds=components.ToArray();
      SnapshotPreparation.Dependencies dependencies=null;var attempted=new HashSet<string>();
      for(int pass=0;pass<2000;pass++){
-      var copied=new Engine(engine.Game,engine.User,engine.Data,engine.TestMode,engine.ReadSteamOptions,engine.ProcessInventory){FrozenEnvironment=revised};var budget=new LaunchReadBudget(67108864,100000);budget.Checkpoint=(path,size)=>cancellation.ThrowIfCancellationRequested();var warnings=new List<string>();var catalog=SaveProfiles.SnapshotEntries(copied,effective,warnings,budget);if(budget.Incomplete)throw new IOException("复制的模组信息尚未读取完整，请重试。");dependencies=SnapshotPreparation.Inspect(copied,effective,catalog,revised.ModRoots,cancellation);if(dependencies.Missing.Length==0)break;
+      var copied=new Engine(engine.Game,engine.User,engine.Data,engine.TestMode,engine.ReadSteamOptions,engine.ProcessInventory){FrozenEnvironment=revised};var budget=new LaunchReadBudget(67108864,100000);budget.Checkpoint=(path,size)=>cancellation.ThrowIfCancellationRequested();var warnings=new List<string>();var catalog=SaveProfiles.SnapshotEntries(copied,effective,warnings,budget);if(budget.Incomplete)throw new IOException("复制的模组信息尚未读取完整，请重试。");dependencies=SnapshotPreparation.Inspect(copied,effective,catalog,revised.ModRoots,cancellation);if(dependencies.Missing.Length==0){revised.DefaultModIds=SnapshotPreparation.Expand(effective,catalog);revised.ActiveComponentIds=components.Concat(revised.DefaultModIds.Where(LauncherComponents.InstallationComponent)).Distinct().ToArray();revised.ActiveManagedIds=managed.Concat(revised.ActiveComponentIds).Distinct().ToArray();break;}
       bool progressed=false;
       foreach(var missing in dependencies.Missing){
        if(!attempted.Add(missing.modId))throw new IOException(SnapshotPreparation.Describe(missing));
        // Never repair a committed copy by downloading current source bytes.
-       if(old.ModRoots.Any(root=>root.ModIds.Contains(missing.modId)))
+       if(old.ModRoots.Any(root=>ContainsId(root.ModIds,missing.modId)))
         throw new IOException(SnapshotPreparation.Describe(missing));
        if(available.Length==0)available=Sources(engine,cancellation,progress);
        var candidates=available.Where(candidate=>candidate.id==missing.modId).ToArray();
@@ -79,7 +82,7 @@ namespace PZ3D {
       }
       if(!progressed)throw new IOException("无法取得所需的模组副本。");
      }
-     if(dependencies==null||dependencies.Missing.Length>0)throw new IOException("依赖数量过多，未保存此次修改。");var retained=new HashSet<string>(dependencies.Ids.Concat(managed),StringComparer.Ordinal);revised.ModRoots=revised.ModRoots.Where(r=>r.ModIds.Any(retained.Contains)).ToArray();
+     if(dependencies==null||dependencies.Missing.Length>0)throw new IOException("依赖数量过多，未保存此次修改。");var retained=new HashSet<string>(dependencies.Ids.Concat(managed).Concat(old.ModRoots.SelectMany(root=>root.ModIds)).Except(uninstall??new string[0]),StringComparer.Ordinal);revised.ModRoots=revised.ModRoots.Where(r=>r.ModIds.Any(retained.Contains)).ToArray();
      FrozenJavaPolicy.Prepare(engine,old,revised,cancellation);
      var outputs=SaveEnvironmentRuntime.RevisionOutputs(old,revised);var result=SaveEnvironments.PublishRevision(engine,old,revised,outputs,cancellation,progress);committed=true;return result;
     }finally{if(!committed)SaveEnvironments.RemoveUncommittedAdditions(engine,old,added);}

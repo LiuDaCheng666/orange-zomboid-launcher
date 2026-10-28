@@ -26,7 +26,11 @@ namespace PZ3D {
    if(action=="identity"||action=="connection"||action=="subscriptions")return clean;
    if(action=="search"||action=="hall"){
     string query=Text(Field(payload,"query")).Trim();if(query.Length>200||query.Any(c=>char.IsControl(c)))throw new Exception("搜索文本最多 200 字符且不能包含控制字符。");clean["query"]=query;
-    if(action=="search"){object raw=Field(payload,"page"),token=Field(payload,"cursor");int page=1;if(raw!=null&&(!int.TryParse(Text(raw),NumberStyles.None,CultureInfo.InvariantCulture,out page)||page<1))throw new Exception("工坊页码必须为正整数。");string cursor=null;if(token!=null){if(!(token is string))throw new Exception("工坊游标必须为文本。");cursor=ValidateCursor((string)token,false);}else if(page==1)cursor="*";if(cursor==null&&page>1000)throw new Exception("传统工坊页码不能超过 1000，请使用游标。");clean["page"]=page;if(cursor!=null)clean["cursor"]=cursor;}return clean;
+    if(action=="search"){object raw=Field(payload,"page"),token=Field(payload,"cursor");int page=1;if(raw!=null&&(!int.TryParse(Text(raw),NumberStyles.None,CultureInfo.InvariantCulture,out page)||page<1))throw new Exception("工坊页码必须为正整数。");string cursor=null;if(token!=null){if(!(token is string))throw new Exception("工坊游标必须为文本。");cursor=ValidateCursor((string)token,false);}else if(page==1)cursor="*";if(cursor==null&&page>1000)throw new Exception("传统工坊页码不能超过 1000，请使用游标。");clean["page"]=page;if(cursor!=null)clean["cursor"]=cursor;
+     clean["version"]=SearchFilter(payload,"version","all",new[]{"all","b41","b42"});
+     clean["sort"]=SearchFilter(payload,"sort","",new[]{"","popular","updated","newest"});
+     clean["category"]=SearchFilter(payload,"category","all",new[]{"all","Map","Vehicles","Weapons","Interface","Textures"});
+    }return clean;
    }
    if(action=="details"||action=="download"){
     clean["id"]=ItemId(Field(payload,"id")).ToString(CultureInfo.InvariantCulture);
@@ -37,6 +41,15 @@ namespace PZ3D {
   internal static string ValidateCursor(string cursor,bool allowEmpty){if(cursor==null||(!allowEmpty&&cursor.Length==0)||cursor.Any(char.IsControl)||new UTF8Encoding(false,true).GetByteCount(cursor)>255)throw new Exception("工坊游标无效或超过 255 字节。");return cursor;}
   internal static string QueryCursor(byte[] response){if(response==null||response.Length!=280)throw new Exception("Steam 查询回调长度不完整。");int end=21;while(end<277&&response[end]!=0)end++;if(end==277)throw new Exception("Steam 查询游标缺少终止符。");return ValidateCursor(new UTF8Encoding(false,true).GetString(response,21,end-21),true);}
   internal static int SearchOrder(string query){return string.IsNullOrEmpty(query)?0:11;}
+  static string SearchFilter(Dictionary<string,object> payload,string name,string fallback,string[] options){object value=Field(payload,name);if(value==null)return fallback;if(!(value is string)||!options.Contains((string)value))throw new Exception("不支持的工坊筛选："+name+"。");return (string)value;}
+  internal static int SearchOrder(string query,string sort){return sort=="popular"?0:sort=="newest"?1:sort=="updated"?19:SearchOrder(query);}
+  // Exact App108600 tags from Steam's Workshop browse filters; required tags are combined with AND.
+  internal static void ConfigureSearch(Dictionary<string,object> args,Func<string,bool> setText,Func<string,bool> addTag){
+   string query=Text(Field(args,"query")),version=Text(Field(args,"version")),category=Text(Field(args,"category"));
+   if(query.Length>0&&!setText(query))throw new Exception("Steam 拒绝工坊搜索文本。");
+   string build=version=="b41"?"Build 41":version=="b42"?"Build 42":"";
+   foreach(string tag in new[]{build,category=="all"?"":category})if(tag.Length>0&&!addTag(tag))throw new Exception("Steam 拒绝工坊筛选："+tag+"。");
+  }
   internal static string Utf8(byte[] bytes,int offset,int length){int end=offset;while(end<offset+length&&bytes[end]!=0)end++;return Encoding.UTF8.GetString(bytes,offset,end-offset);}
   static void RequireUgc(byte[] bytes,ulong expected){
    if(bytes==null||bytes.Length!=UgcBytes)throw new Exception("Steam 工坊 ABI 数据长度不完整。");
