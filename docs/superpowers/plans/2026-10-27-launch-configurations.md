@@ -85,6 +85,6 @@ Status: COMPLETE — scoped spec/quality PASS at 1fa6142 after four findings fix
 
 ### Task 7: Final local candidate and production-entry acceptance
 
-- [ ] Review the whole branch and resolve Critical/Important findings. Run affected checks after final changes; retain per-task evidence instead of mechanically repeating every project suite.
-- [ ] Build immutable local candidate, verify bootstrap RSA/all listed file hashes and Windows NotSigned status truthfully; no VERSION/publication change by this plan.
+- [x] Review the whole branch and resolve Critical/Important findings. Run affected checks after final changes; retain per-task evidence instead of mechanically repeating every project suite. Final N3 scoped review passed at f4834e93; original Runtime377 observation remains unclassified with recurrence diagnostics retained.
+- [x] Build immutable local candidate, verify bootstrap RSA/all listed file hashes and Windows NotSigned status truthfully; no VERSION/publication change by this plan. Candidate: E:\Projects\OrangeLauncher\dist\launch-configurations-local-20261028-f4834e9\app; RSA and 21 listed files verified, Windows NotSigned.
 - [ ] Use candidate production entry/exact arguments for actual menu, selected Java/Lua provenance, named configuration, Chinese-path edited snapshot save/save-exit/relaunch, multiplayer, process/recovery/force-stop. Keep real user data and foreground intact. If actual foreground interaction is indispensable, prepare the concrete candidate first and request that limited permission; no game acceptance/completion/publication claim before it passes.
