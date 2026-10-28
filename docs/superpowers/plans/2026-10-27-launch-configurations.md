@@ -74,12 +74,14 @@ Status: COMPLETE — native backend reviewed at 175c36c; scoped spec/quality PAS
 
 ### Task 6: Homepage choices and native click/visual acceptance
 
+Status: COMPLETE — scoped spec/quality PASS at 1fa6142 after four findings fixed. Parent final focused native R1–R4 PASS; prior full native360 responses/830 events at 5a467b8. Actual packaged-game acceptance remains Task7.
+
 **Files:** Web/app.js/app.css, focused mode UI suite and production native harness, usage/quality docs.
 
-- [ ] RED actual DOM cases show 启动配置 with 启动器配置(default)/Steam 配置/原版配置 plus named normal and snapshot configurations. Create/edit uses one configuration workflow for version/components/mod list/order; keep existing ordinary named mod-list compatibility without merging their storage semantics silently. Only selected-mode description and actual memory/components appear; Steam takeover/force actions only in its mode.
-- [ ] Wire strict native actions, persisted selection and single force confirmation. All targets use selection; no hollow selector, raw JSON, duplicate progress or irrelevant old-parameter gate in launcher mode.
-- [ ] Actual clicks -> production controller -> real owned files for select/install/enable/approval/launch preparation, failure/cancel/retry and Steam confirmation; inspect desktop/narrow dark/light and final statuses. Tests may not claim injected ProcessStart results are actual game entry.
-- [ ] Run affected DOM/native suites, inspect screenshots, review and commit. Build/game acceptance follows Task7 after the shared editor and frozen backend are integrated.
+- [x] RED actual DOM cases show 启动配置 with 启动器配置(default)/Steam 配置/原版配置 plus named normal and snapshot configurations. Create/edit uses one configuration workflow for version/components/mod list/order; keep existing ordinary named mod-list compatibility without merging their storage semantics silently. Only selected-mode description and actual memory/components appear; Steam takeover/force actions only in its mode.
+- [x] Wire strict native actions, persisted selection and single force confirmation. All targets use selection; no hollow selector, raw JSON, duplicate progress or irrelevant old-parameter gate in launcher mode.
+- [x] Actual clicks -> production controller -> real owned files for select/install/enable/approval/launch preparation, failure/cancel/retry and Steam confirmation; inspect desktop/narrow dark/light and final statuses. Tests may not claim injected ProcessStart results are actual game entry.
+- [x] Run affected DOM/native suites, inspect screenshots, review and commit. Build/game acceptance follows Task7 after the shared editor and frozen backend are integrated.
 
 ### Task 7: Final local candidate and production-entry acceptance
 

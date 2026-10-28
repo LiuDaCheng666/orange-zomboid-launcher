@@ -70,3 +70,10 @@ Task7 仍须使用待发布包生产入口进入实际游戏，覆盖中文快�
 最终视觉补充：编辑器进度轨道明确为 8px，轨道/填充沿主题颜色，未知总量继续使用活动条和真实计数。受影响路径单独通过生产 native fixture 点击复制→取消→文件清单不含 Big；截图 snapshot-copy-progress.png 已重新生成并实际查看。聚焦运行证据 artifacts/owned-launch/task6/progress-visual-report.json，隔离根 E:\AppCaches\Temp\o6-mvry8tts；完整套件记录仍对应前述最终功能运行。
 
 Task6复审修复第1轮：R1来源读取取消独立于写任务，真实点击取消/重读/关闭再打开通过；R2初始扫描中切组件会在完成后加载；R3首页封面、摘要和选择项统一已知版本，内存写入与待读取三组DOM检查通过；R4乐观index/manifest/关键JSON读取允许原子替换，持生产旧句柄时真实发布通过，旧句柄仍读取完整旧代。限定delete sharing于乐观读，默认受锁读/复制散列保持原行为。新增tests/UnifiedConfigurationReviewFixes.cjs聚焦原生四组通过；主页37/37，相关快照后端75通过，原生完整受影响文件/点击套件361回复/828进度通过。截图home-normal-selected.png已更新为已知42.21.0，review-R2-components.png、review-R3-home-known.png均已实际查看。首个Runtime377未分类问题和Task7真实游戏边界保持未关闭；Task6待独立复审。
+
+
+## 独立复审与父代理复测
+
+Task6 初次审查发现四项实际问题：扫描取消后重读失败、初始扫描中切换组件页未加载、封面版本/内存陈旧、乐观读取句柄妨碍原子替换。修复提交1fa6142，独立复审规格与质量均通过。父代理在该提交执行 `tests/UnifiedConfigurationNative.test.ps1 -ReviewCase all`，四项生产控制器/真实隔离文件定点用例通过，耗时8.7秒；未把这次定点通过说成重跑全套。已查看刷新后的组件页和已知版本首页截图。此前完整原生界面父复测在5a467b8通过360响应/830进度事件，后续修复覆盖范围见实现报告。
+
+尚待最终整批审查：有意切换配置后，旧 `acceptStatus` 可能留下“游戏目录已变化，请重新核对配置”提示；这条跨界面观察已登记，不能由定点通过隐去。此前Runtime377首次未归因的预览失效记录仍保留。Task7真实游戏验收尚未执行，当前没有发布。
