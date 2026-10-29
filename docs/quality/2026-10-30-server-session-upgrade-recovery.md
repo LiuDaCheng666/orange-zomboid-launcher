@@ -36,3 +36,5 @@
 本地候选：E:/Projects/OrangeLauncher/dist/session-recovery-local-20261030/package/OrangeZomboidLauncher-win-Portable.zip，解压后从顶层“橙子启动器.exe”启动，必须保留完整便携目录。内部版本暂为 1.2.42，明确属于本地修复候选，不替换线上正式 1.2.42；正式发布必须递增版本。
 
 Windows Authenticode 为 NotSigned，RSA 分发认证保留；不宣称防病毒问题根治。本次没有公开发布、覆盖当前安装、改动网站/SSH 配置、修改用户存档/模组、实际连接服务器或运行游戏。其他任务 60 个文件的既有改动哈希保持一致。
+
+正式发布补记：上述为本地阶段验收记录；1.2.43 已按用户后续要求正式发布，见 [正式发布回执](2026-10-30-1.2.43-publication.md)。
