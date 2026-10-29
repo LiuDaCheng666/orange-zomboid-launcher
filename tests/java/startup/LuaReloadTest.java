@@ -15,6 +15,7 @@ import java.nio.*;
 import java.nio.file.*;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Actual premain hooks + renderer, with only the game's synchronous reset work
  * replaced. No game entry point, Steam initialization, or visible window. */
@@ -30,6 +31,7 @@ public final class LuaReloadTest {
   for(int y=0;y<900;y++)for(int x=0;x<1440;x++){int at=((899-y)*1440+x)*4,r=pixels.get(at)&255,g=pixels.get(at+1)&255,b=pixels.get(at+2)&255;image.setRGB(x,y,(r<<16)|(g<<8)|b);if(x>280&&x<440&&y>275&&y<490&&r>150&&r>g*1.25&&g>b*1.1)orange++;}
   ImageIO.write(image,"png",path.toFile());return orange;
  }
+ static int changedOrange(Path a,Path b)throws Exception{BufferedImage first=ImageIO.read(a.toFile()),second=ImageIO.read(b.toFile());int changed=0;for(int y=210;y<490;y++)for(int x=150;x<490;x++){int p=first.getRGB(x,y),q=second.getRGB(x,y);boolean before=((p>>16)&255)>150&&((p>>16)&255)>((p>>8)&255)*1.25&&((p>>8)&255)>(p&255)*1.1,after=((q>>16)&255)>150&&((q>>16)&255)>((q>>8)&255)*1.25&&((q>>8)&255)>(q&255)*1.1;if(before!=after)changed++;}return changed;}
  static void tick() {try{Thread.sleep(45);}catch(InterruptedException e){throw new AssertionError(e);}RenderThread.flushInvokeQueue();}
  public static void main(String[] args)throws Exception{
   check(state()!=null,"premain accepted isolated receipt");
@@ -38,6 +40,7 @@ public final class LuaReloadTest {
   long window=GLFW.glfwCreateWindow(1440,900,"OZL Lua reload regression",0,0);check(window!=0,"hidden GL context created");
   try{
    GLFW.glfwMakeContextCurrent(window);GL.createCapabilities();Display.created=true;
+   AtomicLong clock=new AtomicLong();var renderer=StartupRuntime.class.getDeclaredField("renderer");renderer.setAccessible(true);renderer.set(null,new GameRenderer(clock::get));
    MainScreenState.instance.enter();ConnectToServerState owner=connect("First server");
    MainScreenState.instance.render();var stale=(zombie.core.textures.TextureDraw.GenericDrawer)SpriteRenderer.instance.queue.get(1);long oldEpoch=state().epoch,generation=state().generation;
    Core.instance.duringReset=()->{
@@ -46,10 +49,10 @@ public final class LuaReloadTest {
     check(!RenderThread.isWaitForRenderState(),"fixture is inside installed nonwaiting reset interval");
     GL11.glClearColor(.7f,.05f,.03f,1);GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);stale.render(new zombie.core.textures.TextureDraw());
     ByteBuffer pixel=ByteBuffer.allocateDirect(4);GL11.glReadPixels(720,450,1,1,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixel);check((pixel.get(0)&255)>150&&(pixel.get(1)&255)<30,"previous Lua UI drawer cannot paint during reset");
-    int queued=SpriteRenderer.instance.queue.size(),swaps=Display.swaps,stage=state().stageIndex;tick();int first;
-    try{first=orange(output.resolve("reload-first.png"));Thread.sleep(1250);}catch(Exception e){throw new AssertionError(e);}
+    int queued=SpriteRenderer.instance.queue.size(),swaps=Display.swaps,stage=state().stageIndex;tick();clock.set(800_000_000L);tick();int first;
+    try{first=orange(output.resolve("reload-first.png"));clock.set(2_050_000_000L);}catch(Exception e){throw new AssertionError(e);}
     LuaManager.RunLua("media/lua/client/Reloaded.lua",false);tick();
-    try{check(orange(output.resolve("reload-grown.png"))>first*3&&first>10,"orange visibly grows on render-thread idle without new Lua/UI frames");}catch(Exception e){throw new AssertionError(e);}
+    try{check(orange(output.resolve("reload-grown.png"))>200&&first>200&&changedOrange(output.resolve("reload-first.png"),output.resolve("reload-grown.png"))>500,"approved full-size orange visibly rotates on render-thread idle without new Lua/UI frames");}catch(Exception e){throw new AssertionError(e);}
     check(Display.swaps>=swaps+2&&SpriteRenderer.instance.queue.size()==queued,"idle animation swaps only and never manufactures CPU or Lua UI commands");
     check(state().processedScripts==1&&state().generation==generation&&state().stageIndex==stage&&!state().world,"actual Lua work updates activity without inventing stage progress or completing the connection");
    };

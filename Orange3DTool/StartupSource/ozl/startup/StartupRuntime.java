@@ -9,7 +9,8 @@ public final class StartupRuntime {
     private static volatile LoadingModel model;
     private static Session session;
     private static GameRenderer renderer;
-    private static long lastSwap,lastIssueRead;
+    private static long lastSwap;
+    private static volatile IssueSampler issueSampler;
     private static final long IDLE_FRAME_NANOS=1_000_000_000L/60;
     private static volatile long issueFloor;
     private static boolean drawing,reportedFailure;
@@ -28,7 +29,7 @@ public final class StartupRuntime {
     private static void rejectWorkshop(){presentation.restoreWorkshop();LoadingModel m=model;if(m!=null&&m.snapshot().downloadPage){m.download(false,"","",-1,-1,-1,-1);m.nativeInteraction(true);if(download!=null)download.valid=false;}}
     private static final class WorkshopInteraction {final Object owner;final long generation;volatile boolean success;WorkshopInteraction(Object owner,long generation){this.owner=owner;this.generation=generation;}}
     private static final ServerQuery publicQuery=new ServerQuery((operation,result)->{LoadingModel m=model;if(m!=null)m.publicInfo(operation,result.name,result.map,result.players,result.maximum);});
-    public static void begin(Session accepted){publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;bootHandoff=null;session=accepted;model=new LoadingModel();issueFloor=0;}
+    public static void begin(Session accepted){publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;bootHandoff=null;IssueSampler previous=issueSampler;if(previous!=null)previous.close();session=accepted;issueSampler=accepted==null?null:new IssueSampler(accepted::readIssue);model=new LoadingModel();issueFloor=0;}
     public static LoadingModel.Snapshot snapshot(){LoadingModel value=model;return value==null?null:value.snapshot();}
     public static void phase(String value){LoadingModel m=model;if(m!=null)m.phase(value);}
     public static void early(String value){LoadingModel m=model;if(m!=null)m.early(value.equals("initFonts")?"fonts":value);}
@@ -37,6 +38,11 @@ public final class StartupRuntime {
     public static void mod(String value){LoadingModel m=model;if(m!=null)m.mod(value);}
     public static void script(String value){LoadingModel m=model;if(m!=null)m.script(value);}
     public static long generation(){LoadingModel.Snapshot s=snapshot();return s==null?0:s.generation;}
+    /** First-run native terms require input before MainScreenState can be entered. */
+    public static void gameStateEnter(Object state){
+        LoadingModel.Snapshot current=snapshot();
+        if(state!=null&&state.getClass().getName().equals("zombie.gameStates.TermsOfServiceState")&&current!=null&&current.active&&current.context==LoadingModel.Context.BOOT)handoff(false);
+    }
     public static void menuReady(Object state){
         LoadingModel.Snapshot s=snapshot();
         if(state!=null&&s!=null&&s.active&&s.context==LoadingModel.Context.BOOT&&session!=null&&session.pendingDirectServer(System.currentTimeMillis()/1000)){
@@ -230,12 +236,12 @@ public final class StartupRuntime {
         draw(state,statusBottom,cancelTop,0);
     }
     private static void draw(LoadingModel.Snapshot state,double statusBottom,double cancelTop,double workshopTop)throws Exception{
-        drawing=true;try{LoadingModel m=model;long now=System.currentTimeMillis();if(now-lastIssueRead>=250){lastIssueRead=now;m.issue(session.readIssue(now,issueFloor));}
+        drawing=true;try{LoadingModel m=model;IssueSampler sampler=issueSampler;if(sampler!=null)m.issue(sampler.latest(System.currentTimeMillis(),issueFloor,state.generation));
             if(renderer==null)renderer=new GameRenderer();java.lang.Runtime memory=java.lang.Runtime.getRuntime();renderer.draw(state,session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory(),statusBottom,cancelTop,workshopTop);
         }finally{drawing=false;}
     }
     public static void beforeSwap(){lastSwap=System.nanoTime();LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||!currentContext())return;try{draw(s);}catch(Throwable failure){failed(failure);}}
     /** Full overlays can idle on the existing render thread. Behind-UI frames use only the game's queue. */
     public static void idle(){LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||System.nanoTime()-lastSwap<IDLE_FRAME_NANOS||!currentContext())return;try{GameDisplay.swap();}catch(Throwable failure){failed(failure);}}
-    public static void failed(Throwable failure){publicQuery.cancel();LoadingModel m=model;if(m!=null)m.disable();if(!reportedFailure){reportedFailure=true;System.err.println("[OZL-STARTUP-JAVA] presentation disabled: "+failure.getClass().getSimpleName());}}
+    public static void failed(Throwable failure){publicQuery.cancel();IssueSampler sampler=issueSampler;if(sampler!=null)sampler.close();LoadingModel m=model;if(m!=null)m.disable();if(!reportedFailure){reportedFailure=true;System.err.println("[OZL-STARTUP-JAVA] presentation disabled: "+failure.getClass().getSimpleName());}}
 }

@@ -149,6 +149,7 @@ public final class Hooks {
     }
     public static final class Event {
         @Advice.OnMethodEnter(suppress=Throwable.class)public static Object enter(@Advice.Origin Class<?> eventType,@Advice.Argument(0)String event,@Advice.Argument(value=1,optional=true)Object a,@Advice.Argument(value=2,optional=true)Object b,@Advice.Argument(value=3,optional=true)Object c,@Advice.Argument(value=4,optional=true)Object d){
+            if("OnGameStateEnter".equals(event)){StartupRuntime.gameStateEnter(a);return null;}
             if("OnRenderTick".equals(event))return StartupRuntime.bootTickBefore(eventType);
             // Branch before touching payloads; failure/auth text never enters public progress.
             if("OnGoogleAuthRequest".equals(event)||"OnQRReceived".equals(event)||"OnConnected".equals(event)){StartupRuntime.handoff(true);return null;}

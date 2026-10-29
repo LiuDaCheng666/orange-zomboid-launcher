@@ -52,7 +52,7 @@ public final class LoadingModel {
     private static final Pattern CREDENTIAL=Pattern.compile("(?i)(password|access_token|token|secret)\\s*[:=]\\s*[^\\s,;]+" );
     public static String safe(String value,int limit) {
         String clean=CREDENTIAL.matcher(value==null?"":value).replaceAll("$1=•••").replaceAll("[\\r\\n\\t\\p{Cntrl}]"," ").trim();
-        return clean.length()>limit?clean.substring(0,limit-1)+"…":clean;
+        if(clean.length()<=limit)return clean;int end=limit-1;if(end>0&&Character.isHighSurrogate(clean.charAt(end-1))&&Character.isLowSurrogate(clean.charAt(end)))end--;return clean.substring(0,end)+"…";
     }
     private void append(String value) {
         value=safe(value,180);

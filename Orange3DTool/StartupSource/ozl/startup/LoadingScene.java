@@ -17,7 +17,17 @@ public final class LoadingScene {
  public static double font(double size){return Math.max(9,Math.min(64,size));}
  static double scale(int w,int h){return Math.max(.6,Math.min(2.5,Math.min(w/1280d,h/720d)));}
  static int alpha(int color,int opacity){return (Math.max(0,Math.min(255,opacity))<<24)|(color&0xffffff);}
- static String fit(Canvas c,String value,double size,double width){value=LoadingModel.safe(value,512);size=font(size);if(c.measure(value,size)<=width)return value;int end=value.length();while(end>0&&c.measure(value.substring(0,end)+"…",size)>width)end--;return end==0?"":value.substring(0,end)+"…";}
+ /** Return a code-point boundary using logarithmic font measurements. */
+ static int prefix(Canvas c,String value,double size,double width,String suffix){
+  int low=0,high=value.codePointCount(0,value.length());
+  while(low<high){int middle=(low+high+1)>>>1,end=value.offsetByCodePoints(0,middle);if(c.measure(value.substring(0,end)+suffix,size)<=width)low=middle;else high=middle-1;}
+  return value.offsetByCodePoints(0,low);
+ }
+ static String fit(Canvas c,String value,double size,double width){
+  value=LoadingModel.safe(value,512);size=font(size);if(value.isEmpty()||width<=0)return "";
+  if(c.measure(value,size)<=width)return value;if(c.measure("…",size)>width)return "";
+  int end=prefix(c,value,size,width,"…");return end==0?"":value.substring(0,end)+"…";
+ }
  static void text(Canvas c,String value,double x,double y,double size,int color,boolean right,double width){if(!value.isEmpty())c.text(fit(c,value,size,width),x,y,font(size),color,right);}
  static void centered(Canvas c,String value,double x,double y,double size,int color,double width){if(value.isEmpty())return;String v=fit(c,value,size,width);c.text(v,x-c.measure(v,font(size))/2,y,font(size),color,false);}
  /** A rectangular track with actual fill inset two pixels; no enclosing panel. */
@@ -73,6 +83,6 @@ public final class LoadingScene {
  }
  private static int leftWrapped(Canvas c,String value,double x,double y,double size,int color,double width,double line){
   if(value.isEmpty())return 0;int rows=0;
-  while(!value.isEmpty()){int end=value.length();while(end>1&&c.measure(value.substring(0,end),font(size))>width)end--;c.text(value.substring(0,end),x,y+rows*line,font(size),color,false);value=value.substring(end);rows++;}return rows;
+  while(!value.isEmpty()){int end=c.measure(value,font(size))<=width?value.length():prefix(c,value,font(size),width,"");if(end==0)break;c.text(value.substring(0,end),x,y+rows*line,font(size),color,false);value=value.substring(end);rows++;}return rows;
  }
 }
