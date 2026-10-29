@@ -68,8 +68,9 @@ namespace PZ3D {sealed partial class ModernController {
   foreach(var registered in SaveEnvironments.RegisteredForUsers(data,catalog.Select(v=>v.UserPath).Concat(new[]{defaultUser})).Where(r=>r.Record!=null)){var row=registered.Record;trusted.Add(new LaunchConfigurationResolution{Id="snapshot:"+row.Id,Name=row.Name,Kind="frozen",Available=true,Snapshot=row});}
   foreach(var resolution in trusted){
    string game=resolution.Context==null?resolution.Snapshot.GamePath:resolution.Context.Game,userPath=resolution.Context==null?resolution.Snapshot.UserPath:resolution.Context.User;
-   var known=new Engine(game,userPath,data,test);known.BindConfiguration(resolution);if(!LaunchProfiles.Pending(known))continue;
-   var recovered=LaunchProfiles.RecoveryConfiguration(known);if(recovered==null)continue;var owner=BoundConfigurationController(recovered);lock(gate)lastConfigurationRuntime=owner;return owner;
+   try{var known=new Engine(game,userPath,data,test);known.BindConfiguration(resolution);if(!LaunchProfiles.Pending(known))continue;
+    var recovered=LaunchProfiles.RecoveryConfiguration(known);if(recovered==null)continue;var owner=BoundConfigurationController(recovered);lock(gate)lastConfigurationRuntime=owner;return owner;
+   }catch(Exception error){string message="上次启动恢复未完成："+LauncherJournal.Sanitize(error.Message);bool added;lock(gate){added=!log.Contains(message);if(added)log.Add(message);}if(added)try{journal.Diagnostic(message);}catch{ /* A diagnostic failure cannot prevent the UI or later sessions from opening. */ }}
   }return null;
  }
  object ConfigurationRows(){return ConfigurationMetadata(profiles=>new{selectedId=profiles.SelectedId,configurations=profiles.List().Select(r=>new{id=r.Id,name=r.Name,kind=r.Kind,versionId=r.VersionId,version=r.Snapshot!=null?r.Snapshot.GameVersion:r.Version==null?"":r.Version.Version,available=r.Available,errorCode=r.ErrorCode,message=r.Message}).ToArray()});}

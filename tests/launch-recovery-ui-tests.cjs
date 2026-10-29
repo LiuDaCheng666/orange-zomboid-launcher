@@ -11,9 +11,10 @@ const assert=require('node:assert/strict');
    window.recoveryPending=true;
    chrome.webview.postMessage=m=>{
     if(m.action==='profileRecover'){sent.push(m);held.push(m);return;}
-    if(m.action==='status'){
+    if(m.action==='status'||m.action==='configurationRequest'&&m.payload.action==='status'){
      sent.push(m);
-     queueMicrotask(()=>emitNative({id:m.id,ok:true,data:{...orange.state.status,launch:{pending:recoveryPending},task:{active:false}}}));
+     const status={...orange.state.status,launch:{pending:recoveryPending},task:{active:false}};
+     queueMicrotask(()=>emitNative({id:m.id,ok:true,data:m.action==='configurationRequest'?{configurationId:m.payload.id,data:status}:status}));
      return;
     }
     original(m);
@@ -22,6 +23,19 @@ const assert=require('node:assert/strict');
   });
   const recover=page.locator('[data-profile-recover]');
   await recover.waitFor();
+  await recover.evaluate(button=>button.dataset.retained='same-button');
+  await page.evaluate(()=>orange.acceptStatus({...orange.state.status,launch:{pending:true,stage:'恢复需检查',warning:'旧连接记录内容不完整，请查看启动器日志。'}}));
+  assert.match(await page.locator('[data-launch-recovery]').innerText(),/旧连接记录内容不完整/,'native recovery error is visible inside the existing recovery area');
+  assert.equal(await recover.getAttribute('data-retained'),'same-button','updating a reason retains the action and focus target');
+  const fs=require('node:fs'),path=require('node:path');
+  const evidence=path.resolve(__dirname,'../artifacts/session-upgrade-fix');fs.mkdirSync(evidence,{recursive:true});
+  await page.waitForTimeout(350);
+  await page.screenshot({path:path.join(evidence,'recovery-error-dark.png')});
+  await page.evaluate(()=>orange.acceptStatus({...orange.state.status,launch:{pending:true,stage:'恢复需检查',warning:'第二次读取失败 <img src=x onerror=alert(1)>'}}));
+  assert.match(await page.locator('[data-launch-recovery]').innerText(),/第二次读取失败 <img/,'later errors update as text');
+  assert.equal(await page.locator('[data-launch-recovery] img').count(),0,'error text does not become markup');
+  await page.evaluate(()=>orange.acceptStatus({...orange.state.status,launch:{pending:true,stage:'游戏主菜单已就绪。',warning:'正常连接提示'}}));
+  assert.doesNotMatch(await page.locator('[data-launch-recovery]').innerText(),/第二次读取失败|正常连接提示/,'returning to an ordinary active record clears stale error text');
   assert.equal(await recover.evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true,'required recovery is visible without scrolling');
   await recover.click();
   await page.waitForFunction(()=>held.some(m=>m.action==='profileRecover'));

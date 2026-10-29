@@ -15,7 +15,7 @@ namespace PZ3D {
 #if OZL_VELOPACK
  &&!DistributionPaths.Enabled
 #endif
- ){if(args.Length>0&&args[0]=="--core-update-health")new CoreHealthStartup(args);else{string root=AppDomain.CurrentDomain.BaseDirectory;CoreDeployment.AdoptPortable(root);if(CoreUpdaterProgram.HandoffRecovery(root,CoreUpdateTrust.PublicKeyXml))return 0;}}string assets=ModernAssets.Prepare();return Start(assets,args);}catch(Exception e){if(args.Length>1&&args[0]=="--modern-preview"){File.WriteAllText(args[1]+".error.txt",e.ToString());return 1;}MessageBox.Show("界面启动失败："+e.Message+"\n\n请确认微软 WebView2 Runtime 已安装。官方地址：https://developer.microsoft.com/microsoft-edge/webview2/\n未修改游戏安装或配置。","OZL",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
+ ){if(args.Length>0&&args[0]=="--core-update-health")new CoreHealthStartup(args);else{string root=AppDomain.CurrentDomain.BaseDirectory;CoreDeployment.AdoptPortable(root);if(CoreUpdaterProgram.HandoffRecovery(root,CoreUpdateTrust.PublicKeyXml))return 0;}}string assets=ModernAssets.Prepare();return Start(assets,args);}catch(Exception e){if(args.Length>1&&args[0]=="--modern-preview"){File.WriteAllText(args[1]+".error.txt",e.ToString());return 1;}LauncherDiagnostics.Write("启动器启动失败",e);MessageBox.Show("启动器启动失败："+e.Message+"\n\n请保留此提示，通过反馈提供启动器日志。","OZL",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
   [MethodImpl(MethodImplOptions.NoInlining)]static int Start(string assets,string[] args){using(var form=new ModernForm(assets,args)){Application.Run(form);return form.ExitCode;}}
  }
  sealed partial class ModernForm:Form {
