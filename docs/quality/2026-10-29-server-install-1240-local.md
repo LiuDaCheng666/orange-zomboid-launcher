@@ -32,7 +32,7 @@ Buddy 使用真实 `policy=prompt`；服务器会话移除可能覆盖它的旧 
 - 实际游戏窗口、ImGui 授权点击、真实服务器连接和 3D 渲染未执行；Console 授权与 JVM 探针不能替代这些验收。真正需要 JVM PREMAIN 的新模组也不能承诺在已启动进程内即时完成早期加载。
 - 本次反馈的下载来源已经完整存在；未用本人的 Steam 账户测试首次订阅。现有首次下载入口会调用订阅确认和下载，不能把代码检查称为已实际订阅验收。
 - Windows 发布者签名仍是 NotSigned；后续完整本地候选保留 RSA 包清单与哈希验证，不宣称 Defender 永不检测。
-- 新服务器卡片、查询轮询与完整候选包的最终收据待本轮操作验收完成后补记。
+- 完整本地候选的包内 Web、原生服务桥接及真实隔离文件操作已补齐，见下方最终收据；这些验证仍不代表实际游戏内验收或已经上线。
 
 ## 顶部内存条实际场景验证
 
@@ -55,3 +55,15 @@ Buddy 使用真实 `policy=prompt`；服务器会话移除可能覆盖它的旧 
 - 最终 DOM 定向回归：新详情14组、连接选择13组、受影响启动9组通过；相邻服务器刷新、列表稳定和 Java 授权目标回归通过。纯 DOM 的回复与图库图片是明确合成 fixture；真实 UDP／原生文件流程单独记录，不互相冒充。
 
 证据：artifacts/server-compact-detail-1240/final-web-summary.json、artifacts/server-public-query-native/、artifacts/recommendations-browser/final-source.json。后台仅使用本地回环的独立数据和临时账号，未部署线上管理器或改变现有四服信息。
+
+## 最终完整候选与包内操作收据
+
+生产源码提交为 `653c83b`，完整 Velopack 本地候选位于 `E:\Projects\OrangeLauncher\dist\1.2.40-server-experience-20261029-653c83b`。交付文件是 `release\OrangeZomboidLauncher-win-Portable.zip`，不是未完成的 app 中间目录。ZIP 大小 28,653,044 字节，SHA-256 为 `406cc04835d5f60710e3214c93fe9d41408dff063e582106e46adf3d193ea554`。
+
+- 完整 ZIP CRC、发行布局、RSA 包清单、bootstrap 和哈希验证通过。解压包包含 `.portable`、根入口、`Update.exe` 和 `current/sq.version`。实际主程序 SHA-256 为 `edd5a2867ca32f1729e701e3d2538ebecec828ddff04d33d35b2cce5678a3ff8`。Windows 发布者签名为 `NotSigned`，按既有明确例外构建，不称为 Windows 已签名。证据为 artifacts/local-1.2.40/candidate.json、release-verification.json。
+- 最终包内 `current/Web` 的 app.js/app.css 与冻结源码逐字节一致；index.html 仅包含构建器将占位注释替换为生成图库数据的预期差异。包内 OrangeStartup.jar 与最终顶部内存条资产逐字节一致。
+- `ServerCardsNativeUi.test.ps1 -RunTag portable-final -WebRoot <包内 current/Web>`：实际读取完整包内 Web，重新编译同源生产 Controller 与服务，11 项通过。真实回环 UDP 的 INFO/RULES 驱动在线、无响应、信息不完整及五秒轮询；查询正在进行时点击连接和取消后无残留占用；详情轮播、键盘切图、富文本实际 computed style、纯文回退、链接到原生入口均验证。推荐元数据和图库是明确标记的隔离 fixture，不是线上服务器内容。原 profiles、收藏 SQLite、游戏 JSON 和模组文件字节与修改时间保持不变。证据 artifacts/server-cards-native-ui/portable-final/。
+- `SupportConfigurationNative.test.ps1 -RunTag portable-final -WebRoot <包内 current/Web>`：实际读取包内 Web，后台点击启用、停用、复用、确认卸载和取消，生产原生服务真实复制及删除隔离文件。270/405 字符目标与 281 字符来源全部内容哈希一致；取消前已复制的深层临时文件已核对，取消后无残留。旧版已启用状态直接卸载无需先复制，另一个配置和原来源保持不变。证据 artifacts/support-long-paths-ui-1240/portable-final/。
+- 根任务实际查看最终包内的 Buddy 启用和取消、服务器卡片三色状态、详情顶部轮播及下方富文本截图；最终顶部内存条整页图亦已逐看。未操作用户前台、未打开真实游戏或系统浏览器；包内 Web 与重新编译的同源原生桥接不冒充安装后 WebView2 壳或真实游戏验收。
+
+上述补充只修改测试入口和记录，不改变候选内生产文件。候选尚未上传服务器、GitHub 或在线后台。
