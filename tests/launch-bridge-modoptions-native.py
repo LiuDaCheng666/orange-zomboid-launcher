@@ -20,10 +20,12 @@ def run(game_root, buddy_root):
                 "tickbox|UnloadedModA|enabled|true\r\n"
                 "textentry|UnloadedModB|label|其他模组的原始值\r\n")
 
-    def boot(content, kind="server", include_bridge=True, fail_write=""):
+    def boot(content, kind="server", include_bridge=True, fail_write="", registration="ready"):
         lua = LuaRuntime(unpack_returned_tuples=True)
         lua.execute("""
-            files={};writes={};diagnostics={};autoOrder=true;calls=0
+            files={};writes={};diagnostics={};autoOrder=true;calls=0;luaErrors={}
+            local throw=error
+            function error(message,...) luaErrors[#luaErrors+1]=message;return throw(message,...) end
             function print(value) diagnostics[#diagnostics+1]=value end
             function getText(value) return value end
             luautils={split=function(value,sep)
@@ -72,8 +74,14 @@ def run(game_root, buddy_root):
         fields = ["ORANGE1", "a" * 32, "2000000000", kind, "Sandbox", "fixture", "127.0.0.1", "1", "synthetic", "", "", "0"]
         lua.globals().files["OrangeLauncherSession.request.txt"] = "\n".join(fields) + "\n"
         lua.execute(mod_options)
-        lua.execute(buddy_options)
-        lua.execute("PZAPI.ModOptions:load()")
+        if registration == "ready":
+            lua.execute(buddy_options)
+        elif registration == "no-api":
+            lua.execute("PZAPI=nil")
+        elif registration == "no-option":
+            lua.execute("PZAPI.ModOptions:create('ZombieBuddy','ZombieBuddy')")
+        if registration != "no-api":
+            lua.execute("PZAPI.ModOptions:load()")
         if include_bridge:
             lua.execute(bridge)
         lua.globals().emit("OnMainMenuEnter")
@@ -81,6 +89,17 @@ def run(game_root, buddy_root):
         if include_bridge:
             lua.globals().emit("OnRenderTick")
         return lua
+
+    for registration in ("no-api", "no-group", "no-option"):
+        delayed = boot(original, registration=registration)
+        assert not list(delayed.globals().luaErrors.values()), "unregistered optional Buddy settings must not throw a Lua error: " + registration
+        assert delayed.globals().connected is True and delayed.globals().orderAtConnect is False
+        delayed_saved = delayed.globals().files["ModOptions.ini"]
+        assert delayed_saved.startswith(original), "delayed registration must retain all existing option bytes"
+        assert delayed_saved.splitlines()[-1] == "tickbox|ZombieBuddy|autoFixModOrder|false", "late Buddy registration must read the server order preference"
+        after_reset = boot(delayed_saved, include_bridge=False)
+        assert after_reset.globals().autoOrder is False, "actual original Buddy Lua must retain server order after registration/ResetLua"
+    print("PASS: absent API/group/option creates no Lua exception, connects immediately, and survives later original Buddy Lua registration")
 
     lua = boot(original)
     assert lua.globals().connected is True and lua.globals().orderAtConnect is False

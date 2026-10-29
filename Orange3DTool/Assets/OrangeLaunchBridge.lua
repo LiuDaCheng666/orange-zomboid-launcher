@@ -49,10 +49,11 @@ local function serverOrder()
     if not ZombieBuddy or not ZombieBuddy.setAutoFixModOrder then return end
     local synced=pcall(function()
         local api=PZAPI and PZAPI.ModOptions
-        local options=api and api:getOptions('ZombieBuddy')
-        local option=options and options:getOption('autoFixModOrder')
-        if not option or not option.setValue then error('Buddy option unavailable') end
-        option:setValue(false)
+        local options=api and api.getOptions and api:getOptions('ZombieBuddy')
+        local option=options and options.getOption and options:getOption('autoFixModOrder')
+        -- Direct connect can precede Buddy's Lua settings registration. Keep the
+        -- saved override for ResetLua even when there is no UI option to update.
+        if option and option.setValue then option:setValue(false) end
         persistBuddyOrder()
     end)
     if not synced then print('[OZL] Buddy saved order option unavailable; runtime preference will still be attempted.') end
