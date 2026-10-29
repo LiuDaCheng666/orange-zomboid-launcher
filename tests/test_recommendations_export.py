@@ -49,6 +49,25 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(before, self.feed.read_bytes())
         self.assertFalse(self.app.publication()["pending"])
 
+    def test_rich_description_exports_exact_format_data_and_restart_preserves_bytes(self):
+        rich = " \t<section><h2 style=\"color:#cc8800\">合作生存</h2>\r\n<p>完整介绍</p></section>\n "
+        def add_rich(rows):
+            self.add(rows)
+            rows[-1]["descriptionHtml"] = rich
+            rows[-1]["extendedDescription"] = "独立纯文后备"
+            rows[-1] = self.service.record(rows[-1])
+        self.app.mutate(0, add_rich)
+        public = self.feed_document()
+        self.assertEqual(rich, public["servers"][0]["descriptionHtml"])
+        self.assertEqual("独立纯文后备", public["servers"][0]["extendedDescription"])
+        self.assertEqual(1, public["schema"])
+        self.assertNotIn("published", public["servers"][0])
+        before = self.feed.read_bytes()
+        self.app.close()
+        self.app = self.open()
+        self.assertEqual(before, self.feed.read_bytes())
+        self.assertEqual(rich, self.app.public_document()["servers"][0]["descriptionHtml"])
+
     def test_export_failure_preserves_old_file_and_restart_flushes_committed_revision(self):
         before = self.feed.read_bytes()
         with mock.patch.object(self.service.os, "replace", side_effect=OSError("fixture export failure")):

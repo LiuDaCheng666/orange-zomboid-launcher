@@ -25,13 +25,13 @@ import time
 from urllib.parse import urlsplit
 
 STATIC = Path(__file__).resolve().parent / "static"
-MAX_BODY = 65536
 MAX_DOCUMENT = 1048576
+MAX_BODY = MAX_DOCUMENT
 MAX_ROWS = 200
 ITERATIONS = 310000
 COOKIE = "ozl_recommendations_session"
 BASE_FIELDS = {"id", "name", "host", "port", "queryPort", "version", "description", "cover", "tags", "order", "useSteamRelay", "published"}
-OPTIONAL_FIELDS = {"extendedDescription", "screenshots"}
+OPTIONAL_FIELDS = {"extendedDescription", "screenshots", "descriptionHtml"}
 FIELDS = BASE_FIELDS | OPTIONAL_FIELDS
 IMAGE_HOSTS = {"orangezl.com", "images.steamusercontent.com", "steamuserimages-a.akamaihd.net"}
 
@@ -128,6 +128,9 @@ def record(value):
     if not isinstance(value, dict) or not BASE_FIELDS.issubset(value) or set(value) - FIELDS:
         raise Rejected(400, "请求字段不完整，请刷新后重试。")
     result = dict(value)
+    html = value.get("descriptionHtml", "")
+    text(html, 32768, multiline=True)
+    result["descriptionHtml"] = html
     result["extendedDescription"] = text(value.get("extendedDescription", ""), 8000, multiline=True)
     screenshots = value.get("screenshots", [])
     if not isinstance(screenshots, list) or len(screenshots) > 8:
@@ -464,7 +467,7 @@ class Handler(BaseHTTPRequestHandler):
     def respond(self, status, payload, media="application/json; charset=utf-8", extra=None):
         data = payload if isinstance(payload, bytes) else json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
-        for key, value in {"Content-Type": media, "Content-Length": str(len(data)), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'", **(extra or {})}.items():
+        for key, value in {"Content-Type": media, "Content-Length": str(len(data)), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'", **(extra or {})}.items():
             self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)

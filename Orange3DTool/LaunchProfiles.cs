@@ -13,7 +13,7 @@ using System.Web.Script.Serialization;
 namespace PZ3D {
  sealed class GameLaunchOutcome { public string message; public string stage; public string warning; public LaunchPreflightReport preflight; public GameStartupPending startup; }
  sealed class ProfileLaunchRequest {
-  public string Kind,Id,Mode,Save,Host,Username,UserPassword,ServerPassword;
+  public string Kind,Id,Mode,Save,Host,Username,UserPassword,ServerPassword,ServerComponents;
   public int Port; public bool UseSteamRelay;
   internal string StartupSessionId;
   internal CancellationToken Cancellation;
@@ -26,7 +26,7 @@ namespace PZ3D {
   public Dictionary<string,string> Files=new Dictionary<string,string>();
   public int Pid;public long Birth;
   public string ConfigurationId,ConfigurationMode,ConfigurationOwner,ConfigurationRoot,SessionDirectory,BridgeDirectory,SessionAppliedHash;
-  public string[] SessionVmArguments,ManagedIds;
+  public string[] SessionVmArguments,ManagedIds;public string ServerComponents,ServerRuntimeRoot;
  }
  static partial class LaunchProfiles {
   const string ModId="OrangeLauncherSession";const string RequestName="OrangeLauncherSession.request.txt";const string StatusName="OrangeLauncherSession.status.txt";
@@ -94,6 +94,7 @@ namespace PZ3D {
    arguments.Add("-cp");arguments.Add(string.Join(";",strings(config["classpath"])));arguments.Add(main.Replace('/','.'));return arguments.ToArray();
   }
   internal static ProcessStartInfo BuildStartInfo(Engine e){
+   if(e.LiveSession!=null&&e.LiveSession.ServerComponents!=null)return ServerStartInfo(e);
    if(e.OwnedLaunch){int major=(GameVersionProbe.Read(e.Game)??new Version(42,0)).Major;var own=e.OwnedConfiguration.BuildStartInfo(major);if(e.LiveSession!=null){var arguments=e.OwnedConfiguration.StockArguments(major).ToList();arguments.InsertRange(arguments.IndexOf("-cp"),e.LiveSession.VmArguments);own.Arguments=string.Join(" ",arguments.Select(LauncherConfiguration.QuoteArgument));}return own;}
 
    foreach(string path in new[]{e.Game,e.User,Path.Combine(e.Game,"ProjectZomboid64.exe")})LauncherMaintenance.NoReparse(path);
@@ -117,6 +118,7 @@ namespace PZ3D {
   }
   public static void Stage(Engine e,ProfileLaunchRequest r){using(SaveEnvironmentRuntime.AcquireRevision(e))StageCore(e,r);}
   static void StageCore(Engine e,ProfileLaunchRequest r){
+   if(r.Kind=="server"&&!LegacyBuild(e)){StageServer(e,r);return;}if(r.Kind!="server"&&r.ServerComponents!=null)throw new IOException("服务器组件模式仅用于服务器连接。");
    if(e.OwnedLaunch){StageOwned(e,r);return;}
    var watch=Stopwatch.StartNew();
    e.GuardLaunch();foreach(string path in new[]{e.User,e.Mods,e.Data,Journal(e)})LauncherMaintenance.NoReparse(path);if(Pending(e))throw new Exception("上一次启动配置尚未恢复，请查看启动状态。");string payload=Payload(r);
@@ -131,12 +133,13 @@ namespace PZ3D {
   }
   static bool SameOriginal(string file,byte[] original){return original==null?!File.Exists(file):File.Exists(file)&&File.ReadAllBytes(file).SequenceEqual(original);}
   // Cached monitor images validate exact owned paths without loading UI assets.
-  static void ValidateRecord(Engine e,ProfileSessionRecord record){if(record.SnapshotId!=null){var snapshot=SaveEnvironments.FindOwned(e.Data,e.Game,e.User);if(snapshot==null||snapshot.Id!=record.SnapshotId||snapshot.ManifestHash!=record.SnapshotManifestHash)throw new IOException("启动记录的快照版本已变化，未覆盖快照文件。");}if(record.ConfigurationMode!=null){ValidateOwnedRecord(e,record);return;}if(record.Files==null||record.Files.Count<2||record.Files.Count>4096||!Regex.IsMatch(record.Nonce??"",@"^[a-f0-9]{32}$")||!Regex.IsMatch(record.AppliedHash??"",@"^[A-F0-9]{64}$"))throw new Exception("启动恢复记录缺少有效会话及文件校验。");string folder=Path.Combine(e.User,"mods",ModId);bool legacy=record.Files.ContainsKey(Path.Combine(folder,"mod.info"));var owned=legacy?new[]{Path.Combine(folder,"mod.info"),Path.Combine(folder,"media","lua","client","OrangeLaunchBridge.lua")}:new[]{Path.Combine(folder,"common","mod.info"),Path.Combine(folder,"42","mod.info"),Path.Combine(folder,"42","media","lua","client","OrangeLaunchBridge.lua")};var allowed=new HashSet<string>(owned.Select(Path.GetFullPath),StringComparer.OrdinalIgnoreCase);var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);foreach(var file in record.Files){string path=Path.GetFullPath(file.Key);if((!allowed.Contains(path)&&!ServerLaunchTranslations.OwnedPath(e,path))||!seen.Add(path)||!Regex.IsMatch(file.Value??"",@"^[A-F0-9]{64}$"))throw new Exception("启动恢复记录文件越界或校验无效。");LauncherMaintenance.NoReparse(path);}if(!allowed.IsSubsetOf(seen))throw new Exception("启动恢复记录缺少启动脚本。");if(record.Original!=null&&Convert.FromBase64String(record.Original).Length>1048576)throw new Exception("启动恢复原文件异常过大。");}
+  static void ValidateRecord(Engine e,ProfileSessionRecord record){if(record.ServerRuntimeRoot!=null){ValidateServerRecord(e,record);return;}if(record.SnapshotId!=null){var snapshot=SaveEnvironments.FindOwned(e.Data,e.Game,e.User);if(snapshot==null||snapshot.Id!=record.SnapshotId||snapshot.ManifestHash!=record.SnapshotManifestHash)throw new IOException("启动记录的快照版本已变化，未覆盖快照文件。");}if(record.ConfigurationMode!=null){ValidateOwnedRecord(e,record);return;}if(record.Files==null||record.Files.Count<2||record.Files.Count>4096||!Regex.IsMatch(record.Nonce??"",@"^[a-f0-9]{32}$")||!Regex.IsMatch(record.AppliedHash??"",@"^[A-F0-9]{64}$"))throw new Exception("启动恢复记录缺少有效会话及文件校验。");string folder=Path.Combine(e.User,"mods",ModId);bool legacy=record.Files.ContainsKey(Path.Combine(folder,"mod.info"));var owned=legacy?new[]{Path.Combine(folder,"mod.info"),Path.Combine(folder,"media","lua","client","OrangeLaunchBridge.lua")}:new[]{Path.Combine(folder,"common","mod.info"),Path.Combine(folder,"42","mod.info"),Path.Combine(folder,"42","media","lua","client","OrangeLaunchBridge.lua")};var allowed=new HashSet<string>(owned.Select(Path.GetFullPath),StringComparer.OrdinalIgnoreCase);var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);foreach(var file in record.Files){string path=Path.GetFullPath(file.Key);if((!allowed.Contains(path)&&!ServerLaunchTranslations.OwnedPath(e,path))||!seen.Add(path)||!Regex.IsMatch(file.Value??"",@"^[A-F0-9]{64}$"))throw new Exception("启动恢复记录文件越界或校验无效。");LauncherMaintenance.NoReparse(path);}if(!allowed.IsSubsetOf(seen))throw new Exception("启动恢复记录缺少启动脚本。");if(record.Original!=null&&Convert.FromBase64String(record.Original).Length>1048576)throw new Exception("启动恢复原文件异常过大。");}
   static ProfileSessionRecord Load(Engine e){LauncherMaintenance.NoReparse(Journal(e));if(new FileInfo(Journal(e)).Length>MaxJournalBytes)throw new Exception("启动恢复记录异常过大。");var r=Json.Deserialize<ProfileSessionRecord>(File.ReadAllText(Journal(e)));if(r==null||!string.Equals(Path.GetFullPath(r.Game),Path.GetFullPath(e.Game),StringComparison.OrdinalIgnoreCase)||!string.Equals(Path.GetFullPath(r.User),Path.GetFullPath(e.User),StringComparison.OrdinalIgnoreCase)||r.Token!=Key(e))throw new Exception("启动恢复记录与游戏目录不一致。");ValidateRecord(r.ConfigurationMode==null?e:OwnedRecoveryEngine(e,r),r);return r;}
   static void ClearRequest(Engine e){foreach(string file in RequestFiles(e)){LauncherMaintenance.NoReparse(file);if(File.Exists(file)){Atomic(file,new byte[0]);File.Delete(file);}}}
   static string StageText(string value){if(value=="menu-ready")return "游戏主菜单已就绪。";if(value=="prepared")return "正在准备一次性启动目标。";if(value=="submitted-save")return "读档请求已交给游戏；授权、版本转换等提示仍由游戏处理。";if(value=="submitted-server")return "服务器连接请求已提交。";if(value=="connection-failed")return "服务器连接失败；请查看游戏连接提示和日志后重试。";if(value.StartsWith("failed")||value.StartsWith("invalid")||value.StartsWith("expired"))return "自动直达未完成，请在游戏原入口继续；退出后恢复本地清单。";return value==""?"":"启动状态需检查。";}
   static string RecoverUnlocked(Engine e,bool force=false){if(!Pending(e))return "";if(!e.TestMode&&GameProcessGuard.IsSessionRunning(e.Game,e.ProcessInventory))return "客户端或无法核实用途的游戏 Java 仍在运行；退出后清理启动会话，保留其间编辑的配置。";var r=Load(e);if(!e.TestMode&&RecordedAlive(r))return "本次启动记录的进程仍在运行，暂不清理启动会话。";DateTime created;if(!force&&r.State=="prepared"&&DateTime.TryParse(r.CreatedUtc,out created)&&DateTime.UtcNow-created.ToUniversalTime()<TimeSpan.FromSeconds(90))return "启动请求准备中，暂不覆盖临时配置。";if(!force&&r.ConfigurationMode==null&&r.SnapshotId==null&&r.Kind=="normal"&&r.State=="launched"&&r.Pid==0&&DateTime.TryParse(r.CreatedUtc,out created)&&DateTime.UtcNow-created.ToUniversalTime()<TimeSpan.FromSeconds(180))return "正在等待 Steam 启动本次客户端，暂不覆盖临时配置。";
    if(!string.IsNullOrEmpty(r.CaptureEndpoint))try{if(!ServerWorkshopCatalog.Capture(e.Data,r.CaptureEndpoint,r.Nonce,LuaFile(e,"OrangeLauncherWorkshop.txt"),r.CaptureRevision))new LauncherJournal(e.Data).Diagnostic("服务器工坊连接记录缺失或不完整，保留已有清单。");}catch(Exception ex){try{new LauncherJournal(e.Data).Diagnostic("服务器工坊连接记录读取失败："+ex.Message);}catch{}}
+   if(r.ServerRuntimeRoot!=null)return RecoverServer(e,r);
    if(r.ConfigurationMode!=null)return RecoverOwned(OwnedRecoveryEngine(e,r),r);
    LauncherMaintenance.NoReparse(e.Mods);byte[] original=r.Original==null?null:Convert.FromBase64String(r.Original);bool applied=File.Exists(e.Mods)&&DlssInstaller.HashFile(e.Mods)==r.AppliedHash;bool edited=!applied&&!SameOriginal(e.Mods,original);
    if(applied){if(original==null)File.Delete(e.Mods);else Atomic(e.Mods,original);}else if(edited&&File.Exists(e.Mods)){byte[] current=File.ReadAllBytes(e.Mods);string text=new UTF8Encoding(false,true).GetString(current);string pattern="(?:"+string.Join("|",new[]{ModId}.Concat(ServerLaunchTranslations.OwnedIds(e,r.Files.Keys)).Select(Regex.Escape))+")";string clean=Regex.Replace(text,@"(?m)^[ \t]*mod[ \t]*=[ \t]*"+pattern+@"[ \t]*,[^\r\n]*(?:\r?\n|$)","");if(clean!=text){if(!SameOriginal(e.Mods,current))throw new IOException("清理期间本地模组清单已改变，请重试；已保留玩家编辑。");Atomic(e.Mods,new UTF8Encoding(false).GetBytes(clean));}}ClearRequest(e);string folder=Path.Combine(e.User,"mods",ModId);foreach(var file in r.Files){LauncherMaintenance.NoReparse(file.Key);if(File.Exists(file.Key)&&DlssInstaller.HashFile(file.Key)==file.Value)File.Delete(file.Key);}ServerLaunchTranslations.RemoveEmptyParents(e,r.Files.Keys);
@@ -219,7 +222,7 @@ namespace PZ3D {
   internal static ProfileSessionRecord RecordStartedProcess(Engine e,Process process){var record=Load(e);record.Pid=process.Id;record.Birth=process.StartTime.ToUniversalTime().Ticks;record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));return record;}
   public static GameLaunchOutcome Launch(Engine e,ProfileLaunchRequest r){
    if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");
-   var watch=Stopwatch.StartNew();string reason=LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));Timed(r.Timing,"launch-check",watch);if(reason!="")throw new Exception(reason);
+   var watch=Stopwatch.StartNew();string reason=r.Kind=="server"?ServerReason(e,false,e.RuntimeRunning(true)):LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));Timed(r.Timing,"launch-check",watch);if(reason!="")throw new Exception(reason);
    using(var mutex=new Mutex(false,MutexName(e))){bool acquired=false;try{
     try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}if(!acquired)throw new Exception("另一个启动器正在准备游戏。");
     watch.Restart();Recover(e);Timed(r.Timing,"session-recover",watch);Stage(e,r);

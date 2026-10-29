@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 namespace PZ3D {
  static class ModernHostPolicy {
-  static readonly HashSet<string> Actions=new HashSet<string>{"launchConfigurations","launchConfigurationSelect","configurationTasks","configurationCancel","launchPreflight","status","componentsAction","memoryGet","memorySave","settingsGet","settingsSave","shadersGet","shaderSelect","importShader","maintenance","launch","chooseGame","cancel","help","theme","logs","reticleGet","reticleSave","open","openOfficial","dlss","savesList","modCatalog","saveGet","saveSave","serverList","serverUpsert","serverDelete","serverQuery","profileLaunch","profileRecover","modCover","modDetail","javaList","javaSave","updatesGet","modProfiles","modProfileGet","modSort","saveThumb","serverThumb","taskGet","playtimeGet","serverFavorites","steamConnection","steamSubscriptions","steamSearch","steamDetails","serverHall","modAutoSort","modProfileSave","modProfileDelete","modProfileActivate","steamDownload","favoriteImport","playtimeSettings"};
+  static readonly HashSet<string> Actions=new HashSet<string>{"launchConfigurations","launchConfigurationSelect","configurationTasks","configurationCancel","launchPreflight","status","componentsAction","memoryGet","memorySave","settingsGet","settingsSave","shadersGet","shaderSelect","importShader","maintenance","launch","chooseGame","cancel","help","theme","logs","reticleGet","reticleSave","open","openExternal","openOfficial","dlss","savesList","modCatalog","saveGet","saveSave","serverList","serverUpsert","serverDelete","serverQuery","profileLaunch","profileRecover","modCover","modDetail","javaList","javaSave","updatesGet","modProfiles","modProfileGet","modSort","saveThumb","serverThumb","taskGet","playtimeGet","serverFavorites","steamConnection","steamSubscriptions","steamSearch","steamDetails","serverHall","modAutoSort","modProfileSave","modProfileDelete","modProfileActivate","steamDownload","favoriteImport","playtimeSettings"};
   internal static bool IsWorkshopImage(string url){Uri uri;return url!=null&&url.Length<=8192&&!url.Any(char.IsControl)&&Uri.TryCreate(url,UriKind.Absolute,out uri)&&uri.Scheme=="https"&&uri.IsDefaultPort&&uri.UserInfo==""&&(uri.Host=="orangezl.com"||uri.Host=="images.steamusercontent.com"||uri.Host=="steamuserimages-a.akamaihd.net");}
   public static Dictionary<string,object> Validate(string source,string text){
    Uri uri;if(!Uri.TryCreate(source,UriKind.Absolute,out uri)||uri.Scheme!="https"||uri.Host!="orange.local"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.AbsolutePath!="/index.html")throw new Exception("拒绝非本地受信界面的请求。");
@@ -21,6 +21,7 @@ namespace PZ3D {
    ModernController.ValidateGuidePayload((string)action,(Dictionary<string,object>)payload);
    if(ModernController.ServerWorkshopAction((string)action))ValidateWorkshopPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="openContact")LauncherContact.Resolve((Dictionary<string,object>)payload);
+   if((string)action=="openExternal")ResolveExternal((Dictionary<string,object>)payload);
    if((string)action=="maintenance")ValidateMaintenancePayload((Dictionary<string,object>)payload);
    if(PlayProfiles.Action((string)action))PlayProfiles.ValidatePayload((string)action,(Dictionary<string,object>)payload);
    if(CoreAction((string)action)) {
@@ -39,9 +40,11 @@ namespace PZ3D {
    if((string)action=="saveDeletePreview"||(string)action=="saveDelete")ValidateSaveDeletionPayload((string)action,(Dictionary<string,object>)payload);
    if((string)action=="javaList"||(string)action=="javaSave")ValidateJavaApprovalPayload((string)action,(Dictionary<string,object>)payload);
    if(new[]{"modCatalog","modCover","modDetail","modSort","saveGet","saveSave"}.Contains((string)action))ValidateSaveEditorPayload((string)action,(Dictionary<string,object>)payload);
+   if((string)action=="serverQuery")ServerProfiles.ValidateQueryPayload((Dictionary<string,object>)payload);
    if((string)action=="steamSearch")SteamLauncherServices.Normalize("search",(Dictionary<string,object>)payload);
    return request;
   }
+  internal static string ResolveExternal(Dictionary<string,object> payload){object raw;Uri uri;if(payload==null||payload.Count!=1||!payload.TryGetValue("url",out raw)||!(raw is string)||((string)raw).Length>8192||((string)raw).Any(char.IsControl)||((string)raw).Contains("\\")||!Uri.TryCreate((string)raw,UriKind.Absolute,out uri)||(uri.Scheme!="http"&&uri.Scheme!="https")||string.IsNullOrEmpty(uri.Host))throw new InvalidOperationException("外部链接只接受完整的 HTTP 或 HTTPS 网页地址。");return uri.AbsoluteUri;}
   // Resolve only strictly validated envelopes. Unknown/recursive inner actions never
   // inherit read privileges from the outer configurationRequest name.
   internal static string ReadAction(string action,Dictionary<string,object> payload){if(action!="configurationRequest")return action;ModernController.ValidateConfigurationPayload(action,payload);return (string)payload["action"];}
@@ -77,11 +80,12 @@ namespace PZ3D {
    object kind,id;if(p==null)throw new Exception("缺少启动参数。");
    if(action=="startupStatus"){if(p.Count!=0)throw new Exception("启动状态读取不接受目标参数。");return;}
    if(action=="startupBegin"){
-    if(p.Count!=2||!p.TryGetValue("targetKind",out kind)||!(kind is string)||!new[]{"normal","save","server"}.Contains((string)kind)||!p.TryGetValue("targetId",out id)||!(id is string)||((string)id).Length>1024||((string)id).Any(c=>c<' '||c=='\u007f')||((string)kind=="normal"?((string)id)!="":String.IsNullOrWhiteSpace((string)id)))throw new Exception("启动准备只接受明确的本机目标。");
+     if(p.Count!=(p.ContainsKey("serverComponents")?3:2)||!p.TryGetValue("targetKind",out kind)||!(kind is string)||!new[]{"normal","save","server"}.Contains((string)kind)||!p.TryGetValue("targetId",out id)||!(id is string)||((string)id).Length>1024||((string)id).Any(c=>c<' '||c=='\u007f')||((string)kind=="normal"?((string)id)!="":String.IsNullOrWhiteSpace((string)id)))throw new Exception("启动准备只接受明确的本机目标。");ServerMode((string)kind,p);
    }else if(p.Count!=1||!p.TryGetValue("startupId",out id)||!StartupId(id))throw new Exception("启动准备标识无效。");
   }
-  internal static void ValidateLaunchPayload(string action,Dictionary<string,object> p){object id,kind,target;if(p==null||!p.TryGetValue("startupId",out id)||!StartupId(id)||p.Count!=(action=="launch"?1:3))throw new Exception("请从启动按钮重新提交本次请求。");if(action=="profileLaunch"&&(!p.TryGetValue("kind",out kind)||!(kind is string)||!new[]{"save","server"}.Contains((string)kind)||!p.TryGetValue("id",out target)||!(target is string)||String.IsNullOrWhiteSpace((string)target)||((string)target).Length>1024))throw new Exception("启动目标无效。");}
-  internal static string ValidatePreflightPayload(Dictionary<string,object> payload){object kind,id;var copy=new Dictionary<string,object>(payload);if(copy.TryGetValue("startupId",out id)){if(!StartupId(id))throw new Exception("启动准备标识无效。");copy.Remove("startupId");}if(copy.Count==0)return "normal";if(copy.Count==1&&copy.TryGetValue("targetKind",out kind)&&kind is string&&new[]{"normal","save","server"}.Contains((string)kind))return (string)kind;throw new Exception("启动预检只接受明确目标与本次准备标识。");}
+  internal static string ServerMode(string kind,Dictionary<string,object> p){object raw;if(!p.TryGetValue("serverComponents",out raw))return kind=="server"?"follow-server":null;if(kind!="server"||!(raw is string)||!new[]{"follow-server","force-local"}.Contains((string)raw))throw new Exception("服务器组件模式无效。");return (string)raw;}
+  internal static void ValidateLaunchPayload(string action,Dictionary<string,object> p){object id,kind=null,target;if(p==null||!p.TryGetValue("startupId",out id)||!StartupId(id)||p.Count!=(action=="launch"?1:p.ContainsKey("serverComponents")?4:3))throw new Exception("请从启动按钮重新提交本次请求。");if(action=="profileLaunch"&&(!p.TryGetValue("kind",out kind)||!(kind is string)||!new[]{"save","server"}.Contains((string)kind)||!p.TryGetValue("id",out target)||!(target is string)||String.IsNullOrWhiteSpace((string)target)||((string)target).Length>1024))throw new Exception("启动目标无效。");ServerMode(action=="launch"?"normal":(string)kind,p);}
+  internal static string ValidatePreflightPayload(Dictionary<string,object> payload){object kind,id;var copy=new Dictionary<string,object>(payload);if(copy.TryGetValue("startupId",out id)){if(!StartupId(id))throw new Exception("启动准备标识无效。");copy.Remove("startupId");}if(copy.Count==0)return "normal";if(copy.Count==(copy.ContainsKey("serverComponents")?2:1)&&copy.TryGetValue("targetKind",out kind)&&kind is string&&new[]{"normal","save","server"}.Contains((string)kind)){ServerMode((string)kind,copy);return (string)kind;}throw new Exception("启动预检只接受明确目标与本次准备标识。");}
 
   internal static void ValidateBuddyPayload(string action,Dictionary<string,object> p){
    if(action=="buddyPreview"){if(p.Count!=0)throw new Exception("扫描旧启动参数不接受页面目标参数。");return;}

@@ -143,6 +143,51 @@ class RecommendationTests(unittest.TestCase):
         row["screenshots"] = ["https://foreign.example.invalid/image.png"]
         self.assertEqual(400, self.save(row)[0])
 
+    def test_description_html_http_roundtrip_and_legacy_db_default(self):
+        self.login()
+        row = self.row(published=True)
+        row["extendedDescription"] = "独立纯文后备介绍 <b>按普通文字</b>"
+        row["descriptionHtml"] = " \t<section><h2 style=\"font-size:24px;color:#cc8800\">合作生存</h2>\r\n<blockquote>原始格式数据</blockquote></section>\n "
+        status, _, saved = self.save(row)
+        self.assertEqual(200, status)
+        public = self.read_json("GET", "/api/recommended-servers")[2]["servers"][0]
+        self.assertEqual(row["descriptionHtml"], public["descriptionHtml"])
+        self.assertEqual(row["extendedDescription"], public["extendedDescription"])
+        self.assertEqual(row["description"], public["description"])
+        self.assertEqual(row["descriptionHtml"], saved["servers"][0]["descriptionHtml"])
+        app = self.server.app
+        app.mutate(saved["revision"], lambda rows: rows[0].pop("descriptionHtml"))
+        self.assertNotIn("descriptionHtml", app.document()["servers"][0])
+        self.assertEqual("", self.read_json("GET", "/api/recommended-servers")[2]["servers"][0]["descriptionHtml"])
+        reopened = self.service.Application(self.private)
+        self.addCleanup(reopened.close)
+        self.assertEqual("", reopened.public_document()["servers"][0]["descriptionHtml"])
+        self.assertEqual(1, reopened.public_document()["schema"])
+
+    def test_description_html_rejects_bad_type_size_controls_without_losing_saved_data(self):
+        self.login()
+        row = self.row(published=True)
+        row["descriptionHtml"] = "<p>保留介绍</p>"
+        status, _, saved = self.save(row)
+        self.assertEqual(200, status)
+        for bad in (None, 42, [], "x" * 32769, "<p>bad\x01</p>"):
+            with self.subTest(value_type=type(bad).__name__):
+                invalid = dict(saved["servers"][0], descriptionHtml=bad)
+                self.assertEqual(400, self.save(invalid)[0])
+                self.assertEqual(saved["revision"], self.document()["revision"])
+                self.assertEqual(row["descriptionHtml"], self.read_json("GET", "/api/recommended-servers")[2]["servers"][0]["descriptionHtml"])
+
+    def test_maximum_multibyte_description_html_can_be_saved_through_http(self):
+        self.login()
+        row = self.row(published=True)
+        row["descriptionHtml"] = "橙" * 32768
+        status, _, saved = self.save(row)
+        self.assertEqual(200, status)
+        self.assertEqual(row["descriptionHtml"], saved["servers"][0]["descriptionHtml"])
+        self.assertEqual(row["descriptionHtml"], self.read_json("GET", "/api/recommended-servers")[2]["servers"][0]["descriptionHtml"])
+        row["descriptionHtml"] += "x"
+        self.assertEqual(400, self.save(row)[0])
+
     def test_export_failure_returns_saved_revision_and_retry_requires_authentication(self):
         self.stop_server()
         public = self.private / "public-fixture"
@@ -198,7 +243,16 @@ class RecommendationTests(unittest.TestCase):
         for _ in range(8):
             status = self.request("POST", "/api/admin/login", dict(self.credentials, password="bad"))[0]
         self.assertEqual(429, status)
-        self.assertEqual(413, self.request("POST", "/api/admin/login", {"padding": "x" * 70000})[0])
+        self.assertEqual(1048576, self.service.MAX_BODY)
+        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=4)
+        connection.putrequest("POST", "/api/admin/login")
+        connection.putheader("Content-Type", "application/json")
+        connection.putheader("Content-Length", str(self.service.MAX_BODY + 1))
+        connection.endheaders()
+        response = connection.getresponse()
+        self.assertEqual(413, response.status)
+        response.read()
+        connection.close()
 
     def test_oversize_document_is_refused_without_replacing_previous_list(self):
         rows = []
@@ -220,6 +274,11 @@ class RecommendationTests(unittest.TestCase):
             self.assertIn(media, headers["Content-Type"])
             self.assertEqual("nosniff", headers["X-Content-Type-Options"])
             self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
+            policy = headers["Content-Security-Policy"]
+            self.assertIn("style-src-attr 'unsafe-inline'", policy)
+            self.assertIn("style-src 'self'", policy)
+            self.assertIn("script-src 'self'", policy)
+            self.assertNotIn("script-src 'unsafe-inline'", policy)
         self.assertEqual(404, self.request("GET", "/admin/auth.json")[0])
 
 

@@ -44,7 +44,7 @@ namespace PZ3D {
    if(selected.FrozenEnvironment==null){RecoverStartup();return;}
    string recovered=LaunchProfiles.Recover(selected);if(recovered!="")lock(gate)log.Add(recovered);
    if(LaunchProfiles.Pending(selected))throw new IOException("此存档的上次启动尚未结束，请先退出游戏再重试。");
-   if(selected.LaunchConfiguration!=null&&selected.LaunchConfiguration.Kind=="frozen"){SaveEnvironmentRuntime.PrepareTarget(selected,kind,target);return;}
+   if(selected.LaunchConfiguration!=null&&selected.LaunchConfiguration.Kind=="frozen"){if(kind=="server")SaveEnvironmentRuntime.ValidateTarget(selected,kind,target);else SaveEnvironmentRuntime.PrepareTarget(selected,kind,target);return;}
    if(kind!="save")throw new IOException("游戏与模组快照只用于原绑定的单人存档。");
    SaveEnvironmentRuntime.PrepareForLaunch(selected,target);
   }

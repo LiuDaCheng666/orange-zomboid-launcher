@@ -161,6 +161,13 @@ namespace PZ3D {
    byte[] receipt=Encoding.ASCII.GetBytes(string.Join("\n",new[]{"version=OZLOWN1","session="+sessionId,"created="+now,"expires="+(now+600),"game="+Encode(e.Game),"user="+Encode(e.User),"context="+Encode(e.OwnedConfiguration.Root),"issues="+Encode(issues),"theme="+(LauncherTheme.Load(e.Data).Light?"light":"dark"),"reducedMotion="+(ReducedMotion()?"true":"false")})+"\n");
    LauncherComponents.Atomic(jar,Payload());LauncherComponents.Atomic(Path.Combine(folder,"session.properties"),receipt);LauncherComponents.Atomic(issues,IssueBytes(sessionId,null));return new[]{"-Dozl.startup.context="+e.OwnedConfiguration.Root,"-javaagent:"+jar};
   }
+  internal static string[] PrepareServerSession(Engine e,string sessionId,string directory,string context){
+   bool enabled=e.OwnedLaunch?e.OwnedConfiguration.Mode!="vanilla"&&Enabled(e):Enabled(e)||e.FrozenEnvironment!=null&&File.ReadAllText(e.Config).Contains(Argument);if(!enabled)return new string[0];
+   if(!Nonce(sessionId)||!VersionLibrary.Same(Path.GetDirectoryName(directory),Path.Combine(context,"runtime")))throw new IOException("服务器加载页会话目录无效。");
+   string folder=Path.Combine(directory,"startup"),jar=Path.Combine(folder,"OrangeStartup.jar"),issues=Path.Combine(folder,"issues.txt");long now=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+   byte[] receipt=Encoding.ASCII.GetBytes(string.Join("\n",new[]{"version=OZLOWN1","session="+sessionId,"created="+now,"expires="+(now+600),"game="+Encode(e.Game),"user="+Encode(e.User),"context="+Encode(context),"issues="+Encode(issues),"theme="+(LauncherTheme.Load(e.Data).Light?"light":"dark"),"reducedMotion="+(ReducedMotion()?"true":"false")})+"\n");
+   LaunchProfiles.ServerAtomic(jar,Payload());LaunchProfiles.ServerAtomic(Path.Combine(folder,"session.properties"),receipt);LaunchProfiles.ServerAtomic(issues,IssueBytes(sessionId,null));return new[]{"-Dozl.startup.context="+context,"-javaagent:"+jar};
+  }
   static bool LiveClient(GameStartupLaunch launch,GameStartupSnapshot snapshot){if(!snapshot.ProcessId.HasValue||snapshot.ProcessBirth<launch.StartedUtc.Ticks)return false;try{using(var process=Process.GetProcessById(snapshot.ProcessId.Value)){
    if(process.HasExited||process.StartTime.ToUniversalTime().Ticks!=snapshot.ProcessBirth)return false;string name=process.ProcessName,image=process.MainModule.FileName;bool java=name=="java"||name=="javaw";if(java&&GameProcessGuard.ReadJavaRole(launch.GamePath,name,image,process)!=JavaProcessRole.Client)return false;return GameStartupMonitor.MatchesClientIdentity(launch.GamePath,launch.StartedUtc,name,image,new DateTime(snapshot.ProcessBirth,DateTimeKind.Utc),java);
   }}catch{return false;}}
@@ -176,10 +183,10 @@ namespace PZ3D {
   internal static string IssueIdentity(GameStartupSnapshot snapshot){var issue=Primary(snapshot);return Convert.ToBase64String(IssueBytes("",issue,0))+"|"+(issue==null?0:issue.ObservationLine).ToString(CultureInfo.InvariantCulture);}
   internal static bool WriteIssues(GameStartupLaunch launch,GameStartupSnapshot snapshot){
    if(launch==null||snapshot==null||!Nonce(launch.SessionId)||launch.SessionId!=snapshot.SessionId)return false;
-   try{var engine=new Engine(launch.GamePath,launch.UserPath,launch.DataPath);var owned=LaunchProfiles.OwnedSession(engine,launch.SessionId);if(owned!=null){
+   try{var engine=new Engine(launch.GamePath,launch.UserPath,launch.DataPath);var owned=LaunchProfiles.OwnedSession(engine,launch.SessionId)??LaunchProfiles.ServerSession(engine,launch.SessionId);if(owned!=null){
     string folder=Path.Combine(owned.SessionDirectory,"startup"),jar=Path.Combine(folder,"OrangeStartup.jar"),receipt=Path.Combine(folder,"session.properties"),issues=Path.Combine(folder,"issues.txt");
     if(!Same(Read(jar,JarLimit),Payload()))return false;byte[] bytes=Read(receipt,SessionLimit);if(bytes==null)return false;var values=Encoding.ASCII.GetString(bytes).Split('\n').Where(line=>line.Contains("=")).Select(line=>line.Split(new[]{'='},2)).ToDictionary(pair=>pair[0],pair=>pair[1]);
-    if(values["version"]!="OZLOWN1"||values["session"]!=launch.SessionId||Decode(values["game"])!=launch.GamePath||Decode(values["user"])!=launch.UserPath||Decode(values["context"])!=owned.ConfigurationRoot||Decode(values["issues"])!=issues)return false;
+    if(values["version"]!="OZLOWN1"||values["session"]!=launch.SessionId||Decode(values["game"])!=launch.GamePath||Decode(values["user"])!=launch.UserPath||Decode(values["context"])!=(owned.ServerRuntimeRoot??owned.ConfigurationRoot)||Decode(values["issues"])!=issues)return false;
     if(long.Parse(values["expires"],CultureInfo.InvariantCulture)<=DateTimeOffset.UtcNow.ToUnixTimeSeconds()&&!LiveClient(launch,snapshot))return false;
     byte[] next=IssueBytes(launch.SessionId,Primary(snapshot));if(next.Length>IssueLimit)return false;LauncherComponents.Atomic(issues,next);return true;
    }}catch{return false;}

@@ -38,16 +38,10 @@ public final class LoadingScene {
         int topColor=switch(state.context){case BOOT, NONE -> light?0xfff6eee3:0xff2b201b;case SERVER -> light?0xffe7f2f8:0xff0c263d;case SAVE -> light?0xffe7f3e9:0xff122f27;};
         int bottomColor=switch(state.context){case BOOT, NONE -> light?0xffe8ddd1:0xff130f10;case SERVER -> light?0xffd0e4ee:0xff07121f;case SAVE -> light?0xffd3e5d6:0xff071812;};
         c.gradient(0,0,w,h,topColor,bottomColor);
-        double track=w-2*margin,top=Math.max(28,42*s),titleSize=font(15*s),small=font(12*s);
-        text(c,state.title,margin,top,titleSize,ink,false,track*.52);
+        double track=w-2*margin,top=maximum>0?Math.max(18,18*s)+Math.max(28,32*s):Math.max(28,42*s),titleSize=font(15*s),small=font(12*s);
+        double titleWidth=maximum>0?memory(c,w,margin,top,s,light,used,maximum,ink,muted,accent):track*.52;
+        text(c,state.title,margin,top,titleSize,ink,false,Math.min(track*.52,titleWidth));
         String count=state.context==LoadingModel.Context.BOOT?(state.processedScripts>0?"已读取 "+state.processedScripts+" 个脚本":state.processedMods>0?"已处理 "+state.processedMods+" 个模组":state.scannedResources>0?"已索引 "+state.scannedResources+" 项资源":""):"";
-        if(maximum>0){
-            double ratio=Math.max(0,Math.min(1,used/(double)maximum)),heapWidth=Math.min(track*.25,160*s),heapY=top+9*s;
-            String heap=String.format(Locale.ROOT,"Java 内存  %,d / %,d MiB",Math.max(0,used)>>20,maximum>>20);
-            text(c,heap,w-margin,top,font(10*s),muted,true,track*.46);
-            c.gradient(w-margin-heapWidth,heapY,heapWidth,Math.max(1,2*s),alpha(muted,40),alpha(muted,40));
-            c.gradient(w-margin-heapWidth,heapY,heapWidth*ratio,Math.max(1,2*s),alpha(accent,145),alpha(accent,145));
-        }
         String[] milestones=switch(state.context){case SAVE->new String[]{"准备","世界","就绪"};case SERVER->new String[]{"连接","创意工坊","模组","同步","世界","就绪"};default->new String[]{"初始化","模组","资源","脚本","界面","就绪"};};
         int stages=milestones.length,active=Math.max(0,Math.min(stages-1,state.stageIndex));
         double gap=8*s,cell=(track-gap*(stages-1))/stages,stageY=top+29*s;
@@ -107,6 +101,20 @@ public final class LoadingScene {
             String[] values={state.issue[2].isEmpty()?"":"模组  ·  "+state.issue[2],state.issue[1],state.issue[3],state.issue[4]};
             for(int i=0;i<values.length;i++)text(c,values[i],right,y+(i+1)*line,body,i==0?ink:muted,true,rightWidth);
         }
+    }
+    private static double memory(Canvas c,double width,double margin,double baseline,double s,boolean light,long used,long maximum,int ink,int muted,int accent){
+        // One edge-to-edge memory strip belongs to the page itself, without a
+        // card, background container, outline, or a second window-like shape.
+        double barHeight=Math.max(18,18*s),ratio=Math.max(0,Math.min(1,Math.max(0,used)/(double)maximum));
+        c.gradient(0,0,width,barHeight,alpha(light?muted:0xff000000,light?45:85),alpha(light?muted:0xff000000,light?35:65));
+        c.gradient(0,0,width*ratio,barHeight,accent,alpha(accent,210));
+        String heap=String.format(Locale.ROOT,"%,d / %,d MiB",Math.max(0,used)>>20,maximum>>20);
+        double size=font(Math.max(20,24*s)),labelSize=font(Math.max(14,14*s)),gap=Math.max(12,16*s),right=width-margin;
+        if(c.measure(heap,size)>width*.5)heap=String.format(Locale.ROOT,"%.1f / %.1f GiB",Math.max(0,used)/1073741824d,maximum/1073741824d);
+        text(c,heap,right,baseline,size,ink,true,width*.5);
+        double labelRight=right-c.measure(heap,size)-gap;
+        text(c,"Java 内存",labelRight,baseline,labelSize,muted,true,width*.2);
+        return Math.max(0,labelRight-c.measure("Java 内存",labelSize)-margin-gap);
     }
     private static void serverFacts(Canvas c,LoadingModel.Snapshot state,double x,double y,double width,double s,int ink,int muted,int accent,boolean compact){
         double small=Math.max(12,font(12*s)),label=font(10*s),line=Math.max(16,(compact?18:22)*s);

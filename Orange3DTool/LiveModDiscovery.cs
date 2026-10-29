@@ -2,7 +2,7 @@ using System;using System.IO;using System.IO.Compression;using System.Linq;using
 namespace PZ3D {
  static class LiveModDiscovery {
   internal const string BuddyHash="eb79b9876332010733a8e0d7ce4fe0377846059a9e28859029e2a0fb449f6cf2";
-  internal sealed class Session {public string Directory,Manifest,ManifestHash;public string[] VmArguments,EnabledIds,SelectedRoots,Warnings;}
+  internal sealed class Session {public string Directory,Manifest,ManifestHash,ServerComponents;public string[] VmArguments,EnabledIds,SelectedRoots,Warnings;}
   static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
   static string Record(string key,params string[] values){return key+string.Concat(values.Select(v=>"\t"+Convert.ToBase64String(Utf8.GetBytes(v))))+"\n";}
   internal static string[] MergeOrder(string[] ordinary,HashSet<string> required,string[] anchors){var result=ordinary.Distinct().ToList();int cursor=0;foreach(string raw in anchors){string id=raw.TrimStart('\\');int existing=result.FindIndex(x=>x.TrimStart('\\')==id);if(existing>=0)cursor=Math.Max(cursor,existing+1);else if(required.Contains(id))result.Insert(cursor++,id);}return result.ToArray();}

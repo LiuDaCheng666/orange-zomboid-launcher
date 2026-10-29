@@ -18,8 +18,8 @@ namespace PZ3D {
    }catch{if(journaled)Recover(e,true);else{if(session!=null)RemoveOwnedDirectory(context,session.Directory,"live-");RemoveOwnedDirectory(context,bridge,"bridge-");}throw;}
   }
   internal static LaunchConfigurationResolution RecoveryConfiguration(Engine source){if(!Pending(source))return null;var record=Load(source);if(record.ConfigurationMode!=null){var restored=OwnedRecoveryEngine(source,record);restored.LaunchConfiguration.Name="已启动配置";return restored.LaunchConfiguration;}if(record.SnapshotId!=null){var snapshot=SaveEnvironments.FindOwned(source.Data,source.Game,source.User);return new LaunchConfigurationResolution{Id="snapshot:"+snapshot.Id,Name=snapshot.Name,Kind="frozen",Available=true,Snapshot=snapshot};}return source.LaunchConfiguration;}
-  internal static ProfileSessionRecord OwnedSession(Engine e){if(!Pending(e))return null;var record=Load(e);return record.ConfigurationMode!=null?record:null;}
-  internal static ProfileSessionRecord OwnedSession(Engine e,string nonce){if(!Pending(e))return null;var record=Load(e);return record.ConfigurationMode!=null&&record.Nonce==nonce?record:null;}
+  internal static ProfileSessionRecord OwnedSession(Engine e){if(!Pending(e))return null;var record=Load(e);return record.ConfigurationMode!=null||record.ServerRuntimeRoot!=null&&record.ConfigurationRoot!=null?record:null;}
+  internal static ProfileSessionRecord OwnedSession(Engine e,string nonce){if(!Pending(e))return null;var record=Load(e);return (record.ConfigurationMode!=null||record.ServerRuntimeRoot!=null&&record.ConfigurationRoot!=null)&&record.Nonce==nonce?record:null;}
   static void RequireSessionPath(LauncherConfiguration context,string path,string prefix){
    if(string.IsNullOrEmpty(path)||!VersionLibrary.Same(Path.GetDirectoryName(Path.GetFullPath(path)),context.RuntimeDirectory)||!System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(path),"^"+prefix+"[a-f0-9]{"+12+"}$"))throw new IOException("启动会话目录不属于此配置。");LauncherMaintenance.NoReparse(path);
   }

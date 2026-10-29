@@ -21,6 +21,184 @@ async function ready() {
   });
 }
 async function feed(page, url) { return await page.evaluate(async endpoint => await (await fetch(endpoint)).json(), url.replace('/admin', '/api/recommended-servers')); }
+async function saveForm(page) { await page.locator('#server-form button[type=submit]').click(); await page.waitForFunction(() => !document.querySelector('#server-form button[type=submit]').disabled); }
+async function rendererCompatibility(browser, published) {
+  const { setup, route } = require('../../Orange3DTool/Web/experience-ui-tests.cjs');
+  const { page, errors } = await setup(browser);
+  try {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.route('https://**/*', request => /\/fixture-(?:one\.png|two\.jpg)$/.test(request.request().url()) ? request.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675"><rect width="1200" height="675" fill="#234958"/><text x="70" y="100" font-family="sans-serif" font-size="36" fill="white">Isolated admin publication image fixture</text></svg>' }) : request.abort());
+    await route(page, 'servers');
+    await page.evaluate(row => { orange.library.model.recommended = { schema: 1, revision: 1, servers: [row] }; orange.state.serverTab = 'recommended'; orange.render(); }, published);
+    await page.locator('[data-recommended-details]').click();
+    const content = page.locator('[data-server-rich-description]');
+    assert.match(await content.textContent(), /服务器规则/);
+    assert.equal(await content.locator('h2').evaluate(node => getComputedStyle(node).fontSize), '28px');
+    assert.equal(await content.locator('script,img,iframe,[onclick]').count(), 0);
+    assert.equal(await page.evaluate(() => window.richAttack), undefined);
+    await page.waitForFunction(() => { const image = document.querySelector('[data-server-carousel] img'); return !image || (image.complete && image.naturalWidth > 0); });
+    await page.locator('.server-detail-introduction').evaluate(node => node.scrollIntoView({ block: 'start' }));
+    await page.screenshot({ animations: 'disabled', path: path.join(output, 'published-in-launcher-1366.png') });
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+}
+async function fallbackAndLimits(page, url, original) {
+  const raw = ' \t<script>window.richAttack=7</script>\n', legacy = '保留旧客户端介绍\n没有可展示 HTML 时仍可阅读。';
+  await page.evaluate(async ({ raw, legacy }) => {
+    const session = await (await fetch('/api/admin/session')).json(), document = await (await fetch('/api/admin/servers')).json();
+    const response = await fetch('/api/admin/servers', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrf }, body: JSON.stringify({ revision: document.revision, server: { ...document.servers[0], descriptionHtml: raw, extendedDescription: legacy } }) });
+    if (!response.ok) throw new Error('Could not seed fallback fixture');
+  }, { raw, legacy });
+  await page.reload(); await page.locator('#workspace').waitFor(); await page.getByRole('button', { name: '编辑', exact: true }).click();
+  assert.equal(await page.locator('#description-rich').innerText(), legacy, 'empty display HTML falls back to legacy text without altering its raw source');
+  await page.locator('#rich-source-tab').click();
+  assert.equal(await page.locator('#description-source').inputValue(), raw);
+  assert.equal(await page.locator('#description-preview').innerText(), legacy);
+  await saveForm(page);
+  assert.equal((await feed(page, url)).servers[0].descriptionHtml, raw);
+  assert.equal((await feed(page, url)).servers[0].extendedDescription, legacy);
+  await page.getByRole('button', { name: '编辑', exact: true }).click(); await page.locator('#rich-source-tab').click();
+  const tooLong = '<p>' + '界'.repeat(32768) + '</p>', writes = [];
+  const track = request => { if (request.method() === 'POST' && request.url().endsWith('/api/admin/servers')) writes.push(request); };
+  page.on('request', track);
+  await page.locator('#description-source').fill(tooLong); await saveForm(page);
+  assert.match(await page.locator('#notice.error').textContent(), /32768/);
+  assert.equal(await page.locator('#description-source').inputValue(), tooLong, 'failed validation preserves the draft');
+  assert.equal(await page.locator('#server-form button[type=submit]').isEnabled(), true);
+  assert.equal(writes.length, 0, 'an oversized source is rejected before any HTTP write');
+  assert.equal((await feed(page, url)).servers[0].descriptionHtml, raw);
+  const boundary = '<p>' + '界'.repeat(32761) + '</p>';
+  await page.locator('#description-source').fill(boundary); await saveForm(page);
+  assert.equal(writes.length, 1, 'the corrected draft can be retried'); page.off('request', track);
+  let saved = (await feed(page, url)).servers[0];
+  assert.equal(saved.descriptionHtml, boundary, '32768 Unicode characters over 64 KiB persist through the real HTTP service');
+  assert.equal(Array.from(saved.extendedDescription).length, 8000, 'legacy fallback remains bounded');
+  await page.getByRole('button', { name: '编辑', exact: true }).click(); await page.locator('#rich-source-tab').click(); await page.locator('#description-source').fill(original); await saveForm(page);
+}
+async function toolbarControls(page) {
+  const editor = page.locator('#description-rich');
+  await page.locator('#rich-visual-tab').click();
+  await editor.fill('实际排版工具'); await editor.press('ControlOrMeta+A');
+  await page.locator('#rich-block').selectOption('h2');
+  await page.locator('[data-rich-command=italic]').click();
+  await page.locator('[data-rich-command=underline]').click();
+  await page.locator('#rich-align').selectOption('justifyCenter');
+  await page.locator('#rich-background').evaluate(input => { input.value = '#fff0b3'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+  assert.equal(await editor.locator('h2').count(), 1);
+  const formatted = await editor.evaluate(node => { const text = [...node.querySelectorAll('*')].find(n => n.firstChild?.nodeType === Node.TEXT_NODE && n.textContent === '实际排版工具'); const style = getComputedStyle(text); return { italic: style.fontStyle, underline: text.closest('u') !== null || style.textDecorationLine.includes('underline'), background: style.backgroundColor, align: style.textAlign }; });
+  assert.equal(formatted.italic, 'italic'); assert.equal(formatted.underline, true); assert.equal(formatted.background, 'rgb(255, 240, 179)'); assert.equal(formatted.align, 'center');
+  for (const [command, tag] of [['insertUnorderedList', 'ul'], ['insertOrderedList', 'ol']]) { await editor.fill('可视列表条目'); await editor.press('ControlOrMeta+A'); await page.locator('[data-rich-command=' + command + ']').click(); assert.equal(await editor.locator(tag + ' li').count(), 1); }
+  await editor.fill('完整规则'); await editor.press('ControlOrMeta+A'); await page.locator('#rich-link').click(); await page.locator('#rich-link-url').fill('https://example.org/rules'); await page.locator('#rich-link-apply').click(); assert.equal(await editor.locator('a').getAttribute('href'), 'https://example.org/rules');
+  await page.locator('#rich-source-tab').click(); await page.locator('#description-source').fill('<p>直接插入：</p>'); await page.locator('#rich-visual-tab').click(); await editor.click(); await editor.press('ControlOrMeta+End'); await page.locator('#rich-link').click(); await page.locator('#rich-link-url').fill('https://example.org/join'); await page.locator('#rich-link-apply').click();
+  assert.equal(await editor.locator('a').count(), 1, 'a link can be inserted without first selecting text: ' + await editor.innerHTML());
+  assert.equal(await editor.locator('a').textContent(), 'https://example.org/join');
+  assert.equal(await editor.textContent(), '直接插入：https://example.org/join');
+}
+async function sharedFormats(page) {
+  const fixtures = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../tests/server-description-format-fixtures.json'), 'utf8')).fixtures;
+  const mirror = text => text.match(/\/\/ BEGIN server description formatter[\s\S]*?\/\/ END server description formatter/)[0].replace(/\r\n/g, '\n');
+  assert.equal(mirror(fs.readFileSync(path.join(__dirname, 'static/admin.js'), 'utf8')), mirror(fs.readFileSync(path.resolve(__dirname, '../../Orange3DTool/Web/app.js'), 'utf8')), 'admin and launcher use exactly the same display formatter');
+  await page.locator('#rich-source-tab').click();
+  for (const fixture of fixtures) {
+    await page.locator('#description-source').fill(fixture.html);
+    const preview = page.locator('#description-preview');
+    for (const text of fixture.textIncludes || []) assert.equal((await preview.textContent()).includes(text), true, fixture.name + ' text');
+    for (const text of fixture.textExcludes || []) assert.equal((await preview.textContent()).includes(text), false, fixture.name + ' excluded text');
+    for (const tag of fixture.requiredTags || []) assert.notEqual(await preview.locator(tag).count(), 0, fixture.name + ' tag ' + tag);
+    for (const tag of fixture.forbiddenTags || []) assert.equal(await preview.locator(tag).count(), 0, fixture.name + ' forbidden ' + tag);
+    for (const item of fixture.computed || []) for (const [property, expected] of Object.entries(item.styles)) assert.equal(await preview.locator(item.selector).first().evaluate((node, key) => getComputedStyle(node)[key], property), expected, fixture.name + ' computed ' + property);
+  }
+  assert.equal(await page.evaluate(() => window.richExecuted), undefined);
+  await page.locator('#description-source').fill(fixtures[0].html);
+}
+async function richEditor(page, url, legacy) {
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  assert.equal(await page.locator('#description-rich').count(), 1, 'detailed introduction has a visual editor');
+  assert.equal(await page.locator('#description-rich').getAttribute('contenteditable'), 'true');
+  assert.match(await page.locator('#description-rich').innerText(), /服务器长期活动/);
+  await page.locator('#server-form [name=name]').fill('橙子合作生存服');
+  await saveForm(page);
+  await page.waitForFunction(() => document.querySelector('.server-name').textContent === '橙子合作生存服');
+  let saved = (await feed(page, url)).servers[0];
+  assert.equal(saved.extendedDescription, legacy, 'editing a name never rewrites the legacy introduction');
+  assert.equal(saved.descriptionHtml, '', 'viewing legacy text never silently generates rich HTML');
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  await page.locator('#description-rich').fill('欢迎来到橙子世界\n每周活动与建造规则');
+  assert.match(await page.locator('[name=descriptionHtml]').inputValue(), /欢迎来到橙子世界/);
+  assert.equal(/color|background/i.test(await page.locator('[name=descriptionHtml]').inputValue()), false, 'ordinary typing does not export the editor theme');
+  await page.locator('#rich-theme-toggle').click();
+  assert.equal(await page.locator('#description-rich').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(30, 41, 54)');
+  assert.equal(/color|background/i.test(await page.locator('[name=descriptionHtml]').inputValue()), false, 'preview theme never changes saved formatting');
+  await page.locator('#rich-theme-toggle').click();
+  await page.locator('#description-rich').press('ControlOrMeta+A');
+  await page.locator('[data-rich-command=bold]').click();
+  await page.locator('#rich-font-size').selectOption('22');
+  await page.locator('#rich-color').evaluate(input => { input.value = '#b42318'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('#rich-callout').click();
+  assert.match(await page.locator('#description-rich').evaluate(node => node.innerHTML), /border/i);
+  await page.locator('#description-rich').press('ControlOrMeta+End');
+  await page.locator('#rich-table').click();
+  assert.equal(await page.locator('#description-rich table').count(), 1, 'toolbar inserts a real editable table');
+  await saveForm(page);
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('保存'));
+  saved = (await feed(page, url)).servers[0];
+  assert.match(saved.descriptionHtml, /欢迎来到橙子世界/);
+  assert.match(saved.descriptionHtml, /<table/);
+  assert.match(saved.extendedDescription, /欢迎来到橙子世界/);
+  assert.equal(saved.extendedDescription.includes('<'), false, 'older clients receive generated plain text');
+  assert.equal(saved.description, '长期合作生存\n欢迎新玩家，友好交流。', 'short description remains independent');
+  await page.reload(); await page.locator('#workspace').waitFor();
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  assert.match(await page.locator('#description-rich').innerText(), /欢迎来到橙子世界/);
+  await page.locator('#rich-source-tab').click();
+  const hostile = '\n  <h2 style="color:#b42318;font-size:28px">服务器规则</h2><div style="border:2px solid #476b47;padding:12px;background-color:#edf3e7;color:#203025"><strong>友好合作</strong></div><script>window.richAttack=1</script><img src=x onerror="window.richAttack=2"><iframe srcdoc="<script>parent.richAttack=3</script>"></iframe><p onclick="window.richAttack=4" style="position:fixed;background-image:url(https://invalid.example/track)">安全文字<a href="javascript:alert(1)">链接</a></p>\n\t';
+  await page.locator('#description-source').fill(hostile);
+  assert.match(await page.locator('#description-preview').innerText(), /服务器规则/);
+  assert.equal(await page.locator('#description-preview script,#description-preview img,#description-preview iframe').count(), 0);
+  assert.equal(await page.evaluate(() => window.richAttack), undefined);
+  assert.equal(await page.locator('#description-preview h2').evaluate(node => getComputedStyle(node).fontSize), '28px', 'real HTTP CSP permits sanitized display formatting');
+  await page.screenshot({ path: path.join(output, 'rich-source-desktop.png'), fullPage: true });
+  await saveForm(page);
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('保存'));
+  saved = (await feed(page, url)).servers[0];
+  assert.match(saved.descriptionHtml, /font-size: ?28px/);
+  assert.equal(saved.descriptionHtml, hostile, 'advanced source persists exactly while display stays sanitized');
+  const published = JSON.parse(fs.readFileSync(path.join(publicPath, 'feed.json'), 'utf8')).servers[0];
+  assert.equal(published.descriptionHtml, saved.descriptionHtml, 'real static publication retains formatted introduction');
+  await rendererCompatibility(browser, published);
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  await page.locator('#rich-source-tab').click(); assert.equal(await page.locator('#description-source').inputValue(), hostile);
+  await page.locator('#rich-visual-tab').click(); await page.locator('#rich-source-tab').click();
+  await saveForm(page);
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('保存'));
+  assert.equal((await feed(page, url)).servers[0].descriptionHtml, hostile, 'opening, previewing and saving cannot normalize source without a content edit');
+  await fallbackAndLimits(page, url, hostile);
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  await sharedFormats(page);
+  await toolbarControls(page);
+  await page.locator('#rich-source-tab').click();
+  await page.locator('#description-source').fill('<h2>欢迎来到橙子生存服</h2><p>一起建造、探索，参加每周的<strong>合作活动</strong>。</p><div style="border-left:4px solid #ec994c;padding:12px">友好交流，保护玩家建筑。</div><table style="border-collapse:collapse"><tr><th>活动</th><th>时间</th></tr><tr><td>合作探索</td><td>周末 20:00</td></tr></table>');
+  await page.locator('#rich-visual-tab').click();
+  await page.locator('#description-rich').click();
+  await page.locator('#description-rich').evaluate(node => {
+    const clipboard = new DataTransfer(); clipboard.setData('text/html', '<p><b>粘贴的规则</b><img src=x onerror="window.richAttack=5"></p><script>window.richAttack=6</script>');
+    node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true }));
+  });
+  assert.equal(await page.locator('#description-rich script,#description-rich img').count(), 0);
+  assert.equal(await page.evaluate(() => window.richAttack), undefined);
+  await page.screenshot({ path: path.join(output, 'rich-visual-desktop.png'), fullPage: true });
+  await page.locator('.rich-editor').evaluate(node => { node.scrollIntoView({ block: 'start' }); window.scrollBy(0, -20); });
+  await page.screenshot({ path: path.join(output, 'rich-editor-focused-1440.png') });
+  await page.locator('#rich-theme-toggle').click();
+  await page.screenshot({ path: path.join(output, 'rich-editor-dark-1440.png') });
+  await page.locator('#rich-theme-toggle').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'visual toolbar fits narrow admin viewport');
+  await page.screenshot({ path: path.join(output, 'rich-visual-390.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.locator('#cancel-edit').click();
+  console.log('PASS visual formatting tools, shared display/CSS contract, source retention, inert paste/preview, real HTTP save/reload/static publication, legacy no-op and narrow layout');
+}
 (async () => {
   const url = await ready();
   const credentials = JSON.parse(fs.readFileSync(path.join(privatePath, 'initial-credentials.json'), 'utf8'));
@@ -45,6 +223,7 @@ async function feed(page, url) { return await page.evaluate(async endpoint => aw
   await page.locator('#server-form [name=description]').fill('长期合作生存\n欢迎新玩家，友好交流。');
   const extended = '服务器长期活动和完整玩法介绍\n<b>按普通文字显示</b>';
   const screenshots = ['https://orangezl.com/fixture-one.png', 'https://images.steamusercontent.com/fixture-two.jpg'];
+  await page.locator('#legacy-description summary').click();
   await page.locator('#server-form [name=extendedDescription]').fill(extended);
   await page.locator('#server-form [name=screenshots]').fill(screenshots.join('\n'));
   await page.locator('#server-form [name=tags]').fill('合作，新手友好');
@@ -73,6 +252,7 @@ async function feed(page, url) { return await page.evaluate(async endpoint => aw
   await page.locator('#server-form [name=name]').fill('橙子合作生存服');
   await page.locator('#server-form button[type=submit]').click();
   await page.waitForFunction(() => document.querySelector('.server-name').textContent === '橙子合作生存服');
+  await richEditor(page, url, extended);
   await page.getByRole('button', { name: '＋ 添加服务器', exact: true }).click();
   await page.locator('#server-form [name=name]').fill('河畔长夜 · 建造服');
   await page.locator('#server-form [name=host]').fill('play.example.invalid');
@@ -99,7 +279,7 @@ async function feed(page, url) { return await page.evaluate(async endpoint => aw
   await page.locator('#login-form').waitFor();
   assert.deepEqual(errors, [], 'admin has no browser runtime errors');
   console.log('PASS admin login, draft/edit/publish/order/unpublish/delete/logout, escaped text, desktop/narrow screenshots');
-})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(async () => {
+})().catch(error => { console.error(error.stack); process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close();
   service.kill();
   await new Promise(resolve => { if (service.exitCode !== null) resolve(); else service.once('exit', resolve); });

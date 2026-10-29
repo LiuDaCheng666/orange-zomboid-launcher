@@ -14,7 +14,7 @@ using System.Web.Script.Serialization;
 namespace PZ3D {
  public sealed class RecommendedServer {
   public string id,name,host,version,description,cover;
-  public string extendedDescription="";
+  public string extendedDescription="",descriptionHtml="";
   public string[] screenshots=new string[0];
   public int port,queryPort,order;
   public string[] tags;
@@ -37,10 +37,6 @@ namespace PZ3D {
   readonly string directory,file;
   readonly Func<Uri,CancellationToken,string> reader;
   readonly object gate=new object();
-  static readonly SemaphoreSlim querySlots=new SemaphoreSlim(4,4);
-  static readonly byte[] queryRequest=new byte[]{255,255,255,255,84,83,111,117,114,99,101,32,69,110,103,105,110,101,32,81,117,101,114,121,0};
-  sealed class LiveCache {public string stamp;public DateTime until;public object value;}
-  readonly Dictionary<string,LiveCache> liveCache=new Dictionary<string,LiveCache>(StringComparer.Ordinal);
   RecommendedServerSnapshot last;
   DateTime freshUntil;
   static JavaScriptSerializer Json(){return new JavaScriptSerializer{MaxJsonLength=MaxBytes,RecursionLimit=16};}
@@ -62,7 +58,8 @@ namespace PZ3D {
    string cover=Text(value,"cover",2048);Uri image;if(cover.Length>0&&(!Uri.TryCreate(cover,UriKind.Absolute,out image)||image.Scheme!="https"||image.Host.Length==0||image.UserInfo.Length>0))throw new FormatException();
    object[] rawTags=Required(value,"tags") as object[];if(rawTags==null||rawTags.Length>12||rawTags.Any(tag=>!(tag is string)||((string)tag).Length>32||string.IsNullOrWhiteSpace((string)tag)||((string)tag).Any(char.IsControl)))throw new FormatException();
    string extended=value.ContainsKey("extendedDescription")?Text(value,"extendedDescription",8000,false,true):"";object[] screenshots=value.ContainsKey("screenshots")?Required(value,"screenshots") as object[]:new object[0];if(screenshots==null||screenshots.Length>8||screenshots.Any(item=>!(item is string)||((string)item).Length>2048||!ModernHostPolicy.IsWorkshopImage((string)item)))throw new FormatException();
-   return new RecommendedServer{id=id,name=Text(value,"name",120,true),host=Host(Text(value,"host",253,true)),port=Number(value,"port",1,65535),queryPort=Number(value,"queryPort",0,65535),version=Text(value,"version",80),description=Text(value,"description",2000,false,true),cover=cover,extendedDescription=extended,screenshots=screenshots.Cast<string>().Distinct().ToArray(),tags=rawTags.Cast<string>().Distinct().ToArray(),order=Number(value,"order",0,1000000),useSteamRelay=Boolean(value,"useSteamRelay")};
+   string html=value.ContainsKey("descriptionHtml")?Text(value,"descriptionHtml",32768,false,true):"";
+   return new RecommendedServer{id=id,name=Text(value,"name",120,true),host=Host(Text(value,"host",253,true)),port=Number(value,"port",1,65535),queryPort=Number(value,"queryPort",0,65535),version=Text(value,"version",80),description=Text(value,"description",2000,false,true),cover=cover,extendedDescription=extended,descriptionHtml=html,screenshots=screenshots.Cast<string>().Distinct().ToArray(),tags=rawTags.Cast<string>().Distinct().ToArray(),order=Number(value,"order",0,1000000),useSteamRelay=Boolean(value,"useSteamRelay")};
   }
   static RecommendedServerSnapshot Parse(string content){
    if(content==null||Encoding.UTF8.GetByteCount(content)>MaxBytes)throw new FormatException();
@@ -92,18 +89,9 @@ namespace PZ3D {
   static object CopyObject(object value){return Json().DeserializeObject(Json().Serialize(value));}
   public object Query(string id,CancellationToken token){
    token.ThrowIfCancellationRequested();RecommendedServer row;string stamp;
-   lock(gate){LoadCache();row=last==null?null:last.servers.FirstOrDefault(item=>item.id==id);if(row==null)throw new InvalidOperationException("推荐列表已改变，请刷新后重试。");stamp=Json().Serialize(row);LiveCache cached;if(liveCache.TryGetValue(row.id,out cached)&&cached.stamp==stamp&&cached.until>DateTime.UtcNow)return CopyObject(cached.value);}
-   if(!querySlots.Wait(0,token))return Unknown(row.id,row.description,"服务器查询繁忙，请稍后重试。");
-   object result;
-   try{
-    var watch=Stopwatch.StartNew();IPAddress address;
-    if(!IPAddress.TryParse(row.host,out address)){var dns=Task.Factory.StartNew(()=>Dns.GetHostAddresses(row.host));while(!dns.IsCompleted&&watch.ElapsedMilliseconds<2500){token.ThrowIfCancellationRequested();Thread.Sleep(25);}if(!dns.IsCompleted)throw new TimeoutException();address=dns.Result.FirstOrDefault(item=>item.AddressFamily==AddressFamily.InterNetwork||item.AddressFamily==AddressFamily.InterNetworkV6);if(address==null)throw new IOException("无法解析服务器地址。");}
-    using(var udp=new UdpClient(address.AddressFamily)){udp.Connect(address,row.queryPort==0?row.port:row.queryPort);udp.Send(queryRequest,queryRequest.Length);bool challenged=false;
-     while(true){token.ThrowIfCancellationRequested();if(watch.ElapsedMilliseconds>=2500)throw new TimeoutException();if(!udp.Client.Poll(50000,SelectMode.SelectRead))continue;IPEndPoint peer=null;byte[] packet=udp.Receive(ref peer);if(packet.Length==9&&packet.Take(5).SequenceEqual(new byte[]{255,255,255,255,65})&&!challenged){challenged=true;byte[] retry=queryRequest.Concat(packet.Skip(5)).ToArray();udp.Send(retry,retry.Length);continue;}result=ServerProfiles.ParseInfo(packet,row.id,(int)watch.ElapsedMilliseconds,row.description);var info=Json().Deserialize<Dictionary<string,object>>(Json().Serialize(result));if(Convert.ToString(info["status"])=="online"){string warning="",description=null;using(var deadline=CancellationTokenSource.CreateLinkedTokenSource(token)){deadline.CancelAfter(Math.Max(1,2500-(int)watch.ElapsedMilliseconds));try{description=ServerPublicRules.Query(udp,deadline.Token,out warning);}catch(OperationCanceledException){token.ThrowIfCancellationRequested();warning="人数已读取，公开介绍查询超时。";}}info["description"]=description??row.description;info["descriptionSource"]=description==null?"admin":"server";info["descriptionWarning"]=warning;result=info;}break;}
-    }
-   }catch(OperationCanceledException){throw;}catch{result=Unknown(row.id,row.description,"公开查询无响应或失败；服务器状态未知。");}finally{querySlots.Release();}
-   token.ThrowIfCancellationRequested();
-   lock(gate){var current=last==null?null:last.servers.FirstOrDefault(item=>item.id==id);if(current==null||Json().Serialize(current)!=stamp)throw new InvalidOperationException("推荐列表已改变，请刷新后重试。");foreach(var key in liveCache.Keys.Where(key=>!last.servers.Any(item=>item.id==key)).ToArray())liveCache.Remove(key);liveCache[row.id]=new LiveCache{stamp=stamp,until=DateTime.UtcNow.AddSeconds(10),value=result};}
+   lock(gate){LoadCache();row=last==null?null:last.servers.FirstOrDefault(item=>item.id==id);if(row==null)throw new InvalidOperationException("推荐列表已改变，请刷新后重试。");stamp=Json().Serialize(row);}
+   object result=ServerPublicQuery.Query(row.id,row.host,row.port,row.queryPort,row.description,"admin",token);
+   lock(gate){var current=last==null?null:last.servers.FirstOrDefault(item=>item.id==id);if(current==null||Json().Serialize(current)!=stamp)throw new InvalidOperationException("推荐列表已改变，请刷新后重试。");}
    return CopyObject(result);
   }
  }

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "contract": "descriptionHtml optional, max 32768; format only, no scripts/events/positioning/external CSS. Links use absolute http/https. Launcher opens links through native openExternal.",
+  "fixtures": [
+    {
+      "name": "colored-bordered-panel",
+      "html": "<div style=\"border:2px solid #336699;padding:12px;background-color:#eef4ff;color:#123456;font-size:18px;text-align:center\"><h2>生存指南</h2><p><strong>合作</strong> · <em>探索</em> · <u>规则</u></p><blockquote>欢迎新玩家</blockquote><ul><li>建造安全屋</li><li>保护队友</li></ul></div>",
+      "textIncludes": ["生存指南", "合作", "欢迎新玩家", "保护队友"],
+      "requiredTags": ["div", "h2", "strong", "em", "u", "blockquote", "ul", "li"],
+      "computed": [{"selector": "div", "styles": {"borderTopWidth": "2px", "borderTopColor": "rgb(51, 102, 153)", "paddingTop": "12px", "backgroundColor": "rgb(238, 244, 255)", "color": "rgb(18, 52, 86)", "fontSize": "18px", "textAlign": "center"}}, {"selector": "blockquote", "styles": {"backgroundColor": "rgba(0, 0, 0, 0)", "color": "rgb(18, 52, 86)"}}]
+    },
+    {
+      "name": "table-and-size",
+      "html": "<h3>服务器日程</h3><table style=\"border-collapse:collapse\"><thead><tr><th>玩法</th><th>时间</th></tr></thead><tbody><tr><td colspan=\"2\"><span style=\"font-size:150%;font-weight:700;color:#226644\">周末合作</span></td></tr></tbody></table><pre><code>保留换行\n下一行</code></pre>",
+      "textIncludes": ["服务器日程", "周末合作", "保留换行\n下一行"],
+      "requiredTags": ["table", "thead", "tbody", "th", "td", "span", "pre", "code"],
+      "computed": [{"selector": "span", "styles": {"fontSize": "21px", "fontWeight": "700", "color": "rgb(34, 102, 68)"}}]
+    },
+    {
+      "name": "remove-execution-keep-format",
+      "html": "<script>window.richExecuted=true</script><style>body{display:none}</style><iframe src=\"https://invalid.example\">iframe text</iframe><img src=x onerror=\"window.richExecuted=true\"><div onclick=\"window.richExecuted=true\" style=\"position:fixed;inset:0;z-index:9999;background-image:url(https://invalid.example/a);color:#b00020;border:1px solid #b00020;padding:8px\"><b>保留安全格式</b><a href=\"javascript:window.richExecuted=true\">不安全链接</a></div>",
+      "textIncludes": ["保留安全格式", "不安全链接"],
+      "textExcludes": ["window.richExecuted", "body{", "iframe text"],
+      "requiredTags": ["div", "b", "a"],
+      "forbiddenTags": ["script", "style", "iframe", "img"],
+      "computed": [{"selector": "div", "styles": {"position": "static", "paddingTop": "8px", "borderTopWidth": "1px", "color": "rgb(176, 0, 32)"}}]
+    },
+    {
+      "name": "links-and-display-bounds",
+      "html": "<p><a href=\"https://example.org/rules\" target=\"_self\" onclick=\"bad()\">完整规则</a> <a href=\"http://example.org/info\">公开信息</a></p><div style=\"font-size:9999px;margin:-500px;padding:999px;border:999px solid blue\">仍可阅读</div>",
+      "textIncludes": ["完整规则", "公开信息", "仍可阅读"],
+      "requiredTags": ["a", "p", "div"],
+      "computed": [{"selector": "div", "styles": {"fontSize": "48px", "paddingTop": "64px", "borderTopWidth": "16px"}}]
+    }
+  ]
+}

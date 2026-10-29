@@ -72,8 +72,9 @@ namespace PZ3D {
   static LaunchPreflightItem Item(string id,string status,string title,string message,string route,string[] details=null,bool canAutoSort=false){return new LaunchPreflightItem{id=id,status=status,title=title,message=message,route=route,details=(details??new string[0]).Select(s=>s.Length<=512?s:s.Substring(0,512)).Distinct(StringComparer.Ordinal).Take(100).ToArray(),canAutoSort=canAutoSort};}
   public static LaunchPreflightReport Check(Engine e,bool busy,bool running){return Check(e,busy,running,"normal");}
   public static LaunchPreflightReport Check(Engine e,bool busy,bool running,string targetKind){return CheckLaunch(e,busy,running,targetKind,null,false);}
-  internal static LaunchPreflightReport CheckLaunch(Engine e,bool busy,bool running,string targetKind,string targetId,bool capture){
+  internal static LaunchPreflightReport CheckLaunch(Engine e,bool busy,bool running,string targetKind,string targetId,bool capture,string serverComponents=null,System.Threading.CancellationToken cancellation=default(System.Threading.CancellationToken)){
    if(targetKind!="normal"&&targetKind!="save"&&targetKind!="server")throw new ArgumentException("未知启动预检类型。");
+   if(targetKind=="server")return CheckServer(e,busy,running,capture,serverComponents,cancellation);
    if(e.OwnedLaunch)return CheckOwned(e,busy,running,targetKind,targetId,capture);
    var items=new List<LaunchPreflightItem>();bool safe=true,config=false,pending=false,sessionPending=false,otherRecovery=false;var budget=new LaunchReadBudget(16777216);if(capture)budget.Capture();
    items.Add(Item("activity",busy||running?"error":"ok","任务与游戏进程",busy?"本机任务尚未结束，请完成或取消后再启动。":running?"游戏进程仍在运行，请先退出游戏。":"没有阻止启动的任务或已知游戏进程。","home"));
@@ -106,6 +107,11 @@ namespace PZ3D {
    if(safe&&config){try{int heap=LauncherMaintenance.ReadHeapGiB(e);var memory=LauncherMaintenance.MemoryInfo();if(heap>memory.MaximumHeapGiB)memoryMessage="配置的堆内存超过按总物理内存计算的建议上限，请为系统保留至少 4 GiB 或 25%。";else if(heap>memory.AvailableGiB)memoryMessage="当前可用物理内存低于配置堆上限；请关闭其他程序后核对，未修改堆或分页文件。";else{memoryStatus="ok";memoryMessage="启动内存在建议范围内。";}}catch{memoryMessage="未读取到 Xmx 或系统内存信息，请打开内存设置。";}}
    items.Add(Item("memory",memoryStatus,"堆内存建议",memoryMessage,"memory"));
    bool allowed=items.All(i=>i.status!="error");return new LaunchPreflightReport{canLaunch=allowed,checkedUtc=DateTime.UtcNow.ToString("o"),items=items.ToArray(),Evidence=budget.Evidence,message=allowed?"启动检查通过。":items.First(i=>i.status=="error").message};
+  }
+  static LaunchPreflightReport CheckServer(Engine e,bool busy,bool running,bool capture,string mode,System.Threading.CancellationToken cancellation){
+   var items=new List<LaunchPreflightItem>();LaunchReadSet evidence=null;string reason=LaunchProfiles.ServerReason(e,busy,running);items.Add(Item("launch-config",reason==""?"ok":"error","启动配置",reason==""?"本次连接使用临时服务器会话，不改写启动配置。":reason,"home"));
+   try{e.GuardLaunch();if(LaunchProfiles.Pending(e))throw new IOException("上一次启动会话尚未结束或清理。");var plan=ServerLaunchSelection.Capture(e,mode,cancellation);evidence=plan.Evidence;items.Add(Item("mods",plan.Warnings.Length==0?"ok":"warning","服务器模组",plan.Buddy==null?"跟随服务器模组；此配置没有 Buddy 加载器，服务器 Java 模组不会加载。":plan.Mode=="follow-server"?"跟随服务器模组和顺序；服务器 Java 文件由 Buddy 提示授权。":"保留本地已启用客户端组件；服务器同名来源优先，Java 文件由 Buddy 提示授权。","mods",plan.Warnings));}
+   catch(OperationCanceledException){throw;}catch(Exception error){items.Add(Item("mods","error","服务器模组",error.Message,"mods"));}bool allowed=items.All(item=>item.status!="error");return new LaunchPreflightReport{canLaunch=allowed,checkedUtc=DateTime.UtcNow.ToString("o"),items=items.ToArray(),Evidence=capture?evidence:null,message=allowed?"启动检查通过。":items.First(item=>item.status=="error").message};
   }
   static LaunchPreflightReport CheckOwned(Engine e,bool busy,bool running,string kind,string target,bool capture){
    if(capture)e.OwnedConfiguration.Initialize();
