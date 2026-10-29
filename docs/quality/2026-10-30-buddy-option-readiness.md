@@ -1,5 +1,7 @@
 # Buddy option unavailable：本地修复验证（未发布）
 
+本页保留开发阶段的验收边界；后续已随1.2.42正式发布，见 [正式发布回执](2026-10-30-1.2.42-publication.md)。
+
 用户实际日志 `Zomboid/Logs/2026-10-30_03-07_DebugLog.txt` 在03:08:02记录 `Buddy option unavailable`，调用点是 `OrangeLaunchBridge.lua:54/serverOrder()`。当时框架API已经暴露，但主菜单只载入连接桥接模组，Buddy的Lua设置尚未注册。代码主动调用 `error()`；外层pcall虽继续执行，游戏仍记录异常。当天03:11:02的连接日志随后记录player-connect。前一日21:20也有相同错误，不能归因为1.2.41绘制修改。
 
 ## 最小修复
