@@ -23,6 +23,9 @@ public final class GameRenderer implements LoadingScene.Canvas {
     public GameRenderer(LongSupplier clock){this.clock=Objects.requireNonNull(clock);measure.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);}
     public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum) throws Exception {draw(state,session,used,maximum,state.fullStatusBottom,state.fullCancelTop);}
     public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum,double statusBottom,double cancelTop) throws Exception {
+        draw(state,session,used,maximum,statusBottom,cancelTop,0);
+    }
+    public void draw(LoadingModel.Snapshot state,Session session,long used,long maximum,double statusBottom,double cancelTop,double workshopTop) throws Exception {
         if(!GameDisplay.created()||GL.getCapabilities()==null)return;
         int width=GameDisplay.width(),height=GameDisplay.height();if(width<320||height<240)return;
         int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),active=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE),framebuffer=GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING),matrixMode=GL11.glGetInteger(GL11.GL_MATRIX_MODE),unpack=GL11.glGetInteger(GL21.GL_PIXEL_UNPACK_BUFFER_BINDING);
@@ -41,7 +44,7 @@ public final class GameRenderer implements LoadingScene.Canvas {
             if(logo==null){try(InputStream input=GameRenderer.class.getResourceAsStream("/ozl/startup/orange.png")){if(input==null)throw new IOException("Missing OZL mark");BufferedImage source=ImageIO.read(input);logo=upload(source);LogoGrowth.Parts parts=LogoGrowth.split(source);body=upload(parts.body());leaf=upload(parts.leaf());}}
             // UI lease invalidation is independent of this operation's visible animation.
             double visible=animation.seconds(state.generation,state.context.toString(),clock.getAsLong());
-            LoadingScene.draw(this,width,height,state,visible,"light".equals(session.theme),session.reducedMotion,used,maximum,statusBottom,cancelTop);
+            LoadingScene.draw(this,width,height,state,visible,"light".equals(session.theme),session.reducedMotion,used,maximum,statusBottom,cancelTop,workshopTop);
         } finally {
             if(modelview){GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPopMatrix();}
             if(projection){GL11.glMatrixMode(GL11.GL_PROJECTION);GL11.glPopMatrix();}

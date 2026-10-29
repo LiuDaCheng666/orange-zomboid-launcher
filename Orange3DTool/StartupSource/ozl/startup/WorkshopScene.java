@@ -1,25 +1,24 @@
 package ozl.startup;
 import java.util.Locale;
-/** One readable current-item transfer above the original interactive project list. */
+/** Centered actual transfer above the retained native project list and controls. */
 final class WorkshopScene {
  static String size(double bytes){return String.format(Locale.ROOT,"%.2f MiB",bytes/1048576d);}
- static void pill(LoadingScene.Canvas c,double x,double y,double width,double height,int color){if(width<=0)return;double r=Math.min(height/2,width/2);c.gradient(x+r,y,Math.max(0,width-2*r),height,color,color);c.arc(x+r,y+height/2,r/2,r,0,Math.PI*2,color);c.arc(x+width-r,y+height/2,r/2,r,0,Math.PI*2,color);}
- static void draw(LoadingScene.Canvas c,int w,int h,LoadingModel.Snapshot s,double time,boolean reduced){
-  c.gradient(0,0,w,h,0xff211a3d,0xff0d1027);double scale=Math.max(.75,Math.min(1.4,Math.min(w/1440d,h/900d))),left=Math.max(28,w*.12),right=w-left,top=h*.08,meta=Math.max(14,14*scale),title=Math.max(22,26*scale),itemFont=Math.max(19,22*scale);
-  c.glow(w*.8,h*.23,170*scale,0x299c74ff,0x009c74ff);
-  String heading=s.downloadPhase.equals("prepare")?"正在准备下一个工坊项目":s.downloadPhase.equals("validate")?"正在验证工坊项目":"正在下载工坊模组";
-  LoadingScene.text(c,heading,left,top,title,0xfff0eafa,false,right-left-65*scale);
-  LoadingScene.text(c,s.name+(s.endpoint.isEmpty()?"":"  ·  "+s.endpoint),left,top+31,meta,0xffbcb2ce,false,(right-left)*.56);
-  LoadingScene.text(c,"已就绪 "+Math.max(0,s.workshopReady)+" / "+s.workshopProjects+" 工坊项目",right,top+31,meta,0xffd3c6f0,true,(right-left)*.42);
-  LoadingScene.text(c,s.downloadTitle.isEmpty()?s.downloadID.isEmpty()?"正在校验已安装项目":s.downloadID:s.downloadTitle,left,top+99,itemFont,0xfffaf7ff,false,right-left-80*scale);
-  LoadingScene.text(c,s.downloadID.isEmpty()?"":"工坊项目 "+s.downloadID,left,top+127,meta,0xffb9aecb,false,(right-left)*.7);
-  boolean known=s.downloadPhase.equals("download")&&s.downloaded>=0&&s.downloadTotal>1;
-  if(known)LoadingScene.text(c,String.format(Locale.ROOT,"%.0f%%",s.downloaded*100d/s.downloadTotal),right,top+127,meta,0xffe5d8ff,true,(right-left)*.25);
-  double y=top+149,track=right-left,bar=Math.max(20,20*scale);pill(c,left,y,track,bar,0xff413554);
-  if(known)pill(c,left,y,track*Math.max(0,Math.min(1,s.downloaded/(double)s.downloadTotal)),bar,0xffad8de8);
-  else if(!reduced){double segment=track*.18,p=(time*.24)%1;pill(c,left+p*(track-segment),y,segment,bar,0xff9676cf);}
-  String bytes=s.downloadPhase.equals("prepare")?"正在准备项目":s.downloadPhase.equals("validate")?"正在校验安装状态":s.downloaded<0?"等待下载进度":size(s.downloaded)+(s.downloadTotal>1?" / "+size(s.downloadTotal):"");LoadingScene.text(c,bytes,left,y+bar+25,meta,0xffd8cee9,false,track*.68);
-  if(s.downloadRate>=0&&s.downloadPhase.equals("download"))LoadingScene.text(c,size(s.downloadRate)+"/s",right,y+bar+25,meta,0xffc3acee,true,track*.3);
-  LogoGrowth.Frame growth=LogoGrowth.at(time,reduced);c.growingLogo(right-25*scale,top+83,54*scale*growth.bodyScale(),1,growth.angle(),growth.leafScale(),growth.leafAngle());
+ static void draw(LoadingScene.Canvas c,int w,int h,LoadingModel.Snapshot state,double time,boolean reduced,long used,long maximum,double workshopTop){
+  int accent=0xffad8de8,ink=0xfff0eafa,muted=0xffbcb2ce;double s=LoadingScene.scale(w,h),margin=Math.max(24,42*s),protectedTop=workshopTop>0?workshopTop*h:h*.54;
+  c.gradient(0,0,w,h,0xff211a3d,0xff0d1027);double header=LoadingScene.memory(c,w,s,false,used,maximum,ink,muted,accent),stageBottom=LoadingScene.stages(c,w,header,s,state,ink,muted,accent,0xff0d1027);
+  boolean compact=h<600;int logRows=compact?1:2;
+  double logLine=Math.max(14,16*s),logBaseline=protectedTop-10*s,statsBaseline=logBaseline-(logRows-1)*logLine-Math.max(18,20*s);
+  double barHeight=Math.max(20,22*s),barY=statsBaseline-Math.max(16,20*s)-barHeight,titleY=barY-Math.max(16,16*s),heroTop=stageBottom+14*s,heroBottom=titleY-22*s,cy=(heroTop+heroBottom)/2,visualScale=Math.max(.1,Math.min(s,(heroBottom-heroTop)/(164*Math.sqrt(2)+16))),cx=w*.22;
+  LoadingScene.ring(c,cx,cy,visualScale,time,reduced,accent);LoadingScene.orange(c,cx,cy,visualScale,LoadingModel.Context.SERVER,time,reduced,true);
+  double infoX=w*.425,infoWidth=w*.54,nameY=heroTop+22*s;
+  String item=state.downloadTitle.isEmpty()?state.downloadID.isEmpty()?"正在校验已安装项目":state.downloadID:state.downloadTitle;
+  if(compact){LoadingScene.text(c,state.name+(state.endpoint.isEmpty()?"":" · "+state.endpoint),infoX,heroTop+11,12,muted,false,infoWidth);LoadingScene.text(c,item,infoX,heroTop+35,14,ink,false,infoWidth);}
+  else{LoadingScene.text(c,state.name,infoX,nameY,Math.max(15,22*s),ink,false,infoWidth);LoadingScene.text(c,state.endpoint,infoX,nameY+22*s,Math.max(11,13*s),muted,false,infoWidth);LoadingScene.text(c,item,infoX,nameY+52*s,Math.max(14,20*s),ink,false,infoWidth);LoadingScene.text(c,state.downloadID.isEmpty()?"":"工坊项目 "+state.downloadID,infoX,nameY+72*s,Math.max(10,12*s),muted,false,infoWidth);}
+  String heading=state.downloadPhase.equals("prepare")?"正在准备下一个工坊项目":state.downloadPhase.equals("validate")?"正在验证工坊项目":"正在下载工坊模组";LoadingScene.centered(c,heading,w*.5,titleY,Math.max(16,22*s),ink,w*.85);
+  boolean known=state.downloadPhase.equals("download")&&state.downloaded>=0&&state.downloadTotal>1;double width=Math.min(1000*s,w*.76),x=(w-width)/2;if(known)LoadingScene.slot(c,x,barY,width,barHeight,state.downloaded/(double)state.downloadTotal,accent,false);else LoadingScene.activity(c,x,barY,width,barHeight,time,reduced,accent,false);
+  String bytes=state.downloadPhase.equals("prepare")?"正在准备项目":state.downloadPhase.equals("validate")?"正在校验安装状态":state.downloaded<0?"等待下载进度":size(state.downloaded)+(state.downloadTotal>1?" / "+size(state.downloadTotal):"");LoadingScene.text(c,bytes,x,statsBaseline,Math.max(11,13*s),muted,false,width*.54);
+  String progress=known?String.format(Locale.ROOT,"%.0f%%",state.downloaded*100d/state.downloadTotal):"";LoadingScene.text(c,progress,x+width,titleY,Math.max(14,18*s),ink,true,width*.2);String ready="已就绪 "+Math.max(0,state.workshopReady)+" / "+state.workshopProjects+" 工坊项目";LoadingScene.centered(c,ready,w*.5,statsBaseline,Math.max(10,12*s),muted,width*.42);
+  if(state.downloadRate>=0&&state.downloadPhase.equals("download"))LoadingScene.text(c,size(state.downloadRate)+"/s",x+width,statsBaseline,Math.max(11,13*s),muted,true,width*.24);
+  LoadingScene.logs(c,state,margin,w-margin,logBaseline,logLine,Math.max(10,12*s),w*.43-margin,w*.43-margin,logRows,ink,muted,accent);
  }
 }

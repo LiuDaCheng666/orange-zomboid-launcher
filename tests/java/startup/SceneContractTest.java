@@ -12,7 +12,7 @@ public final class SceneContractTest {
             case "measure":return ((String)a[0]).length()*(double)a[1]*.6;
             case "logo":case "growingLogo":x=(double)a[0];y=(double)a[1];size=(double)a[2];angle=a.length>=5?(double)a[4]:0;leaf=a.length>=7?(double)a[5]:1;break;
             case "line":lines++;break;
-            case "gradient":if((double)a[0]==0&&(double)a[1]==0)background=(int)a[4];if((double)a[1]<140&&(double)a[3]<=6)bars.add(new double[]{(double)a[0],(double)a[1],(double)a[2],(double)a[3],(int)a[4]});break;
+            case "gradient":if((double)a[0]==0&&(double)a[1]==0)background=(int)a[4];if((double)a[1]<140&&(double)a[3]<=45)bars.add(new double[]{(double)a[0],(double)a[1],(double)a[2],(double)a[3],(int)a[4]});break;
             case "text":text+=" "+a[0];textSizes.put((String)a[0],(double)a[3]);texts.add(a.clone());break;
         }return null;}
     }
@@ -22,12 +22,12 @@ public final class SceneContractTest {
         if(args.length>0&&args[0].equals("palette")){palette();return;}
         if(args.length>0&&args[0].startsWith("queue")){queue(Integer.parseInt(args[0].substring(5)));return;}
         LoadingModel boot=new LoadingModel();Frame first=draw(boot,0,false),settled=draw(boot,2,false),later=draw(boot,9,false);
-        check(settled.size>first.size*1.8,"orange visibly grows from the first accepted frame");
+        check(settled.size==first.size,"approved entrance keeps the orange full-size while fading in");
         for(double time:new double[]{4,7,11,16,30,60,90}){Frame idle=draw(boot,time,false);check(idle.size>=174*.94&&idle.leaf>=.93,"long waits retain a fully grown source mark");}
         check(draw(boot,6,false).angle!=draw(boot,11,false).angle,"idle changes gesture without repeating seed growth");
         check(settled.text.contains("4,097")&&settled.text.contains("MiB"),"heap has measured MiB precision");
         check(settled.bars.size()>=2&&settled.lines>=5,"top uses connected real milestone nodes plus separate measured heap track");
-        boolean measured=false;for(double[] a:settled.bars)for(double[] b:settled.bars)if(a!=b&&a[0]==b[0]&&a[1]==b[1]&&a[3]==b[3]&&a[2]>b[2]&&Math.abs(b[2]/a[2]-4097d/12288)<.00001)measured=true;
+        boolean measured=false;for(double[] a:settled.bars)for(double[] b:settled.bars)if(a!=b&&a[0]+2==b[0]&&a[1]+2==b[1]&&a[3]-4==b[3]&&a[2]>b[2]&&Math.abs(b[2]/(a[2]-4)-4097d/12288)<.00001)measured=true;
         check(measured,"heap fill width uses the actual measured used/max ratio");
         LoadingModel save=new LoadingModel();save.worldBegin(false,"ActualSave","Sandbox","Rosewood");Frame local=draw(save,2,false);
         LoadingModel server=new LoadingModel();server.serverBegin("Friendly server","203.0.113.7",16261);server.serverStage("WorkshopUpdate",132,8);server.serverStats("Riverside",8);server.queueInformation(server.snapshot().generation,17,32,1993,7,9,14,35);server.serverClock(server.snapshot().generation,1993,6,8,14,35,48);Frame remote=draw(server,2,false);
@@ -57,6 +57,6 @@ public final class SceneContractTest {
         palette();
         System.out.println("PASS scene growth/rotation/context/precision contracts");
     }
-    static void palette(){LoadingModel boot=new LoadingModel(),save=new LoadingModel(),server=new LoadingModel();save.worldBegin(false,"Save","Sandbox","Rosewood");server.serverBegin("Server");Frame a=draw(boot,4,false),b=draw(save,4,false),c=draw(server,4,false);check(a.background!=b.background&&a.background!=c.background&&b.background!=c.background,"three primary contexts have distinct palettes");check(a.x!=b.x&&a.x!=c.x&&b.x!=c.x,"three contexts have distinct composition anchors");System.out.println("PASS three primary palette/composition contracts");}
+    static void palette(){LoadingModel boot=new LoadingModel(),save=new LoadingModel(),server=new LoadingModel();save.worldBegin(false,"Save","Sandbox","Rosewood");server.serverBegin("Server");Frame a=draw(boot,4,false),b=draw(save,4,false),c=draw(server,4,false);check(a.background!=b.background&&a.background!=c.background&&b.background!=c.background,"three primary contexts have distinct palettes");check(a.x!=b.x&&a.x!=c.x&&b.lines!=c.lines,"approved boot is centered; save and server use distinct left-side map/network geometry");System.out.println("PASS three primary palette/composition contracts");}
     static void queue(int position){LoadingModel server=new LoadingModel();server.serverBegin("Queue fixture");if(position<0)server.queueWaiting();else server.queue(position);Frame frame=new Frame();LoadingScene.draw(frame.canvas(),640,480,server.snapshot(),4,false,false,0,0,276d/480,382d/480);check(frame.texts.stream().anyMatch(a->((String)a[0]).contains("Esc / 手柄 A 取消排队")&&(double)a[1]>128)&&(position<0||frame.text.contains("排队位置  "+position)),"queue "+position+" retains actual cancel hint with inherited native lease bounds");System.out.println("PASS queue hint at position "+position);}
 }

@@ -38,14 +38,15 @@ public final class MemoryPanelLayoutTest implements LoadingScene.Canvas {
             check(label.size>=14,"memory label must remain readable at "+w+" "+mode);
             check(value.size>=20,"memory used/maximum must be a prominent readable number at "+w+" "+mode);
             check(value.value.contains("1,010")&&value.value.contains("8,192"),"memory values remain the real used and maximum, not a loading percentage");
-            Rect track=c.rectangles.stream().filter(a->a.x==0&&a.y==0&&a.h>=18&&a.h<=55&&a.w==w).findFirst().orElseThrow(()->new AssertionError("memory track must span the top edge of the loading page, without a separate framed card"));
+            Rect track=c.rectangles.stream().filter(a->a.x>0&&a.y>0&&a.y<70&&a.h>=14&&a.h<=45&&Math.abs(a.w-w*.6)<1).findFirst().orElseThrow(()->new AssertionError("approved memory slot must be bounded and centered, without a separate framed card"));
+            check(Math.abs(track.x+track.w/2-w/2d)<1,"memory slot is horizontally centered with generous margins");
             check(c.rectangles.stream().noneMatch(a->a.y<100&&a.h>55&&a.h<h*.5),"memory must not introduce a separate background panel");
             check(track.x>=0&&track.y>=0&&track.x+track.w<=w&&track.y+track.h<=h,"memory track stays within the game viewport");
             check(!track.bounds().intersects(value.bounds)&&!label.bounds.intersects(value.bounds),"memory value, title and bar occupy separate lines");
             Set<String> stages=Set.of("初始化","连接","创意工坊","模组","资源","脚本","界面","同步","世界","就绪","准备");
             check(c.words.stream().filter(a->stages.contains(a.value)).noneMatch(a->a.bounds.intersects(track.bounds())||a.bounds.intersects(value.bounds)),"memory panel never overlaps stage labels");
-            Rect fill=c.rectangles.stream().filter(a->Math.abs(a.x-track.x)<.1&&Math.abs(a.y-track.y)<.1&&Math.abs(a.h-track.h)<.1&&a.w<track.w).findFirst().orElseThrow();
-            check(Math.abs(fill.w/track.w-1010d/8192)<.00001,"memory fill is proportional to actual heap usage");
+            Rect fill=c.rectangles.stream().filter(a->Math.abs(a.x-track.x-2)<.1&&Math.abs(a.y-track.y-2)<.1&&Math.abs(a.h-track.h+4)<.1&&a.w<track.w).findFirst().orElseThrow();
+            check(Math.abs(fill.w/(track.w-4)-1010d/8192)<.00001,"inset memory fill is proportional to actual heap usage");
             c.drawing.g.dispose();if(w==1280||w==1920)ImageIO.write(image,"png",output.resolve(mode+"-"+w+"-"+(light?"light":"dark")+".png").toFile());
         }
         BufferedImage noHeap=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);MemoryPanelLayoutTest c=new MemoryPanelLayoutTest(noHeap,logo);LoadingScene.draw(c,1280,720,model("boot").snapshot(),12,false,true,0,0);check(c.words.stream().noneMatch(a->a.value.contains("Java 内存")),"unknown heap maximum does not invent a memory percentage");c.drawing.g.dispose();

@@ -9,34 +9,17 @@ public final class LogoGrowth {
     private static double unit(double value){return Math.max(0,Math.min(1,value));}
     private static double smooth(double value){double t=unit(value);return t*t*(3-2*t);}
     private static double spring(double value){double t=unit(value)-1;return 1+2.4*t*t*t+1.4*t*t;}
-    public static Frame at(double seconds,boolean reduced){
+    public static Frame at(double seconds,boolean reduced){return at(seconds,reduced,LoadingModel.Context.BOOT,false);}
+    public static Frame at(double seconds,boolean reduced,LoadingModel.Context context,boolean download){
         if(reduced)return new Frame(1,1,0,0,0,1,1);
         double t=Double.isFinite(seconds)?Math.max(0,seconds):0;
-        if(t<3){
-            double growth=spring((t-.2)/1.9),leaf=spring((t-.7)/1.8);
-            return new Frame(.24+.76*growth,.05+.95*leaf,-.12*(1-unit(growth)),
-                -.95*(1-unit(leaf)),.12*(1-unit(growth)),1,1);
-        }
-        // A quiet beat separates four deliberate gestures. The fruit never becomes a seed again.
-        double cycle=(t-3)%30,angle=0,leafAngle=0,lift=0,sx=1,sy=1;
-        if(cycle>=1.0&&cycle<6.0){
-            double u=(cycle-1)/5,envelope=Math.pow(Math.sin(Math.PI*u),2);
-            angle=Math.PI*2*smooth(u);lift=-.007*envelope;
-        }else if(cycle>=6&&cycle<6.6){
-            double u=(cycle-6)/.6;angle=.025*Math.sin(2*Math.PI*u)*(1-u);
-        }else if(cycle>=8&&cycle<12){
-            double u=(cycle-8)/4,envelope=Math.pow(Math.sin(Math.PI*u),2);
-            leafAngle=.55*Math.sin(4*Math.PI*u)*envelope;angle=-.018*envelope;
-        }else if(cycle>=15&&cycle<18.2){
-            double u=(cycle-15)/3.2;
-            if(u<.24){double squash=Math.pow(Math.sin(Math.PI*u/.24),2);sx+=.06*squash;sy-=.07*squash;lift=.016*squash;}
-            else if(u<.76){double hop=Math.sin(Math.PI*(u-.24)/.52);lift=-.105*hop;angle=.045*Math.sin(2*Math.PI*(u-.24)/.52);sx-=.025*hop;sy+=.035*hop;leafAngle=-.16*hop;}
-            else{double settle=Math.sin(Math.PI*(u-.76)/.24);sx+=.025*settle;sy-=.028*settle;lift=.007*settle;}
-        }else if(cycle>=21&&cycle<26){
-            double u=(cycle-21)/5,envelope=Math.pow(Math.sin(Math.PI*u),2);
-            angle=-.08*envelope;leafAngle=.14*envelope;lift=-.009*envelope;
-        }
-        return new Frame(1,1,angle,leafAngle,lift,sx,sy);
+        double cycle=t%18,angle=cycle<6.6?Math.PI*2*smooth((cycle-1)/4.8):0,leafAngle=0,lift=0;
+        if(download){double p=(t%6)/6;leafAngle=.15*Math.sin(Math.PI*p*2)*Math.pow(Math.sin(Math.PI*p),2);}
+        else if(context==LoadingModel.Context.SERVER){int direction=new int[]{-1,-1,0,1,1,0,-1}[(int)(t/2.8)%7];double p=(t%2.8)/2.8,wave=Math.pow(Math.sin(Math.PI*p),2);angle+=direction*.065*wave;leafAngle=-direction*.11*wave;lift=-1.5/164*wave;}
+        else if(context==LoadingModel.Context.SAVE){double p=t%7,dy=0;if(p<.35)dy=6*(1-Math.cos(Math.PI*p/.35))/2;else if(p<1.05){double v=(p-.35)/.7;dy=6*(1-v)-3*Math.sin(Math.PI*v);}else if(p<1.6)dy=1.5*Math.sin((p-1.05)/.55*Math.PI);lift=dy/164;leafAngle=-.02*dy;}
+        else if(cycle>=7&&cycle<8.5){double p=(cycle-7)/1.5;lift=-9d/174*Math.sin(Math.PI*p);leafAngle=-.22*Math.sin(Math.PI*p);angle+=.025*Math.sin(p*Math.PI*2);}
+        else if(cycle>=10&&cycle<13){double wave=Math.pow(Math.sin(Math.PI*(cycle-10)/3),2);angle+=.06*wave;leafAngle=-.12*wave;}
+        return new Frame(1,1,angle,leafAngle,lift,1,1);
     }
     public record Parts(BufferedImage body,BufferedImage leaf) {}
     public static Parts split(BufferedImage source){

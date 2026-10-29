@@ -1,169 +1,78 @@
 package ozl.startup;
-
 import java.util.*;
 
-/** Production layout shared by the actual game GL canvas and offscreen inspection. */
+/** Actual game and offscreen renderers share this approved original-orange layout. */
 public final class LoadingScene {
-    public interface Canvas {
-        void gradient(double x,double y,double w,double h,int top,int bottom);
-        void glow(double x,double y,double radius,int center,int edge);
-        void arc(double x,double y,double radius,double thickness,double start,double length,int color);
-        void line(double x1,double y1,double x2,double y2,double thickness,int color);
-        void logo(double x,double y,double size,double alpha,double angle);
-        default void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle){logo(x,y,size,alpha,angle);}
-        default void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle,double stretchX,double stretchY){growingLogo(x,y,size,alpha,angle,leafScale,leafAngle);}
-        double measure(String text,double size);
-        void text(String value,double x,double y,double size,int color,boolean right);
-    }
-    /** Match both GL's raster font and scene measurement, including small viewports. */
-    public static double font(double size){return Math.max(9,Math.min(64,size));}
-    static int alpha(int color,int opacity){return (Math.max(0,Math.min(255,opacity))<<24)|(color&0xffffff);}
-    static String fit(Canvas c,String text,double size,double width){
-        text=LoadingModel.safe(text,512);size=font(size);if(c.measure(text,size)<=width)return text;
-        int end=text.length();while(end>0&&c.measure(text.substring(0,end)+"…",size)>width)end--;
-        return end==0?"":text.substring(0,end)+"…";
-    }
-    static void text(Canvas c,String value,double x,double y,double size,int color,boolean right,double width){if(!value.isEmpty())c.text(fit(c,value,size,width),x,y,font(size),color,right);}
-    static double entrance(double time){double t=Math.max(0,Math.min(1,time/1.1)),u=t-1;return 1+2.4*u*u*u+1.4*u*u;}
-    public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum) {
-        draw(c,w,h,state,seconds,light,reduced,used,maximum,0,0);
-    }
-    /** Native widget bounds are normalized immutable observations from the accepted CPU frame. */
-    public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum,double statusBottom,double cancelTop) {
-        if(state.downloadPage){WorkshopScene.draw(c,w,h,state,seconds,reduced);return;}
-        boolean nativeControls=state.context==LoadingModel.Context.SERVER&&statusBottom>0&&cancelTop>statusBottom;
-        if(nativeControls)light=false; // Original native status is white and remains authoritative.
-        double sceneScale=Math.max(.6,Math.min(2.5,Math.min(w/1440d,h/900d))),s=nativeControls?Math.min(1.3,sceneScale):sceneScale,margin=Math.max(22,48*s);
-        int accent=switch(state.context){case BOOT, NONE -> 0xffffbd76;case SERVER -> 0xff67d8f0;case SAVE -> 0xff73dfa8;},ink=light?0xff29343e:0xffe9edf2,muted=light?0xff52616a:0xffa4b5c1;
-        int topColor=switch(state.context){case BOOT, NONE -> light?0xfff6eee3:0xff2b201b;case SERVER -> light?0xffe7f2f8:0xff0c263d;case SAVE -> light?0xffe7f3e9:0xff122f27;};
-        int bottomColor=switch(state.context){case BOOT, NONE -> light?0xffe8ddd1:0xff130f10;case SERVER -> light?0xffd0e4ee:0xff07121f;case SAVE -> light?0xffd3e5d6:0xff071812;};
-        c.gradient(0,0,w,h,topColor,bottomColor);
-        double track=w-2*margin,top=maximum>0?Math.max(18,18*s)+Math.max(28,32*s):Math.max(28,42*s),titleSize=font(15*s),small=font(12*s);
-        double titleWidth=maximum>0?memory(c,w,margin,top,s,light,used,maximum,ink,muted,accent):track*.52;
-        text(c,state.title,margin,top,titleSize,ink,false,Math.min(track*.52,titleWidth));
-        String count=state.context==LoadingModel.Context.BOOT?(state.processedScripts>0?"已读取 "+state.processedScripts+" 个脚本":state.processedMods>0?"已处理 "+state.processedMods+" 个模组":state.scannedResources>0?"已索引 "+state.scannedResources+" 项资源":""):"";
-        String[] milestones=switch(state.context){case SAVE->new String[]{"准备","世界","就绪"};case SERVER->new String[]{"连接","创意工坊","模组","同步","世界","就绪"};default->new String[]{"初始化","模组","资源","脚本","界面","就绪"};};
-        int stages=milestones.length,active=Math.max(0,Math.min(stages-1,state.stageIndex));
-        double gap=8*s,cell=(track-gap*(stages-1))/stages,stageY=top+29*s;
-        double node=Math.max(4,6*s);
-        for(int i=0;i<stages-1;i++){
-            double x=margin+i*(cell+gap)+cell/2;
-            c.line(x+node+4*s,stageY,x+cell+gap-node-4*s,stageY,Math.max(1,s),alpha(muted,40));
-        }
-        for(int i=0;i<stages;i++){
-            double x=margin+i*(cell+gap)+cell/2;int color=i<active?alpha(accent,160):i==active?accent:alpha(muted,75);
-            c.arc(x,stageY,i<active?node*.5:i==active?node+1.5*s:node,i<active?node:Math.max(1,1.5*s),0,Math.PI*2,color);
-            if(i<active){c.line(x-node*.45,stageY,x-node*.08,stageY+node*.35,Math.max(1,s),bottomColor);c.line(x-node*.08,stageY+node*.35,x+node*.48,stageY-node*.35,Math.max(1,s),bottomColor);}
-            else if(i==active)centered(c,Integer.toString(i+1),x,stageY+3*s,font(9*s),accent,node*2);
-            centered(c,milestones[i],x,stageY+20*s,font(i==active?11*s:10*s),i==active?ink:muted,cell);
-        }
-        String observed=state.detail.isEmpty()?count:state.detail;
-        if(!observed.isEmpty()&&!nativeControls)text(c,observed,margin,stageY+42*s,small,muted,false,track*.75);
-        double visualScale=s,cx=w*.5,cy=h*(state.context==LoadingModel.Context.SERVER?.40:state.context==LoadingModel.Context.SAVE?.37:.42),t=reduced?2:Math.max(0,seconds);
-        LogoGrowth.Frame growth=LogoGrowth.at(seconds,reduced);
-        if(state.context==LoadingModel.Context.SAVE){cx=w*.29;cy=h*.40;}
-        else if(state.context==LoadingModel.Context.SERVER&&!nativeControls){cx=w*.25;cy=h*.40;}
-        if(nativeControls){double upper=statusBottom*h+24*s,lower=cancelTop*h-24*s;cy=(upper+lower)/2;visualScale=Math.min(sceneScale,Math.max(.1,(lower-upper)/260));}
-        c.glow(cx,cy,Math.min(310*visualScale,w*.46),alpha(accent,light?35:24),alpha(accent,0));
-        if(state.context==LoadingModel.Context.SAVE)map(c,cx,cy,s,t,reduced,accent,light);
-        else if(state.context==LoadingModel.Context.SERVER)network(c,cx,cy,visualScale,t,reduced,accent,light);
-        else {
-            c.arc(cx,cy,107*s,1.1*s,0,Math.PI*2,light?0x38757e71:0x343e5261);
-            c.arc(cx,cy,107*s,1.7*s,Math.PI*.18,Math.PI*.34,alpha(accent,125));
-            c.arc(cx,cy,107*s,1.7*s,Math.PI*1.18,Math.PI*.34,alpha(accent,65));
-        }
-        double logoBase=(state.context==LoadingModel.Context.BOOT?174:state.context==LoadingModel.Context.SAVE?130:150)*visualScale;
-        double logoSize=logoBase*growth.bodyScale();
-        c.growingLogo(cx,cy+logoBase*growth.lift(),logoSize,1,growth.angle(),growth.leafScale(),growth.leafAngle(),growth.stretchX(),growth.stretchY());
-        double labelY=state.context==LoadingModel.Context.BOOT?cy+157*s:h*.31;
-        if(state.context==LoadingModel.Context.SERVER){
-            double infoX=nativeControls?margin:w*.46,infoY=nativeControls?top+98*s:h*.28;
-            double infoWidth=nativeControls?track:w*.49;
-            serverFacts(c,state,infoX,infoY,infoWidth,s,ink,muted,accent,nativeControls);
-            if("排队".equals(state.stage))centered(c,state.detail,w*.5,nativeControls?Math.min(cancelTop*h-12*s,cy+120*visualScale):h*.69,small,ink,w*.78);
-        }else{
-            String identity=state.context==LoadingModel.Context.BOOT?"O Z L":state.name;
-            double infoCx=state.context==LoadingModel.Context.BOOT?w*.5:w*.68,infoWidth=state.context==LoadingModel.Context.BOOT?w*.84:w*.49;
-            centered(c,identity,infoCx,labelY,font(21*s),ink,infoWidth);
-            String mode=switch(state.mode){case "Sandbox" -> "沙盒";case "Survival" -> "生存";default -> state.mode;};
-            String metadata=String.join("  ·  ",java.util.stream.Stream.of(mode,state.map).filter(v->!v.isEmpty()).toList());
-            centered(c,metadata,infoCx,labelY+25*s,small,muted,infoWidth);
-            if(state.context==LoadingModel.Context.SAVE)centered(c,state.detail,infoCx,labelY+56*s,small,muted,infoWidth);
-        }
-        LoadingHumor.Caption caption=LoadingHumor.at(seconds,state.generation,state.context,reduced);
-        double humorY=nativeControls?Math.min(cy+150*visualScale,cancelTop*h-15*s):state.context==LoadingModel.Context.BOOT?labelY+28*s:cy+153*s;
-        centered(c,caption.text(),cx,humorY,Math.max(10,12*s),alpha(muted,caption.opacity()),Math.min(w*.52,300*s));
-        double line=Math.max(16,23*s),bottom=h-Math.max(23,45*s),body=font(13*s),leftWidth=w*.46-margin,rightWidth=w*.42-margin;
-        if(nativeControls){leftWidth=Math.min(leftWidth,w*.5-75-margin);rightWidth=Math.min(rightWidth,w*.5-75-margin);}
-        int rows=Math.min(5,state.activity.length);
-        for(int i=0;i<rows;i++)text(c,state.activity[state.activity.length-rows+i],margin,bottom-(rows-1-i)*line,body,i==rows-1?ink:muted,false,leftWidth);
-        if(state.issue.length==5){double right=w-margin,y=bottom-4*line;text(c,state.issue[0],right,y,body,accent,true,rightWidth);
-            String[] values={state.issue[2].isEmpty()?"":"模组  ·  "+state.issue[2],state.issue[1],state.issue[3],state.issue[4]};
-            for(int i=0;i<values.length;i++)text(c,values[i],right,y+(i+1)*line,body,i==0?ink:muted,true,rightWidth);
-        }
-    }
-    private static double memory(Canvas c,double width,double margin,double baseline,double s,boolean light,long used,long maximum,int ink,int muted,int accent){
-        // One edge-to-edge memory strip belongs to the page itself, without a
-        // card, background container, outline, or a second window-like shape.
-        double barHeight=Math.max(18,18*s),ratio=Math.max(0,Math.min(1,Math.max(0,used)/(double)maximum));
-        c.gradient(0,0,width,barHeight,alpha(light?muted:0xff000000,light?45:85),alpha(light?muted:0xff000000,light?35:65));
-        c.gradient(0,0,width*ratio,barHeight,accent,alpha(accent,210));
-        String heap=String.format(Locale.ROOT,"%,d / %,d MiB",Math.max(0,used)>>20,maximum>>20);
-        double size=font(Math.max(20,24*s)),labelSize=font(Math.max(14,14*s)),gap=Math.max(12,16*s),right=width-margin;
-        if(c.measure(heap,size)>width*.5)heap=String.format(Locale.ROOT,"%.1f / %.1f GiB",Math.max(0,used)/1073741824d,maximum/1073741824d);
-        text(c,heap,right,baseline,size,ink,true,width*.5);
-        double labelRight=right-c.measure(heap,size)-gap;
-        text(c,"Java 内存",labelRight,baseline,labelSize,muted,true,width*.2);
-        return Math.max(0,labelRight-c.measure("Java 内存",labelSize)-margin-gap);
-    }
-    private static void serverFacts(Canvas c,LoadingModel.Snapshot state,double x,double y,double width,double s,int ink,int muted,int accent,boolean compact){
-        double small=Math.max(12,font(12*s)),label=font(10*s),line=Math.max(16,(compact?18:22)*s);
-        text(c,state.name,x,y,font(22*s),ink,false,width);
-        int endpointLines=leftWrapped(c,state.endpoint,x,y+line,small,muted,width,line);
-        double base=y+(endpointLines+1)*line+16*s,col=width/3;
-        String population=state.online>=0?(state.maxPlayers>0?state.online+" / "+state.maxPlayers:Integer.toString(state.online)):state.maxPlayers>0?"— / "+state.maxPlayers:"—";
-        String clock=state.gameClock.isEmpty()?"—":state.gameClock,day=state.worldDay>0?"第 "+state.worldDay+" 天":"—";
-        String[] labels={"在线玩家","游戏时间","世界天数"},values={population,clock,day};
-        for(int i=0;i<3;i++){
-            text(c,labels[i],x+i*col,base,label,muted,false,col-8*s);
-            text(c,values[i],x+i*col,base+line,font(21*s),i==0?accent:ink,false,col-8*s);
-        }
-        double second=base+2*line+12*s;
-        String[] lowerLabels={"地图","模组","创意工坊"},lowerValues={state.map.isEmpty()?"—":state.map,state.requestedMods>=0?state.requestedMods+" 个":"—",state.workshopProjects>=0?state.workshopProjects+" 项":"—"};
-        for(int i=0;i<3;i++){
-            text(c,lowerLabels[i],x+i*col,second,label,muted,false,col-8*s);
-            text(c,lowerValues[i],x+i*col,second+line,small,ink,false,col-8*s);
-        }
-        if(!state.gameDate.isEmpty())text(c,state.gameDate,x+col,base+line+Math.max(14,17*s),Math.max(12,font(10*s)),muted,false,col-8*s);
-
-    }
-    private static int leftWrapped(Canvas c,String value,double x,double y,double size,int color,double width,double line){
-        if(value.isEmpty())return 0;int rows=0;
-        while(!value.isEmpty()){int end=value.length();while(end>1&&c.measure(value.substring(0,end),font(size))>width)end--;c.text(value.substring(0,end),x,y+rows*line,font(size),color,false);value=value.substring(end);rows++;}return rows;
-    }
-    private static void centered(Canvas c,String text,double x,double y,double size,int color,double width){if(text.isEmpty())return;String v=fit(c,text,size,width);c.text(v,x-c.measure(v,font(size))/2,y,font(size),color,false);}
-    private static int wrapped(Canvas c,String text,double x,double y,double size,int color,double width,double line){
-        if(text.isEmpty())return 0;int rows=0;
-        while(!text.isEmpty()){int end=text.length();while(end>1&&c.measure(text.substring(0,end),font(size))>width)end--;String part=text.substring(0,end);c.text(part,x-c.measure(part,font(size))/2,y+rows*line,font(size),color,false);text=text.substring(end);rows++;}return rows;
-    }
-    private static void map(Canvas c,double cx,double cy,double s,double time,boolean reduced,int accent,boolean light){
-        double gap=7*s,cell=32*s;
-        for(int y=-2;y<=2;y++)for(int x=-3;x<=3;x++){
-            int distance=Math.abs(x)+Math.abs(y);double appear=reduced?1:Math.max(0,Math.min(1,(time-distance*.065)*2.2));
-            double xx=cx+x*(cell+gap)-cell/2,yy=cy+y*(cell+gap)-cell/2+(1-appear)*18*s;
-            int opacity=(int)((distance<2?15:34)*appear);c.gradient(xx,yy,cell,cell,alpha(accent,opacity),alpha(accent,opacity/2));
-            int stroke=alpha(accent,(int)((distance<2?45:95)*appear));
-            c.line(xx,yy,xx+cell,yy,1*s,stroke);c.line(xx,yy,xx,yy+cell,1*s,stroke);
-            if(!reduced){double p=((time*.17+x*.09+y*.07)%1+1)%1;c.gradient(xx+2*s,yy+cell-3*s,Math.max(0,(cell-4*s)*p),1*s,alpha(accent,(int)(55*appear)),alpha(accent,(int)(55*appear)));}
-        }
-    }
-    private static void network(Canvas c,double cx,double cy,double s,double time,boolean reduced,int accent,boolean light){
-        double[][] points={{-160,-44},{-99,-101},{21,-121},{142,-62},{158,58},{49,114},{-89,95}};
-        for(int i=0;i<points.length;i++){
-            double x=cx+points[i][0]*s,y=cy+points[i][1]*s,dx=x-cx,dy=y-cy;
-            c.line(cx,cy,x,y,1*s,alpha(accent,60));c.arc(x,y,5*s,2*s,0,Math.PI*2,alpha(accent,180));
-
-        }
-        c.arc(cx,cy,48*s,1*s,0,Math.PI*2,alpha(accent,85));
-    }
+ public interface Canvas {
+  void gradient(double x,double y,double w,double h,int top,int bottom);
+  void glow(double x,double y,double radius,int center,int edge);
+  void arc(double x,double y,double radius,double thickness,double start,double length,int color);
+  void line(double x1,double y1,double x2,double y2,double thickness,int color);
+  void logo(double x,double y,double size,double alpha,double angle);
+  default void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle){logo(x,y,size,alpha,angle);}
+  default void growingLogo(double x,double y,double size,double alpha,double angle,double leafScale,double leafAngle,double sx,double sy){growingLogo(x,y,size,alpha,angle,leafScale,leafAngle);}
+  double measure(String text,double size);
+  void text(String value,double x,double y,double size,int color,boolean right);
+ }
+ public static double font(double size){return Math.max(9,Math.min(64,size));}
+ static double scale(int w,int h){return Math.max(.6,Math.min(2.5,Math.min(w/1280d,h/720d)));}
+ static int alpha(int color,int opacity){return (Math.max(0,Math.min(255,opacity))<<24)|(color&0xffffff);}
+ static String fit(Canvas c,String value,double size,double width){value=LoadingModel.safe(value,512);size=font(size);if(c.measure(value,size)<=width)return value;int end=value.length();while(end>0&&c.measure(value.substring(0,end)+"…",size)>width)end--;return end==0?"":value.substring(0,end)+"…";}
+ static void text(Canvas c,String value,double x,double y,double size,int color,boolean right,double width){if(!value.isEmpty())c.text(fit(c,value,size,width),x,y,font(size),color,right);}
+ static void centered(Canvas c,String value,double x,double y,double size,int color,double width){if(value.isEmpty())return;String v=fit(c,value,size,width);c.text(v,x-c.measure(v,font(size))/2,y,font(size),color,false);}
+ /** A rectangular track with actual fill inset two pixels; no enclosing panel. */
+ static void slot(Canvas c,double x,double y,double width,double height,double ratio,int accent,boolean light){int track=light?0x2052616a:0x22a4b5c1;c.gradient(x,y,width,height,track,track);double inset=Math.min(2,height/4),fill=Math.max(0,width-2*inset)*Math.max(0,Math.min(1,ratio));if(fill>0)c.gradient(x+inset,y+inset,fill,height-2*inset,accent,accent);}
+ static double memory(Canvas c,int w,double s,boolean light,long used,long maximum,int ink,int muted,int accent){
+  if(maximum<=0)return Math.max(34,48*s);double width=Math.min(900*s,w*.60),x=(w-width)/2,y=Math.max(18,24*s),height=Math.max(14,18*s);slot(c,x,y,width,height,Math.max(0,used)/(double)maximum,accent,light);
+  String heap=String.format(Locale.ROOT,"%,d / %,d MiB",Math.max(0,used)>>20,maximum>>20);double label=Math.max(14,14*s),value=Math.max(20,20*s),gap=12*s,baseline=y+height+Math.max(24,28*s),lw=c.measure("Java 内存",label),vw=c.measure(heap,value),start=(w-lw-gap-vw)/2;c.text("Java 内存",start,baseline,label,muted,false);c.text(heap,start+lw+gap,baseline,value,ink,false);return baseline;
+ }
+ static double stages(Canvas c,int w,double top,double s,LoadingModel.Snapshot state,int ink,int muted,int accent,int background){
+  String[] names=switch(state.context){case SAVE->new String[]{"准备","世界","就绪"};case SERVER->new String[]{"连接","创意工坊","模组","同步","世界","就绪"};default->new String[]{"初始化","模组","资源","脚本","界面","就绪"};};
+  double margin=Math.max(22,48*s),cell=(w-2*margin)/names.length,y=top+Math.max(20,27*s),node=Math.max(4,6*s);int active=Math.max(0,Math.min(names.length-1,state.stageIndex));
+  double labelGap=Math.max(18,20*s);
+  for(int i=0;i<names.length;i++){double x=margin+cell*(i+.5);if(i<names.length-1)c.line(x+node+6*s,y,x+cell-node-6*s,y,Math.max(1,s),alpha(muted,40));int color=i<active?alpha(accent,165):i==active?accent:alpha(muted,75);c.arc(x,y,i<active?node*.5:node,i<active?node:Math.max(1,1.2*s),0,Math.PI*2,color);if(i<active){c.line(x-node*.45,y,x-node*.08,y+node*.35,Math.max(1,s),background);c.line(x-node*.08,y+node*.35,x+node*.48,y-node*.35,Math.max(1,s),background);}else if(i==active)centered(c,Integer.toString(i+1),x,y+3*s,font(9*s),accent,node*2);centered(c,names[i],x,y+labelGap,Math.max(10,11*s),i==active?ink:muted,cell-4*s);}return y+labelGap;
+ }
+ public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum){draw(c,w,h,state,seconds,light,reduced,used,maximum,0,0,0);}
+ public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum,double statusBottom,double cancelTop){draw(c,w,h,state,seconds,light,reduced,used,maximum,statusBottom,cancelTop,0);}
+ public static void draw(Canvas c,int w,int h,LoadingModel.Snapshot state,double seconds,boolean light,boolean reduced,long used,long maximum,double statusBottom,double cancelTop,double workshopTop){
+  if(state.downloadPage){WorkshopScene.draw(c,w,h,state,seconds,reduced,used,maximum,workshopTop);return;}
+  boolean nativeControls=state.context==LoadingModel.Context.SERVER&&statusBottom>0&&cancelTop>statusBottom;if(nativeControls)light=false;double s=scale(w,h),margin=Math.max(22,42*s);
+  int accent=switch(state.context){case BOOT,NONE->0xffffbd76;case SERVER->0xff67d8f0;case SAVE->0xff73dfa8;},ink=light?0xff29343e:0xffe9edf2,muted=light?0xff52616a:0xffa4b5c1;
+  int top=switch(state.context){case BOOT,NONE->light?0xfff6eee3:0xff2b201b;case SERVER->light?0xffe7f2f8:0xff0c263d;case SAVE->light?0xffe7f3e9:0xff122f27;},bottom=switch(state.context){case BOOT,NONE->light?0xffe8ddd1:0xff130f10;case SERVER->light?0xffd0e4ee:0xff07121f;case SAVE->light?0xffd3e5d6:0xff071812;};c.gradient(0,0,w,h,top,bottom);
+  double header=memory(c,w,s,light,used,maximum,ink,muted,accent),stageBottom=stages(c,w,header,s,state,ink,muted,accent,bottom);
+  String context=switch(state.context){case BOOT,NONE->"启动游戏";case SERVER->"连接服务器";case SAVE->"载入单人存档";};text(c,context,margin,Math.max(32,40*s),Math.max(11,12*s),muted,false,Math.max(0,w*.2-margin-12*s));
+  double cx=state.context==LoadingModel.Context.BOOT?w*.5:w*.22,cy=h*.37,visualScale=s,titleY=h*.64;boolean wideNative=false;
+  if(nativeControls){double upper=statusBottom*h+16*s,lower=cancelTop*h-16*s,heroHeight=Math.max(12,lower-upper-70*s);wideNative=heroHeight>=240*s;cx=wideNative?w*.22:w*.5;cy=upper+heroHeight/2;visualScale=Math.min(s,heroHeight/(174*Math.sqrt(2)+30));titleY=lower-48*s;}
+  c.glow(cx,cy,Math.min(280*visualScale,w*.4),alpha(accent,light?30:22),alpha(accent,0));if(state.context==LoadingModel.Context.SAVE)map(c,cx,cy,visualScale,seconds,reduced,accent);else if(state.context==LoadingModel.Context.SERVER)network(c,cx,cy,visualScale,seconds,reduced,accent);else ring(c,cx,cy,visualScale,seconds,reduced,accent);orange(c,cx,cy,visualScale,state.context,seconds,reduced,false);
+  if(state.context==LoadingModel.Context.SERVER){double infoX=nativeControls&&!wideNative?margin:w*.425,infoY=nativeControls&&!wideNative?stageBottom+Math.max(28,25*s):cy-80*s;serverFacts(c,state,infoX,infoY,nativeControls&&!wideNative?w-2*margin:w*.54,s,ink,muted,accent,nativeControls&&!wideNative);}
+  else if(state.context==LoadingModel.Context.BOOT)centered(c,"O Z L",cx,cy+118*s,22*s,ink,w*.8);
+  else{double x=w*.425,y=cy-46*s,width=w*.54;text(c,state.name,x,y,24*s,ink,false,width);String mode=switch(state.mode){case "Sandbox"->"沙盒";case "Survival"->"生存";default->state.mode;};String meta=String.join(" · ",java.util.stream.Stream.of(mode,state.map).filter(v->!v.isEmpty()).toList());text(c,meta,x,y+27*s,Math.max(12,14*s),muted,false,width);text(c,state.detail,x,y+60*s,Math.max(12,14*s),muted,false,width);}
+  LoadingHumor.Caption caption=LoadingHumor.at(seconds,state.generation,state.context,reduced);double humorY=state.context==LoadingModel.Context.BOOT?cy+146*s:cy+134*visualScale;if(nativeControls)humorY=Math.min(humorY,titleY-27*s);centered(c,caption.text(),cx,humorY,Math.max(10,13*s),alpha(muted,caption.opacity()),Math.min(w*.44,340*s));
+  centered(c,state.title,w*.5,titleY,Math.max(15,22*s),ink,w*.86);double width=Math.min(900*s,w*.60),y=titleY+15*s,height=Math.max(7,10*s);activity(c,(w-width)/2,y,width,height,seconds,reduced,accent,light);
+  String count=state.processedScripts>0?"已读取 "+state.processedScripts+" 个脚本":state.processedMods>0?"已处理 "+state.processedMods+" 个模组":state.scannedResources>0?"已索引 "+state.scannedResources+" 项资源":"";centered(c,state.detail.isEmpty()?count:state.detail,w*.5,y+height+22*s,Math.max(11,14*s),muted,w*.8);
+  double line=Math.max(16,22*s),baseline=h-Math.max(24,32*s),leftWidth=w*.46-margin,rightWidth=w*.42-margin;if(nativeControls){leftWidth=Math.min(leftWidth,w*.5-75-margin);rightWidth=Math.min(rightWidth,w*.5-75-margin);}logs(c,state,margin,w-margin,baseline,line,Math.max(11,14*s),leftWidth,rightWidth,5,ink,muted,light?ink:accent);
+ }
+ static void activity(Canvas c,double x,double y,double width,double height,double seconds,boolean reduced,int accent,boolean light){slot(c,x,y,width,height,0,accent,light);double inset=Math.min(2,height/4),segment=(width-2*inset)*.25,p=reduced?.5:(Math.sin(seconds*.75)+1)/2;c.gradient(x+inset+p*(width-2*inset-segment),y+inset,segment,Math.max(1,height-2*inset),accent,accent);}
+ static void logs(Canvas c,LoadingModel.Snapshot state,double left,double right,double baseline,double line,double size,double leftWidth,double rightWidth,int count,int ink,int muted,int accent){int rows=Math.min(count,state.activity.length);for(int i=0;i<rows;i++)text(c,state.activity[state.activity.length-rows+i],left,baseline-(rows-1-i)*line,size,i==rows-1?ink:muted,false,leftWidth);if(state.issue.length==5){String[] values={state.issue[0],state.issue[2].isEmpty()?"":"模组 · "+state.issue[2],state.issue[1],state.issue[3],state.issue[4]};int limit=Math.min(count,values.length);for(int i=0;i<limit;i++)text(c,values[i],right,baseline-(limit-1-i)*line,size,i==0?accent:i==1?ink:muted,true,rightWidth);}}
+ static void orange(Canvas c,double cx,double cy,double s,LoadingModel.Context context,double seconds,boolean reduced,boolean download){LogoGrowth.Frame pose=LogoGrowth.at(seconds,reduced,context,download);double size=(context==LoadingModel.Context.BOOT?174:164)*s,opacity=reduced?1:Math.max(0,Math.min(1,seconds/.65));c.growingLogo(cx,cy+size*pose.lift(),size,opacity,pose.angle(),pose.leafScale(),pose.leafAngle(),pose.stretchX(),pose.stretchY());}
+ static void ring(Canvas c,double cx,double cy,double s,double time,boolean reduced,int accent){double start=reduced?0:time*.22;c.arc(cx,cy,97*s,Math.max(.6,s),0,Math.PI*2,alpha(accent,35));c.arc(cx,cy,97*s,1.5*s,start,Math.PI*.34,alpha(accent,155));c.arc(cx,cy,97*s,1.5*s,start+Math.PI,Math.PI*.25,alpha(accent,75));}
+ static void map(Canvas c,double cx,double cy,double s,double time,boolean reduced,int accent){double gap=6*s,cell=28*s;for(int y=-2;y<=2;y++)for(int x=-3;x<=3;x++){double wave=reduced?.3:Math.pow(Math.max(0,Math.sin((time*.23-Math.hypot(x,y)*.12)*Math.PI*2)),2),xx=cx+x*(cell+gap)-cell/2,yy=cy+y*(cell+gap)-cell/2;int fill=alpha(accent,(int)(18+wave*46));c.gradient(xx,yy,cell,cell,fill,fill);c.line(xx,yy,xx+cell,yy,Math.max(.6,s),alpha(accent,55));c.line(xx,yy,xx,yy+cell,Math.max(.6,s),alpha(accent,55));}}
+ static void network(Canvas c,double cx,double cy,double s,double time,boolean reduced,int accent){double[][] points={{-145,-40},{-90,-89},{15,-100},{133,-51},{144,50},{44,93},{-80,84}};int active=(int)(Math.max(0,time)/2.8)%points.length;double p=reduced?.5:1-(time%2.8)/2.8;for(int i=0;i<points.length;i++){double x=cx+points[i][0]*s,y=cy+points[i][1]*s;c.line(cx,cy,x,y,Math.max(.6,s),alpha(accent,60));c.arc(x,y,4*s,Math.max(.6,s),0,Math.PI*2,alpha(accent,155));if(i==active&&!reduced)c.arc(cx+(x-cx)*p,cy+(y-cy)*p,1.3*s,2.6*s,0,Math.PI*2,accent);}}
+ private static void serverFacts(Canvas c,LoadingModel.Snapshot state,double x,double y,double width,double s,int ink,int muted,int accent,boolean compact){
+  double line=Math.max(16,(compact?16:22)*s),name=Math.max(16,(compact?20:25)*s),small=Math.max(12,14*s),label=Math.max(10,12*s);
+  double nameGap=Math.max(line,name*1.3);text(c,state.name,x,y,name,ink,false,width);int endpointLines=leftWrapped(c,state.endpoint,x,y+nameGap,small,muted,width,line);
+  double base=y+nameGap+endpointLines*line+(compact?4:15)*s,col=width/3;
+  String population=state.online>=0?(state.maxPlayers>0?state.online+" / "+state.maxPlayers:Integer.toString(state.online)):state.maxPlayers>0?"— / "+state.maxPlayers:"—";
+  String[] labels={"在线玩家","游戏时间","世界天数"},values={population,state.gameClock.isEmpty()?"—":state.gameClock,state.worldDay>0?"第 "+state.worldDay+" 天":"—"};
+  double compactRow=Math.max(18,20*s);
+  for(int i=0;i<3;i++){if(compact)text(c,labels[i]+" · "+values[i],x+i*col,base,small,ink,false,col-8*s);else{text(c,labels[i],x+i*col,base,label,muted,false,col-8*s);text(c,values[i],x+i*col,base+line,Math.max(14,20*s),i==0?accent:ink,false,col-8*s);}}
+  if(!state.gameDate.isEmpty())text(c,state.gameDate,x+col,compact?base+compactRow:base+line+Math.max(15,16*s),Math.max(12,11*s),muted,false,col-8*s);
+  double second=compact?base+(state.gameDate.isEmpty()?1:2)*compactRow:base+2*line+(state.gameDate.isEmpty()?12:23)*s;
+  String[] lowerLabels={"地图","模组","创意工坊"},lowerValues={state.map.isEmpty()?"—":state.map,state.requestedMods>=0?state.requestedMods+" 个":"—",state.workshopProjects>=0?state.workshopProjects+" 项":"—"};
+  for(int i=0;i<3;i++){if(compact)text(c,lowerLabels[i]+" · "+lowerValues[i],x+i*col,second,small,ink,false,col-8*s);else{text(c,lowerLabels[i],x+i*col,second,label,muted,false,col-8*s);text(c,lowerValues[i],x+i*col,second+line,small,ink,false,col-8*s);}}
+ }
+ private static int leftWrapped(Canvas c,String value,double x,double y,double size,int color,double width,double line){
+  if(value.isEmpty())return 0;int rows=0;
+  while(!value.isEmpty()){int end=value.length();while(end>1&&c.measure(value.substring(0,end),font(size))>width)end--;c.text(value.substring(0,end),x,y+rows*line,font(size),color,false);value=value.substring(end);rows++;}return rows;
+ }
 }

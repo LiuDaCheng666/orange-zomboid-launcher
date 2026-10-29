@@ -222,13 +222,16 @@ public final class StartupRuntime {
                 if(ticket.bootOwner!=model||ticket.state.context!=LoadingModel.Context.BOOT||!(current.context==LoadingModel.Context.BOOT&&current.generation==ticket.state.generation&&current.epoch==ticket.state.epoch||current.context==LoadingModel.Context.SERVER&&current.route==LoadingModel.Route.BEHIND_UI&&current.generation==ticket.state.generation+1&&current.epoch==ticket.state.epoch+1))return;
             }else if(current.generation!=ticket.state.generation||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE")))return;
             if(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING)!=0){if(ticket.state.downloadPage)workshopRestorePending=true;return;}
-            draw(ticket.state,ticket.statusBottom,ticket.cancelTop);
+            draw(ticket.state,ticket.statusBottom,ticket.cancelTop,ticket.workshopTop);
         }catch(Throwable error){failed(error);}
     }
     private static void draw(LoadingModel.Snapshot state)throws Exception{draw(state,state.fullStatusBottom,state.fullCancelTop);}
     private static void draw(LoadingModel.Snapshot state,double statusBottom,double cancelTop)throws Exception{
+        draw(state,statusBottom,cancelTop,0);
+    }
+    private static void draw(LoadingModel.Snapshot state,double statusBottom,double cancelTop,double workshopTop)throws Exception{
         drawing=true;try{LoadingModel m=model;long now=System.currentTimeMillis();if(now-lastIssueRead>=250){lastIssueRead=now;m.issue(session.readIssue(now,issueFloor));}
-            if(renderer==null)renderer=new GameRenderer();java.lang.Runtime memory=java.lang.Runtime.getRuntime();renderer.draw(state,session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory(),statusBottom,cancelTop);
+            if(renderer==null)renderer=new GameRenderer();java.lang.Runtime memory=java.lang.Runtime.getRuntime();renderer.draw(state,session,memory.totalMemory()-memory.freeMemory(),memory.maxMemory(),statusBottom,cancelTop,workshopTop);
         }finally{drawing=false;}
     }
     public static void beforeSwap(){lastSwap=System.nanoTime();LoadingModel.Snapshot s=snapshot();if(s==null||drawing||!s.active||s.route!=LoadingModel.Route.FULL||!currentContext())return;try{draw(s);}catch(Throwable failure){failed(failure);}}

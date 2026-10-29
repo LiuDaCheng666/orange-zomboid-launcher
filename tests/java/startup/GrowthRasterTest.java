@@ -37,7 +37,7 @@ public final class GrowthRasterTest {
      if(y<=276||y>=382)throw new AssertionError("Rotated body/leaf escapes native lane at t"+time+" y"+y);mark++;
     }
    }
-   check(mark>20,"source mark remains visible through the complete native-lane repertoire");
+   check(time<.65||mark>20,"source mark remains visible after the approved entrance fade through the complete native-lane repertoire");
   }
   for(int i=0;i<64;i++)ImageIO.write(draw(logo,boot,640,480,2+i*8.4/64,false,false),"png",out.resolve(String.format("motion-%03d.png",i)).toFile());
   System.out.println("PASS "+checks+" growth raster/alpha/partition/reduced/viewport contracts");

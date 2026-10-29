@@ -17,7 +17,7 @@ public final class LoadingVisualRefinementTest {
         boolean has(String value){return text.stream().anyMatch(a->((String)a[0]).equals(value));}
     }
     static void motion(){
-        check(LogoGrowth.at(0,false).bodyScale()<.35&&LogoGrowth.at(2.8,false).bodyScale()>.95,"entrance grows and unfolds once");
+        check(LogoGrowth.at(0,false).bodyScale()==1&&LogoGrowth.at(2.8,false).bodyScale()==1,"approved entrance preserves full-size orange instead of repeating seed growth");
         Set<String> poses=new HashSet<>();boolean quiet=false,tilt=false,leaf=false,hop=false;
         for(int i=60;i<2400;i++){
             LogoGrowth.Frame f=LogoGrowth.at(i*.05,false);
@@ -29,11 +29,11 @@ public final class LoadingVisualRefinementTest {
         }
         check(quiet&&tilt&&leaf&&hop&&poses.size()>25,"idle repertoire has quiet beats, roll, leaf wave and a restrained hop");
         Set<Integer> orientations=new HashSet<>();
-        for(int i=0;i<50;i++){LogoGrowth.Frame f=LogoGrowth.at(4+i*.1,false);orientations.add(Math.floorMod((int)Math.floor(f.angle()/(Math.PI/2)),4));}
+        for(int i=0;i<50;i++){LogoGrowth.Frame f=LogoGrowth.at(1+i*.1,false);orientations.add(Math.floorMod((int)Math.floor(f.angle()/(Math.PI/2)),4));}
         check(orientations.size()==4,"slow full turn visibly visits all four orientations");
         check(Math.abs(Math.sin(LogoGrowth.at(8.999,false).angle())-Math.sin(LogoGrowth.at(9.001,false).angle()))<.003,"full-turn settle remains visually continuous modulo one turn");
         double leafSwing=0,hopLift=0;for(int i=0;i<300;i++){LogoGrowth.Frame f=LogoGrowth.at(3+i*.1,false);leafSwing=Math.max(leafSwing,Math.abs(f.leafAngle()));hopLift=Math.min(hopLift,f.lift());}
-        check(leafSwing>.4&&hopLift<-.10,"leaf wave and soft hop remain clearly distinct from a quiet pose");
+        check(leafSwing>.16&&hopLift<-.035,"approved restrained leaf wave and nine-pixel hop remain distinct from a quiet pose");
         for(double t:new double[]{0,1,9,33,120})check(LogoGrowth.at(t,true).equals(LogoGrowth.at(0,true)),"reduced motion stays static");
     }
     static void humor(){

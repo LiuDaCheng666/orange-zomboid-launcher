@@ -13,12 +13,15 @@ public final class NativeConnectionPresentation {
     private final ThreadLocal<Lease> current=new ThreadLocal<>();
     private WorkshopGeometry workshopGeometry;
     public static final class Lease {
-        public final double statusBottom,cancelTop;
+        public final double statusBottom,cancelTop,workshopTop;
         final ClassLoader loader;final Object environment,mainTable,connectTable,main,connect,logo,background,arrowBG,arrowFG,queue;
         final Set<Object> decoration,allowedMain,allowedConnection,hiddenPages;
         final long generation,epoch,frame;final boolean queueScope,workshopScope;
         Lease(ClassLoader loader,Object environment,Object mainTable,Object connectTable,Object main,Object connect,Object logo,Object background,Object bg,Object fg,Object queue,Set<Object> decoration,Set<Object> allowedMain,Set<Object> allowedConnection,Set<Object> hiddenPages,LoadingModel.Snapshot state,long frame,boolean queueScope,double statusBottom,double cancelTop){
-            this.loader=loader;this.environment=environment;this.mainTable=mainTable;this.connectTable=connectTable;this.main=main;this.connect=connect;this.logo=logo;this.background=background;arrowBG=bg;arrowFG=fg;this.queue=queue;this.decoration=decoration;this.allowedMain=allowedMain;this.allowedConnection=allowedConnection;this.hiddenPages=hiddenPages;generation=state.generation;epoch=state.epoch;this.frame=frame;this.queueScope=queueScope;workshopScope=state.downloadPage;this.statusBottom=statusBottom;this.cancelTop=cancelTop;
+            this(loader,environment,mainTable,connectTable,main,connect,logo,background,bg,fg,queue,decoration,allowedMain,allowedConnection,hiddenPages,state,frame,queueScope,statusBottom,cancelTop,0);
+        }
+        Lease(ClassLoader loader,Object environment,Object mainTable,Object connectTable,Object main,Object connect,Object logo,Object background,Object bg,Object fg,Object queue,Set<Object> decoration,Set<Object> allowedMain,Set<Object> allowedConnection,Set<Object> hiddenPages,LoadingModel.Snapshot state,long frame,boolean queueScope,double statusBottom,double cancelTop,double workshopTop){
+            this.loader=loader;this.environment=environment;this.mainTable=mainTable;this.connectTable=connectTable;this.main=main;this.connect=connect;this.logo=logo;this.background=background;arrowBG=bg;arrowFG=fg;this.queue=queue;this.decoration=decoration;this.allowedMain=allowedMain;this.allowedConnection=allowedConnection;this.hiddenPages=hiddenPages;generation=state.generation;epoch=state.epoch;this.frame=frame;this.queueScope=queueScope;workshopScope=state.downloadPage;this.statusBottom=statusBottom;this.cancelTop=cancelTop;this.workshopTop=workshopTop;
         }
     }
     private static Class<?> type(String name,ClassLoader loader)throws Exception{return Class.forName(name,false,loader);}
@@ -144,7 +147,8 @@ public final class NativeConnectionPresentation {
         if(workshopGeometry==null)workshopGeometry=new WorkshopGeometry(loader,env,wt);
         if(reflow){if(!workshopGeometry.apply(number(mt,"height")))return null;}else if(!workshopGeometry.matches())return null;
         Object logo=raw(mt,"logoTexture");if(logo==null)return null;
-        return new Lease(loader,env,mt,wt,main,page,logo,null,null,null,null,identities(),ma,allowed,hidden,state,frame,false,0,0);
+        double workshopTop=(number(wt,"y")+number(workshopGeometry.label,"y"))/number(mt,"height");
+        return new Lease(loader,env,mt,wt,main,page,logo,null,null,null,null,identities(),ma,allowed,hidden,state,frame,false,0,0,workshopTop);
     }catch(Throwable unavailable){return null;}}
     /** CPU-only: retained through input, including between rendered frames. */
     public void restoreWorkshop(){WorkshopGeometry geometry=workshopGeometry;workshopGeometry=null;if(geometry!=null)geometry.restore();}

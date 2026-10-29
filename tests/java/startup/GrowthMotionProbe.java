@@ -21,11 +21,11 @@ public final class GrowthMotionProbe {
         for(int i=0;i<=1200;i++){LogoGrowth.Frame f=LogoGrowth.at(3+i*.05,false);min=Math.min(min,f.bodyScale());max=Math.max(max,f.bodyScale());leafMin=Math.min(leafMin,f.leafScale());leafMax=Math.max(leafMax,f.leafScale());}
         check(min>=.94&&max<=1.06,"long waits preserve a fully grown orange");
         check(leafMin>=.93&&leafMax<=1.08,"idle leaf stays unfolded");
-        check(LogoGrowth.at(0,false).bodyScale()<.3&&LogoGrowth.at(2.8,false).bodyScale()>.95,"seed entrance occurs once");
+        check(LogoGrowth.at(0,false).bodyScale()==1&&LogoGrowth.at(2.8,false).bodyScale()==1,"approved entrance retains the original full-size silhouette");
         LoadingModel model=new LoadingModel();model.phase("Loading Mods");model.mod("Project Viewpoint");String stage=model.snapshot().stage;int count=model.snapshot().activity.length;
         BufferedImage logo=ImageIO.read(Path.of(args[1]).toFile());Path out=Path.of(args[0]);Files.createDirectories(out);int smallest=1000,largest=0;
         for(int i=0;i<180;i++){double t=i*.2;BufferedImage image=frame(logo,model,t,false);ImageIO.write(image,"png",out.resolve(String.format("motion-%03d.png",i)).toFile());int height=orangeHeight(image);if(height>0){smallest=Math.min(smallest,height);largest=Math.max(largest,height);}}
-        check(largest/(double)smallest>3,"actual raster silhouette clearly grows, instead of only rotating");
+        check(largest/(double)smallest>1.08&&largest/(double)smallest<1.6,"actual raster shows full-turn orientation changes while retaining full-size silhouette");
         check(model.snapshot().stage.equals(stage)&&model.snapshot().activity.length==count,"animation cannot fabricate observed progress or activity");
         BufferedImage still=frame(logo,model,0,true);check(Arrays.equals(pixels(still),pixels(frame(logo,model,60,true))),"reduced-motion output stays pixel-identical");ImageIO.write(still,"png",out.resolve("reduced.png").toFile());
         LoadingModel server=new LoadingModel();server.serverBegin("橙子社区服务器","203.0.113.7",16261);

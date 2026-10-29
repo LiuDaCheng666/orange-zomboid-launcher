@@ -15,7 +15,7 @@ public final class RefinementGlProbe {
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE,GLFW.GLFW_FALSE);
         long window=GLFW.glfwCreateWindow(1440,900,"OZL refinement hidden verification",0,0);
         if(window==0)throw new AssertionError("No hidden GL context");
-        Path out=Path.of(args[0]);Files.createDirectories(out);
+        Path out=Path.of(args.length>1?args[1]:args[0]);Files.createDirectories(out);
         try{
             GLFW.glfwMakeContextCurrent(window);GL.createCapabilities();Display.created=true;Display.width=1440;Display.height=900;
             Session session=Session.read(Path.of("OrangeLauncherRuntime/startup/OrangeStartup.jar"),Path.of(System.getProperty("user.dir")),System.currentTimeMillis()/1000);
