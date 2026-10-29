@@ -34,7 +34,7 @@
 
 ### Task 3: Publish the same verified bytes
 
-- [ ] Set `VERSION` to 1.2.41 and add the implemented changes to `CHANGELOG.md`; commit only owned files.
-- [ ] Build a fresh `dist/1.2.41-loading-*` candidate with `Build-VelopackRelease.ps1 -AllowUnsignedRelease`; verify actual containers, RSA bootstrap, ten assets, icon and startup jar identity.
-- [ ] Publish through `deploy/publish_software.py --allow-unsigned-release`, then same ten files to a GitHub draft; verify asset digests before making it the latest formal release. Attach no unrelated files or secrets.
-- [ ] Run `deploy/publish_changelog.py` after both formal releases. Verify anonymous download bytes, current feeds, preserved legacy metadata, webpage record and protected site hashes. Record final URLs and signing state.
+- [x] Set `VERSION` to 1.2.41 and add the implemented changes to `CHANGELOG.md`; commit only owned files.
+- [x] Build a fresh `dist/1.2.41-loading-*` candidate with `Build-VelopackRelease.ps1 -AllowUnsignedRelease`; verify actual containers, RSA bootstrap, ten assets, icon and startup jar identity.
+- [x] Publish through `deploy/publish_software.py --allow-unsigned-release`, then same ten files to a GitHub draft; verify asset digests before making it the latest formal release. Attach no unrelated files or secrets.
+- [x] Run `deploy/publish_changelog.py` after both formal releases. Verify anonymous download bytes, current feeds, preserved legacy metadata, webpage record and protected site hashes. Record final URLs and signing state.
