@@ -63,6 +63,30 @@ class VelopackReleaseTests(legacy_tests.PrepareReleaseTests):
         self.assertEqual(len(list((self.output/'releases/v1.2.15').iterdir())),10)
         with self.assertRaises(ValueError): self.prepare()
 
+    def test_display_date_uses_authenticated_exact_version_notes_section(self):
+        self.feed['notes'] = ('## 9.9.9 \u2014 2099-01-01\n- Other release\n\n'
+                              '## 1.2.15 \u2014 2026-10-26\n- Current release\n\n'
+                              '## 1.2.14 \u2014 2026-10-24\n- Older release\n')
+        self.write_feed(); self.write_inventory()
+        before = {p.name: p.read_bytes() for p in self.source.iterdir()}
+        result = self.prepare()
+        self.assertEqual(result['date'], '2026-10-26')
+        self.assertEqual(result['notes'], ['Current release'])
+        self.assertEqual(json.loads((self.output/'release.json').read_text(encoding='utf-8'))['date'], '2026-10-26')
+        self.assertEqual({p.name: p.read_bytes() for p in self.source.iterdir()}, before)
+
+    def test_display_date_without_dated_section_keeps_legacy_inventory_date(self):
+        self.feed['notes'] = '## 1.2.15\n- Historic undated notes\n'
+        self.write_feed(); self.write_inventory()
+        result = self.prepare()
+        self.assertEqual(result['date'], '2026-10-25')
+        self.assertEqual(result['notes'], ['Historic undated notes'])
+
+    def test_display_date_does_not_borrow_another_release_heading(self):
+        self.feed['notes'] = '## 1.2.150 \u2014 2099-01-01\n- Other version\n'
+        self.write_feed(); self.write_inventory()
+        self.assertEqual(self.prepare()['date'], '2026-10-25')
+
     def test_tampered_or_unsigned_candidate_is_rejected(self):
         (self.source/self.package).write_bytes(b'tampered')
         with self.assertRaises(ValueError): self.prepare()

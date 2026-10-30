@@ -252,9 +252,11 @@ def prepare_velopack_release(source, destination, public_key, legacy):
     if blobs['RELEASES'].decode('utf-8-sig').strip().upper() != f'{hashlib.sha1(payload).hexdigest()} {package} {len(payload)}'.upper():
         raise ValueError('Framework RELEASES mismatch')
     oldraw, oldsig = preserved_legacy(legacy, public_key, version)
-    notes = re.split(r'(?m)^## ',feed['notes'])[1:2]
-    bullets=[line[2:].strip()[:1000] for line in (notes[0] if notes else feed['notes']).splitlines() if line.startswith('- ')][:8]
-    display=dict(distribution='velopack',version=version,date=inventory['date'],notes=bullets)
+    sections = re.split(r'(?m)^## ', feed['notes'])[1:]
+    notes = next((section for section in sections if re.match(re.escape(version) + r'(?:\s|$)', section)), sections[0] if sections else feed['notes'])
+    dated_heading = re.match(re.escape(version) + r'[ \t]+[\u2014-][ \t]+(\d{4}-\d{2}-\d{2})[ \t]*(?:\r?\n|$)', notes)
+    bullets=[line[2:].strip()[:1000] for line in notes.splitlines() if line.startswith('- ')][:8]
+    display=dict(distribution='velopack',version=version,date=dated_heading.group(1) if dated_heading else inventory['date'],notes=bullets)
     for kind,name in [('setup','OrangeZomboidLauncher-win-Setup.exe'),('portable','OrangeZomboidLauncher-win-Portable.zip')]:
         display[kind]=dict(url=f'/releases/v{version}/{name}',github=f'{REPOSITORY}/releases/download/v{version}/{name}',length=len(blobs[name]),sha256=digest(blobs[name]))
     blobs.update({'velopack-artifacts.json':raw,'velopack-artifacts.sig':signature})
