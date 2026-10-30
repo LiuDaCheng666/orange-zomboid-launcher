@@ -36,3 +36,7 @@ Preserve the approved orange icon/layout/colors, 60 FPS target, native input/aut
 - [ ] Reproduce or capture the original transient desktop-wide input stall before assigning its cause or claiming it fixed.
 
 Results and exact boundaries: docs/quality/2026-10-30-loading-overhead-verification.md.
+
+## 1.2.44 发布时的用户后续决定
+
+2026-10-30 用户授权发布，并在正式 Program.Main 窗口已打开后，按 Esc 停止操作，明确要求停止额外验收、直接更新。额外连服未执行，不记通过；按该后续要求完成发布。独立测试服务器已正常退出，三个临时配置索引逐字节恢复；未更新 D 盘安装。最终发行与未覆盖项见 docs/quality/2026-10-30-1.2.44-publication.md。
