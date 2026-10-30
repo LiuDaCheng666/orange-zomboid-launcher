@@ -1397,3 +1397,30 @@ main:has(#page[data-route=servers])>.workspace-context{display:none}
 @media(min-width:1700px){.recommended-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:950px){.recommended-grid{grid-template-columns:1fr}.server-detail-heading{align-items:flex-start;flex-direction:column;gap:12px}.server-detail-heading .actions{flex-wrap:wrap}}
 @media(max-width:600px){.server-detail-topbar{align-items:flex-start}.server-detail-heading h1{font-size:22px}.server-live-metrics{gap:7px 12px}.recommended-card .recommended-body{padding:12px}}
+/* Backup work stays visible and cancellable inside its existing modal. */
+#save-backup-dialog [data-backup-task] progress{display:block;width:100%;height:8px;min-height:8px;border:0;border-radius:4px;overflow:hidden;appearance:none;background:var(--line);accent-color:var(--accent)}
+#save-backup-dialog [data-backup-task] progress::-webkit-progress-bar{background:var(--line);border-radius:4px}
+#save-backup-dialog [data-backup-task] progress::-webkit-progress-value{background:var(--accent);border-radius:4px}
+#save-backup-dialog [data-backup-task] progress:not([value]){background:linear-gradient(90deg,var(--line) 25%,var(--accent) 50%,var(--line) 75%);background-size:240% 100%;animation:environment-progress-flow 1.6s linear infinite}
+#save-backup-dialog [data-backup-task] progress:not([value])::-webkit-progress-bar{background:transparent}
+@media(prefers-reduced-motion:reduce){#save-backup-dialog [data-backup-task] progress{animation:none!important}}
+
+/* Installed-version update announcement. */
+dialog.ozl-update-announcement{width:min(720px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;border-radius:20px;background:var(--reading,var(--panel));box-shadow:var(--shadow);overflow:hidden}
+dialog.ozl-update-announcement[open]{display:flex;flex-direction:column}
+.ozl-update-announcement::backdrop{background:#10141bb8}
+.ozl-update-header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 28px 18px;flex:0 0 auto}
+.ozl-update-header h1{margin:4px 0 0;font-size:26px;line-height:1.35}
+.ozl-update-header>button{flex-shrink:0}
+.ozl-update-meta{display:flex;align-items:center;gap:14px;padding:0 28px 20px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.ozl-update-meta strong{font-size:15px;color:var(--accent)}
+.ozl-update-meta time{font-size:13px;color:var(--muted)}
+.ozl-update-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px 28px;font-size:15px;line-height:1.8;overflow-wrap:anywhere}
+.ozl-update-body ul{margin:0;padding-left:21px;display:grid;gap:15px}
+.ozl-update-body p{margin:0 0 16px}.ozl-update-body p:last-child{margin-bottom:0}
+.ozl-update-warning{padding:0 28px 16px;margin:0;font-size:13px;color:var(--muted);flex:0 0 auto}
+.ozl-update-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 28px;border-top:1px solid var(--line);flex:0 0 auto}
+.ozl-update-footer p{margin:0;font-size:13px;color:var(--muted)}
+.ozl-update-footer>button{flex-shrink:0;min-width:100px}
+.ozl-update-help{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 24px;margin:20px 0}.ozl-update-help h2{margin:0 0 6px;font-size:18px}.ozl-update-help p{margin:0;color:var(--muted);font-size:13px}.ozl-update-help>button{flex-shrink:0}
+@media(max-width:560px){.ozl-update-header{padding:20px 20px 16px}.ozl-update-meta{padding:0 20px 16px}.ozl-update-body{padding:20px}.ozl-update-warning{padding:0 20px 14px}.ozl-update-footer{padding:16px 20px;align-items:flex-start;gap:12px}.ozl-update-footer p{max-width:160px}.ozl-update-help{padding:18px;align-items:flex-start;flex-direction:column}}

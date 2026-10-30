@@ -56,6 +56,7 @@ function Get-OzlProductionSources {
         'GameVersionProbe.cs',
         'GoldControls.cs',
         'GuideController.cs',
+        'UpdateAnnouncement.cs',
         'HardwareProbe.cs',
         'HelpContent.cs',
         'HelpPage.cs',

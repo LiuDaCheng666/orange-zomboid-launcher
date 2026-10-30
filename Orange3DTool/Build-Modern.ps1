@@ -12,6 +12,7 @@ $loader=Join-Path $dependencyRoot 'runtimes\win-x64\native\WebView2Loader.dll'
 $sources=@(Get-OzlProductionSources -ProjectDirectory $PSScriptRoot)
 $sources+=& (Join-Path $PSScriptRoot '..\Build-Version.ps1')
 $sources+="/resource:$PSScriptRoot\..\VERSION,Launcher.Version.txt"
+$sources+="/resource:$PSScriptRoot\..\CHANGELOG.md,Launcher.Changelog.md"
 $sources+="/resource:$PSScriptRoot\Assets\orange-app.png,OrangeAppLogo.png"
 $webBundle=Join-Path $PSScriptRoot 'Modern.Web.zip'
 $webStage=Join-Path $PSScriptRoot ('..\artifacts\modern-web-'+[Guid]::NewGuid().ToString('N'))

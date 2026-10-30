@@ -16,7 +16,7 @@ $sdk=Join-Path $PSScriptRoot 'Dependencies\WebView2'
 $refs=@('/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Management.dll','/reference:System.IO.Compression.dll','/reference:System.IO.Compression.FileSystem.dll','/reference:System.Security.dll',"/reference:$sdk\lib\net462\Microsoft.Web.WebView2.Core.dll","/reference:$sdk\lib\net462\Microsoft.Web.WebView2.WinForms.dll")
 $sources=@(Get-OzlProductionSources -ProjectDirectory $project)
 $toolSources=@($sources)+@(Join-Path $project 'CoreReleaseTool.cs')
-$resources=@("/resource:$PSScriptRoot\VERSION,Launcher.Version.txt","/resource:$public,Launcher.UpdatePublicKey.xml","/resource:$project\Assets\orange-app.png,OrangeAppLogo.png")
+$resources=@("/resource:$PSScriptRoot\VERSION,Launcher.Version.txt","/resource:$PSScriptRoot\CHANGELOG.md,Launcher.Changelog.md","/resource:$public,Launcher.UpdatePublicKey.xml","/resource:$project\Assets\orange-app.png,OrangeAppLogo.png")
 $tool=Join-Path $PSScriptRoot 'artifacts\core-release-tool.exe'
 & $compiler /nologo /define:OZL_PRODUCTION /target:exe /main:PZ3D.CoreReleaseTool "/out:$tool" $refs $resources $versionAttributes $toolSources
 if($LASTEXITCODE -ne 0){throw 'Release tool compilation failed'}

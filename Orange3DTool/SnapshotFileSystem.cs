@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
 namespace PZ3D {
@@ -33,6 +35,31 @@ namespace PZ3D {
   static IOException Error(string action,string path,int error){return new IOException(action+"："+path,new Win32Exception(error));}
   static bool Exists(string path,bool directory){if(string.IsNullOrEmpty(path))return false;uint value=PathAttributes(NativePath(path));return value!=uint.MaxValue&&((value&(uint)FileAttributes.Directory)!=0)==directory;}
   static SafeFileHandle Open(string path,FileMode mode,FileAccess access,FileShare share){uint creation;switch(mode){case FileMode.CreateNew:creation=1;break;case FileMode.Create:creation=2;break;case FileMode.Open:creation=3;break;case FileMode.OpenOrCreate:creation=4;break;case FileMode.Truncate:creation=5;break;default:throw new NotSupportedException("快照不使用追加文件模式。");}uint rights=0;if((access&FileAccess.Read)!=0)rights|=0x80000000;if((access&FileAccess.Write)!=0)rights|=0x40000000;var handle=CreateFileNative(NativePath(path),rights,(uint)share&7,IntPtr.Zero,creation,0x80,IntPtr.Zero);if(handle.IsInvalid){int error=Marshal.GetLastWin32Error();handle.Dispose();throw Error("无法打开快照文件",path,error);}return handle;}
+  // Payloads remain independent files. Storage controls work on Windows 10 as
+  // well as older NTFS versions; no Windows 11-only sparse-copy flag is needed.
+  [DllImport("kernel32.dll",SetLastError=true)]static extern bool DeviceIoControl(SafeFileHandle handle,uint code,byte[] input,uint inputLength,IntPtr output,uint outputLength,out uint returned,IntPtr overlapped);
+  static bool StorageFlag(Stream output,uint code,byte[] input,string path){uint returned;if(DeviceIoControl(output.SafeFileHandle,code,input,input==null?0:(uint)input.Length,IntPtr.Zero,0,out returned,IntPtr.Zero))return true;int error=Marshal.GetLastWin32Error();if(error==1||error==50)return false;throw Error("无法保留文件存储属性",path,error);}
+  internal static string CopyPayload(string source,string destination,long expectedLength,CancellationToken cancellation,Action<int> progress){
+   cancellation.ThrowIfCancellationRequested();var attributes=Files.GetAttributes(source);
+   using(var sha=SHA256.Create())using(var from=new Stream(source,FileMode.Open,FileAccess.Read,FileShare.Read))using(var to=new Stream(destination,FileMode.CreateNew,FileAccess.ReadWrite,FileShare.None)){
+    if(from.Length!=expectedLength)throw new IOException("复制前来源文件已变化。");
+    bool compressed=(attributes&FileAttributes.Compressed)!=0&&StorageFlag(to,0x0009c040,new byte[]{1,0},destination);
+    bool sparse=(attributes&FileAttributes.SparseFile)!=0&&StorageFlag(to,0x000900c4,null,destination);
+    byte[] buffer=new byte[(int)Math.Max(1,Math.Min(1048576L,expectedLength))];long copied=0;int count;
+    while(true){cancellation.ThrowIfCancellationRequested();count=from.Read(buffer,0,buffer.Length);if(count==0)break;cancellation.ThrowIfCancellationRequested();
+     if(sparse){for(int offset=0;offset<count;){int length=Math.Min(65536,count-offset),end=offset+length,index=offset;while(index<end&&buffer[index]==0)index++;if(index==end)to.Seek(length,SeekOrigin.Current);else to.Write(buffer,offset,length);offset=end;}}
+     else to.Write(buffer,0,count);
+     sha.TransformBlock(buffer,0,count,null,0);copied+=count;if(progress!=null)progress(count);cancellation.ThrowIfCancellationRequested();
+    }
+    if(copied!=expectedLength||from.Length!=expectedLength)throw new IOException("来源文件在复制期间变化。");
+    if(sparse)to.SetLength(copied);if(compressed)to.Flush(true);sha.TransformFinalBlock(new byte[0],0,0);
+    // Compressed files need a flush to realize compressed allocation before
+    // publication; ordinary payloads only flush managed buffers on close.
+    // Durable metadata barriers remain on the final
+    // manifest/index publication, not every individual verified payload file.
+    return BitConverter.ToString(sha.Hash).Replace("-","");
+   }
+  }
   internal static void NoReparse(string path){string current=System.IO.Path.GetFullPath(DisplayPath(path));while(current!=null){uint attributes=PathAttributes(NativePath(current));if(attributes==uint.MaxValue){int error=Marshal.GetLastWin32Error();if(error!=2&&error!=3)throw new IOException("无法核实快照路径属性："+current,new Win32Exception(error));}else if((attributes&(uint)FileAttributes.ReparsePoint)!=0)throw new IOException("拒绝重解析点 / 联接路径："+current);current=System.IO.Path.GetDirectoryName(current);}}
   internal static class Directories {
    public static void CreateDirectory(string path){string display=DisplayPath(NativePath(path));uint attributes=PathAttributes(NativePath(display));if(attributes!=uint.MaxValue){if((attributes&(uint)FileAttributes.Directory)==0)throw new IOException("快照目录位置已被文件占用："+display);return;}int error=Marshal.GetLastWin32Error();if(error!=2&&error!=3)throw Error("无法读取快照目录",display,error);string parent=System.IO.Path.GetDirectoryName(display.TrimEnd('\\'));if(parent!=null)CreateDirectory(parent);if(!CreateDirectoryNative(NativePath(display),IntPtr.Zero)){error=Marshal.GetLastWin32Error();if(error!=183||!Exists(display))throw Error("无法创建快照目录",display,error);}}

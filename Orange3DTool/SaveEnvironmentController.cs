@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -12,7 +12,7 @@ namespace PZ3D {
  sealed class SaveEnvironmentSaveSummary {public string id,name;}
  sealed class SaveEnvironmentListView {
   public string stamp="",selectedSaveId="",selectedSaveName="",activeSnapshotId="";
-  public bool saveBackupSeparate=true;
+  public bool saveBackupSeparate=true,selectionChanged;public int unavailableSnapshotCount;
   public SaveEnvironmentSaveSummary[] saves=new SaveEnvironmentSaveSummary[0];
   public SaveEnvironmentSummary[] snapshots=new SaveEnvironmentSummary[0];
   public string[] warnings=new string[0];
@@ -30,9 +30,13 @@ namespace PZ3D {
   }
   static SaveEnvironmentSummary EnvironmentSummary(SaveEnvironmentRecord row,string active){return new SaveEnvironmentSummary{id=row.Id,name=row.Name,saveId=row.SaveId,gameVersion=row.GameVersion,modCount=row.ModRoots.SelectMany(root=>root.ModIds).Select(id=>id.TrimStart('\\')).Distinct(StringComparer.Ordinal).Count(),bytes=row.Bytes,createdUtc=row.CreatedUtc,rootPath=row.RootPath,active=row.Id==active};}
   SaveEnvironmentListView ReadEnvironments(string requestedSaveId=null,bool cancellable=true){
-   if(cancellable)cancel.Token.ThrowIfCancellationRequested();var serializer=new JavaScriptSerializer{MaxJsonLength=4194304};var saveList=serializer.Deserialize<Dictionary<string,object>>(serializer.Serialize(SaveProfiles.List(engine)));var rows=((IEnumerable)saveList["saves"]).Cast<Dictionary<string,object>>().Where(row=>row.ContainsKey("editable")&&row["editable"] is bool&&(bool)row["editable"]&&!((string)row["mode"]).Equals("Multiplayer",StringComparison.OrdinalIgnoreCase)).Select(row=>new SaveEnvironmentSaveSummary{id=(string)row["id"],name=(string)row["name"]}).OrderBy(row=>row.name,StringComparer.OrdinalIgnoreCase).ThenBy(row=>row.id,StringComparer.Ordinal).ToArray();
-   var result=new SaveEnvironmentListView{saves=rows,warnings=((IEnumerable)saveList["warnings"]).Cast<string>().ToArray()};if(requestedSaveId!=null&&!rows.Any(row=>row.id==requestedSaveId))throw new IOException("所选单人存档不存在，请重新读取列表。");var selected=requestedSaveId==null?rows.FirstOrDefault():rows.Single(row=>row.id==requestedSaveId);if(selected==null)return result;result.selectedSaveId=selected.id;result.selectedSaveName=selected.name;
-   var library=new SaveEnvironments(engine);result.stamp=library.BindingStamp(selected.id);var snapshots=library.List(selected.id);var active=library.Bound(selected.id);result.activeSnapshotId=active==null?"":active.Id;if(cancellable)cancel.Token.ThrowIfCancellationRequested();result.snapshots=snapshots.Select(row=>EnvironmentSummary(row,result.activeSnapshotId)).ToArray();if(library.BindingStamp(selected.id)!=result.stamp)throw new IOException("快照绑定在读取期间变化，请重新读取。");return result;
+   if(cancellable)cancel.Token.ThrowIfCancellationRequested();var serializer=new JavaScriptSerializer{MaxJsonLength=4194304};var saveList=serializer.Deserialize<Dictionary<string,object>>(serializer.Serialize(SaveProfiles.List(engine)));var rows=((IEnumerable)saveList["saves"]).Cast<Dictionary<string,object>>().Where(row=>!((string)row["mode"]).Equals("Multiplayer",StringComparison.OrdinalIgnoreCase)).Select(row=>new SaveEnvironmentSaveSummary{id=(string)row["id"],name=(string)row["name"]}).OrderBy(row=>row.name,StringComparer.OrdinalIgnoreCase).ThenBy(row=>row.id,StringComparer.Ordinal).ToArray();
+   var warnings=((IEnumerable)saveList["warnings"]).Cast<string>().ToList();bool changed=requestedSaveId!=null&&!rows.Any(row=>row.id==requestedSaveId);
+   if(changed)warnings.Add(rows.Length==0?"所选存档已不在当前列表，当前没有可用的单人存档。":"所选存档已不在当前列表，已重新读取当前存档，请核对所选存档后继续。");
+   var result=new SaveEnvironmentListView{saves=rows,selectionChanged=changed,warnings=warnings.ToArray()};var selected=requestedSaveId==null||changed?rows.FirstOrDefault():rows.Single(row=>row.id==requestedSaveId);if(selected==null)return result;result.selectedSaveId=selected.id;result.selectedSaveName=selected.name;
+   var library=new SaveEnvironments(engine);result.stamp=library.BindingStamp(selected.id);result.activeSnapshotId=library.BoundId(selected.id);var snapshots=library.ListRegistered(selected.id);result.unavailableSnapshotCount=snapshots.Count(row=>row.Record==null);
+   foreach(var snapshot in snapshots.Where(row=>row.Record==null)){string name=Path.GetFileName(snapshot.RootPath.TrimEnd('\\','/'));string error=snapshot.Error=="快照不可变清单已改变，未继续使用。"?"快照配置文件已改变或缺失，未继续使用。":snapshot.Error;warnings.Add((snapshot.Id==result.activeSnapshotId?"当前绑定的快照":"历史快照")+"“"+name+"”不可用："+error+(snapshot.Id==result.activeSnapshotId?" 请恢复快照文件或位置，或选择“使用当前环境”。":" 原记录已保留。"));}
+   if(cancellable)cancel.Token.ThrowIfCancellationRequested();result.snapshots=snapshots.Where(row=>row.Record!=null).Select(row=>EnvironmentSummary(row.Record,result.activeSnapshotId)).ToArray();result.warnings=warnings.ToArray();if(library.BindingStamp(selected.id)!=result.stamp)throw new IOException("快照绑定在读取期间变化，请重新读取。");return result;
   }
   object DispatchEnvironment(string action,Dictionary<string,object> payload){
    if(!EnvironmentAction(action))throw new IOException("未知快照操作。");ValidateEnvironmentPayload(action,payload);cancel.Token.ThrowIfCancellationRequested();var library=new SaveEnvironments(engine,payload.ContainsKey("modChoices")?SnapshotModChoices.Parse(Text(payload,"modChoices")):null);
