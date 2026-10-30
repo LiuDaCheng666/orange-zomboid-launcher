@@ -47,7 +47,8 @@ namespace PZ3D {
   [DllImport("kernel32.dll",SetLastError=true)]static extern IntPtr OpenProcess(int access,bool inherit,int pid);
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool QueryFullProcessImageName(IntPtr process,int flags,StringBuilder text,ref int size);
   [DllImport("kernel32.dll")]static extern bool CloseHandle(IntPtr h);
-  internal static IDisposable Instance(string root){return new InstanceLock(root);}
-  sealed class InstanceLock:IDisposable {readonly Mutex mutex;bool held;internal InstanceLock(string root){mutex=new Mutex(false,"Local\\OZL-Instance-"+CoreReleaseProtocol.Hash(Encoding.UTF8.GetBytes(Canonical(root).ToUpperInvariant())));try{try{held=mutex.WaitOne(10000);}catch(AbandonedMutexException){held=true;}if(!held)throw new IOException("另一个启动器窗口或更新正在使用此目录，请关闭后重试。");}catch{mutex.Dispose();throw;}}public void Dispose(){if(held){held=false;mutex.ReleaseMutex();mutex.Dispose();}}}
+  internal static IDisposable Instance(string root){return new InstanceLock(root,10000,true);}
+  internal static bool TryInstance(string root,out IDisposable lease){var candidate=new InstanceLock(root,0,false);if(candidate.Held){lease=candidate;return true;}candidate.Dispose();lease=null;return false;}
+  sealed class InstanceLock:IDisposable {readonly Mutex mutex;bool held,disposed;internal bool Held{get{return held;}}internal InstanceLock(string root,int wait,bool required){mutex=new Mutex(false,"Local\\OZL-Instance-"+CoreReleaseProtocol.Hash(Encoding.UTF8.GetBytes(Canonical(root).ToUpperInvariant())));try{try{held=mutex.WaitOne(wait);}catch(AbandonedMutexException){held=true;}if(!held&&required)throw new IOException("另一个启动器窗口或更新正在使用此目录，请关闭后重试。");}catch{mutex.Dispose();throw;}}public void Dispose(){if(disposed)return;disposed=true;if(held){held=false;mutex.ReleaseMutex();}mutex.Dispose();}}
  }
 }

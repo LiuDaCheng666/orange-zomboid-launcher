@@ -48,12 +48,12 @@ namespace PZ3D {
    }
 #if OZL_VELOPACK
    DistributionPaths.Bootstrap(args);
-   using(NativeApplyGuard.Instance(DistributionPaths.InstallationRoot)){
+   return LauncherWindowActivation.Run(DistributionPaths.InstallationRoot,()=>{
 #endif
    Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
    return ModernBootstrap.Run(args);
 #if OZL_VELOPACK
-   }
+   });
 #endif
   }
  }
