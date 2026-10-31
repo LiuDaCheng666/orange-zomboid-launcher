@@ -1,4 +1,4 @@
-param([string]$RunTag='current',[ValidateSet('query','race','external','saved','recommended')][string]$Group='query')
+param([string]$RunTag='current',[ValidateSet('query','race','external','saved','recommended','encoding')][string]$Group='query')
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 . (Join-Path $repo 'build/ProductionSources.ps1')
@@ -6,8 +6,8 @@ $output=Join-Path $repo 'artifacts/server-public-query-native'
 [IO.Directory]::CreateDirectory($output)|Out-Null
 $bin=Join-Path ([IO.Path]::GetTempPath()) ('ozl-server-query-'+[guid]::NewGuid().ToString('N').Substring(0,8))
 [IO.Directory]::CreateDirectory($bin)|Out-Null
-$main=if($Group -eq 'saved'){'PZ3D.ServerProfilesTests'}elseif($Group -eq 'recommended'){'PZ3D.RecommendedServersTests'}else{'PZ3D.ServerPublicQueryNative'}
-$tests=if($Group -eq 'saved'){@('Orange3DTool/ServerProfilesTests.cs','Orange3DTool/LauncherTestPaths.cs')}elseif($Group -eq 'recommended'){@('Orange3DTool/RecommendedServersTests.cs')}else{@('tests/ServerPublicQueryNative.cs')}
+$main=if($Group -eq 'encoding'){'PZ3D.ServerInfoEncodingTests'}elseif($Group -eq 'saved'){'PZ3D.ServerProfilesTests'}elseif($Group -eq 'recommended'){'PZ3D.RecommendedServersTests'}else{'PZ3D.ServerPublicQueryNative'}
+$tests=if($Group -eq 'encoding'){@('tests/ServerInfoEncodingTests.cs')}elseif($Group -eq 'saved'){@('Orange3DTool/ServerProfilesTests.cs','Orange3DTool/LauncherTestPaths.cs')}elseif($Group -eq 'recommended'){@('Orange3DTool/RecommendedServersTests.cs')}else{@('tests/ServerPublicQueryNative.cs')}
 $sources=@(Get-OzlProductionSources -ProjectDirectory (Join-Path $repo 'Orange3DTool'))+@($tests|ForEach-Object{Join-Path $repo $_})
 $raceOriginal=$null
 if($Group -eq 'race'){
@@ -27,6 +27,7 @@ $refs+="/reference:$sdk/Microsoft.Web.WebView2.WinForms.dll"
 $refs+="/resource:$repo/Orange3DTool/Assets/OrangeStartup.jar,OrangeStartup.jar"
 $refs+="/resource:$repo/Orange3DTool/Assets/OrangeLaunchBridge.lua,OrangeLaunchBridge.lua"
 $inputs=@($sources)+(Join-Path $repo 'Orange3DTool/Assets/OrangeStartup.jar')+(Join-Path $repo 'Orange3DTool/Assets/OrangeLaunchBridge.lua')
+if($Group -eq 'encoding'){$encodingFixture=Join-Path $PSScriptRoot 'fixtures/a2s-truncated-name.bin';$refs+="/resource:$encodingFixture,A2sTruncatedName.bin";$inputs+=@($encodingFixture)}
 if($raceOriginal){$inputs+=@($raceOriginal)}
 $binding=@($inputs|ForEach-Object{[ordered]@{path=$_;sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()}})
 & C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe /nologo /utf8output /target:exe "/main:$main" "/out:$bin/Test.exe" $refs $sources 2>&1|Tee-Object (Join-Path $output "$RunTag-compile.log")

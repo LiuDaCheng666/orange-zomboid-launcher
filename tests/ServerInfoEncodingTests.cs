@@ -1,0 +1,35 @@
+using System;using System.IO;using System.Linq;using System.Text;using System.Collections.Generic;using System.Net;using System.Net.Sockets;using System.Threading;using System.Web.Script.Serialization;
+namespace PZ3D {static class ServerInfoEncodingTests {
+ static int checks;static readonly JavaScriptSerializer Json=new JavaScriptSerializer();
+ static void Check(bool value,string reason){checks++;if(!value)throw new Exception(reason);Console.WriteLine("PASS "+reason);}
+ static Dictionary<string,object> D(object value){return Json.Deserialize<Dictionary<string,object>>(Json.Serialize(value));}
+ static Dictionary<string,object> P(params object[] values){var result=new Dictionary<string,object>();for(int i=0;i<values.Length;i+=2)result[(string)values[i]]=values[i+1];return result;}
+ static byte[] Info(){var b=new List<byte>(new byte[]{255,255,255,255,73,17});foreach(string value in new[]{"Valid server","map","folder","Project Zomboid"})b.AddRange(Encoding.UTF8.GetBytes(value+"\0"));b.AddRange(new byte[]{56,166,3,24,0,100,119,0,1});b.AddRange(Encoding.UTF8.GetBytes("42.21\0"));return b.ToArray();}
+ static byte[] Replace(byte[] packet,int field,byte[] value){int start=6;for(int i=0;i<Math.Min(field,4);i++)start=Array.IndexOf(packet,(byte)0,start)+1;if(field==4)start+=9;int end=Array.IndexOf(packet,(byte)0,start);return packet.Take(start).Concat(value).Concat(new byte[]{0}).Concat(packet.Skip(end+1)).ToArray();}
+ static Dictionary<string,object> Parse(byte[] b){return D(ServerProfiles.ParseInfo(b,"encoding",94,"saved note"));}
+ static void Online(Dictionary<string,object> info,int players,int max,string label){Check((string)info["status"]=="online",label+" remains online");Check(Convert.ToInt32(info["players"])==players&&Convert.ToInt32(info["maxPlayers"])==max,label+" keeps actual player counts");Check(Convert.ToInt32(info["latencyMs"])==94&&info["error"]==null,label+" keeps latency without a failed-packet error");}
+ sealed class Responder:IDisposable {
+  readonly UdpClient udp=new UdpClient(new IPEndPoint(IPAddress.Loopback,0));readonly Thread thread;readonly byte[] packet;volatile bool stopped;
+  internal int Port{get{return ((IPEndPoint)udp.Client.LocalEndPoint).Port;}}
+  internal Responder(byte[] packet){this.packet=packet;udp.Client.ReceiveTimeout=100;thread=new Thread(Run){IsBackground=true};thread.Start();}
+  void Run(){while(!stopped)try{IPEndPoint peer=null;byte[] request=udp.Receive(ref peer);if(request.Length<5)continue;byte[] reply;if(request[4]==84)reply=packet;else if(request[4]==86){reply=new byte[]{255,255,255,255,69,1,0}.Concat(Encoding.UTF8.GetBytes("PublicDescription\0Public rules remain readable\0")).ToArray();}else continue;udp.Send(reply,reply.Length,peer);}catch(SocketException){}catch(ObjectDisposedException){return;}}
+  public void Dispose(){stopped=true;udp.Close();thread.Join(2000);}
+ }
+ static void QueryPaths(byte[] captured,string root){using(var server=new Responder(captured)){
+  var saved=new ServerProfiles(Path.Combine(root,"saved"));var list=D(saved.List());saved.Upsert(P("stamp",list["stamp"],"id","","name","Saved fallback title","host","127.0.0.1","port",server.Port,"queryPort",server.Port,"username","","description","local note","useSteamRelay",false));var rows=((System.Collections.IEnumerable)D(saved.List())["servers"]).Cast<object>().ToArray();string id=Convert.ToString(((Dictionary<string,object>)rows[0])["id"]);
+  var personal=D(saved.Query(id,CancellationToken.None));Check((string)personal["status"]=="online"&&Convert.ToInt32(personal["players"])==4&&personal["name"]==null,"personal saved profile reads actual bad-name UDP reply and keeps its own fallback title");
+  foreach(string source in new[]{"favorite","hall"}){var read=D(saved.QueryRequest(P("id",source,"host","127.0.0.1","port",server.Port,"queryPort",server.Port),CancellationToken.None));Check((string)read["status"]=="online"&&Convert.ToInt32(read["maxPlayers"])==80&&read["name"]==null,source+" public endpoint retains metrics with bad-name UDP reply");}
+  string feed=Json.Serialize(new{schema=1,revision=1,updatedUtc="2026-10-31T00:00:00Z",servers=new[]{new{id="encoding-rec",name="Recommended fallback title",host="127.0.0.1",port=server.Port,queryPort=server.Port,version="42.21",description="Recommended note",cover="",tags=new string[0],order=0,useSteamRelay=false}}});var recommended=new RecommendedServers(Path.Combine(root,"recommended"),(url,token)=>feed);recommended.Read(true,CancellationToken.None);var rec=D(recommended.Query("encoding-rec",CancellationToken.None));Check((string)rec["status"]=="online"&&Convert.ToInt32(rec["players"])==4&&rec["name"]==null,"recommended endpoint retains metrics and null name for existing UI title fallback");Check(Convert.ToString(rec["description"])=="Public rules remain readable","bad INFO name does not prevent the independent public RULES query");
+ }}
+ public static int Main(string[] args){try{
+  byte[] captured;using(var input=typeof(ServerInfoEncodingTests).Assembly.GetManifestResourceStream("A2sTruncatedName.bin"))using(var output=new MemoryStream()){input.CopyTo(output);captured=output.ToArray();}
+  var actual=Parse(captured);Online(actual,4,80,"unaltered captured server packet");Check(actual["name"]==null,"malformed server name is absent rather than a replacement-character title");
+  var normal=Parse(Info());Online(normal,3,24,"valid UTF-8 packet");Check((string)normal["name"]=="Valid server"&&(string)normal["version"]=="42.21","valid text is preserved exactly");
+  var chinese=Parse(Replace(Info(),0,Encoding.UTF8.GetBytes("中文服务器")));Check((string)chinese["name"]=="中文服务器","valid Chinese name is not treated as corruption");
+  byte[] invalid={0xe4,0xb8};for(int field=0;field<5;field++){var result=Parse(Replace(Info(),field,invalid));Online(result,3,24,"malformed optional text field "+field);if(field==0)Check(result["name"]==null,"bad name falls back through null");if(field==4)Check(result["version"]==null,"bad version does not invent a build number");}
+  var optional=Info().Concat(new byte[]{96,1,0,0xe4,0xb8,0,0xff,0}).ToArray();Online(Parse(optional),3,24,"malformed optional spectator and keyword text");
+  foreach(var malformed in new[]{new byte[0],Info().Take(5).ToArray(),Info().Take(Info().Length-2).ToArray(),Replace(Info(),0,Enumerable.Repeat((byte)65,2049).ToArray()),Info().Concat(new byte[]{128}).ToArray(),Info().Concat(new byte[]{2}).ToArray(),Info().Concat(new byte[]{0,1}).ToArray()})Check((string)Parse(malformed)["status"]!="online","actual layout corruption remains unavailable");
+  var numeric=Info();int at=6;for(int i=0;i<4;i++)at=Array.IndexOf(numeric,(byte)0,at)+1;numeric[at+2]=25;Check((string)Parse(numeric)["status"]!="online","impossible player counts are not presented as real metrics");
+  QueryPaths(captured,args[0]);Console.WriteLine("ServerInfoEncodingTests "+checks+" checks; actual captured packet plus real isolated loopback UDP, no public network/game/user data");return 0;
+ }catch(Exception error){Console.WriteLine(error);return 1;}}
+}}
