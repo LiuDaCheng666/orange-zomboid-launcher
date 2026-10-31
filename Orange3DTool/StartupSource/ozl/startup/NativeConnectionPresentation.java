@@ -17,6 +17,7 @@ public final class NativeConnectionPresentation {
         final ClassLoader loader;final Object environment,mainTable,connectTable,main,connect,logo,background,arrowBG,arrowFG,queue;
         final Set<Object> decoration,allowedMain,allowedConnection,hiddenPages;
         final long generation,epoch,frame;final boolean queueScope,workshopScope;
+        volatile boolean revoked;
         Lease(ClassLoader loader,Object environment,Object mainTable,Object connectTable,Object main,Object connect,Object logo,Object background,Object bg,Object fg,Object queue,Set<Object> decoration,Set<Object> allowedMain,Set<Object> allowedConnection,Set<Object> hiddenPages,LoadingModel.Snapshot state,long frame,boolean queueScope,double statusBottom,double cancelTop){
             this(loader,environment,mainTable,connectTable,main,connect,logo,background,bg,fg,queue,decoration,allowedMain,allowedConnection,hiddenPages,state,frame,queueScope,statusBottom,cancelTop,0);
         }
@@ -99,21 +100,25 @@ public final class NativeConnectionPresentation {
         try{Object value=raw(label,"name");return value instanceof String s&&s.length()<=256?LoadingModel.safe(s,256):"";}catch(Throwable unavailable){return "";}
     }
     public void clear(){current.remove();}
+    /** CPU-frame revocation is visible to its queued GL drawer without reading Lua there. */
+    public void revoke(){Lease lease=current.get();if(lease!=null)lease.revoked=true;current.remove();}
+    public void finishFrame(){valid();}
+    private Lease decline(){revoke();return null;}
     private Lease valid(){
-        Lease lease=current.get();if(lease==null)return null;
+        Lease lease=current.get();if(lease==null||lease.revoked)return null;
         if(lease.workshopScope)return validWorkshop(lease);
         try{
             LoadingModel.Snapshot state=StartupRuntime.snapshot();
-            if(state==null||!state.active||state.generation!=lease.generation||state.epoch!=lease.epoch||!StartupRuntime.acceptedFrame(lease.frame)||!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",lease.loader),"useUiFbo"))||field(type("zombie.Lua.LuaManager",lease.loader),"env")!=lease.environment)return null;
+            if(state==null||!state.active||state.generation!=lease.generation||state.epoch!=lease.epoch||!StartupRuntime.acceptedFrame(lease.frame)||!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",lease.loader),"useUiFbo"))||field(type("zombie.Lua.LuaManager",lease.loader),"env")!=lease.environment)return decline();
 
-            if(raw(raw(lease.environment,"MainScreen"),"instance")!=lease.mainTable||element(raw(lease.mainTable,"connectToServer"))!=lease.connect||!visible(lease.main)||visible(lease.connect)==lease.queueScope)return null;
-            if(raw(lease.mainTable,"logoTexture")!=lease.logo||raw(lease.connectTable,"failMessage")!=null)return null;
-            if(visible(element(raw(lease.connectTable,"googleAuthPopup"))))return null;
-            exactChildren(lease.main,lease.allowedMain,false);exactChildren(lease.connect,lease.allowedConnection,false);for(Object page:lease.hiddenPages)if(visible(page))return null;
-            for(String name:DECORATION){Object child=element(raw(lease.connectTable,name));if(!lease.decoration.contains(child)||!children(child).isEmpty())return null;}
-            Object roots=type("zombie.ui.UIManager",lease.loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(lease.main))return null;for(Object root:list)if(root!=lease.main&&visible(root))return null;
+            if(raw(raw(lease.environment,"MainScreen"),"instance")!=lease.mainTable||element(raw(lease.mainTable,"connectToServer"))!=lease.connect||!visible(lease.main)||visible(lease.connect)==lease.queueScope)return decline();
+            if(raw(lease.mainTable,"logoTexture")!=lease.logo||raw(lease.connectTable,"failMessage")!=null)return decline();
+            if(visible(element(raw(lease.connectTable,"googleAuthPopup"))))return decline();
+            exactChildren(lease.main,lease.allowedMain,false);exactChildren(lease.connect,lease.allowedConnection,false);for(Object page:lease.hiddenPages)if(visible(page))return decline();
+            for(String name:DECORATION){Object child=element(raw(lease.connectTable,name));if(!lease.decoration.contains(child)||!children(child).isEmpty())return decline();}
+            Object roots=type("zombie.ui.UIManager",lease.loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(lease.main))return decline();for(Object root:list)if(root!=lease.main&&visible(root))return decline();
             return lease;
-        }catch(Throwable unavailable){return null;}
+        }catch(Throwable unavailable){return decline();}
     }
     /** Constant-sized identity checks only; no item scans, new leases or identity-set allocation. */
     private Lease validWorkshop(Lease lease){try{
@@ -127,7 +132,7 @@ public final class NativeConnectionPresentation {
         Object roots=type("zombie.ui.UIManager",lease.loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(lease.main))return declineWorkshop();for(Object root:list)if(root!=lease.main&&visible(root))return declineWorkshop();
         return lease;
     }catch(Throwable unavailable){return declineWorkshop();}}
-    private Lease declineWorkshop(){restoreWorkshop();clear();return null;}
+    private Lease declineWorkshop(){restoreWorkshop();revoke();return null;}
     public boolean skipWorkshopTitle(Object element,String text,double x,double y){Lease lease=valid();try{return lease!=null&&lease.workshopScope&&element==lease.connect&&text!=null&&y==10&&x==number(lease.connectTable,"width")/2;}catch(Exception unavailable){return false;}}
     private Lease resolveWorkshop(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean reflow){try{
         if(!StartupRuntime.ownsWorkshop(loader,state.generation))return null;Class<?> font=type("zombie.ui.UIFont",loader),text=type("zombie.ui.TextManager",loader);text.getMethod("MeasureStringX",font,String.class);if(text.getField("instance").get(null)==null)return null;

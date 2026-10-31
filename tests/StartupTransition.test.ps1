@@ -1,4 +1,4 @@
-param([string]$GameDirectory='E:\Steam\steamapps\common\ProjectZomboid',[string[]]$Probe=@('StartupTransitionTest','TransitionAnimationTest'))
+param([string]$GameDirectory='E:\Steam\steamapps\common\ProjectZomboid',[string[]]$Probe=@('StartupTransitionTest','TransitionAnimationTest','ConnectionOwnershipTest'))
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $output=Join-Path $repo ('artifacts\startup-transition-'+[guid]::NewGuid().ToString('N'))
@@ -17,7 +17,7 @@ $apiFiles=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'java\kahlua-api
 & javac -encoding UTF-8 --release 17 -d $api $apiFiles
 if($LASTEXITCODE -ne 0){throw 'Compile-only Kahlua signatures failed'}
 $fixtures=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'java\startup\fixtures') -Recurse -Filter '*.java' -File | ForEach-Object FullName)
-$tests=@('StartupTransitionTest','TransitionAnimationTest','LuaReloadTest','NativeLuaFixture','IsolatedLuaProbe','NativeLifecycleTest','NativeStatusTest','QueueCompositionTest','WorkshopDownloadTest','StartupModelTest','RefinementTransformerTest') | ForEach-Object {Join-Path $PSScriptRoot ('java\startup\'+$_+'.java')}
+$tests=@('StartupTransitionTest','TransitionAnimationTest','ConnectionOwnershipTest','NativeLuaGlProbe','LuaReloadTest','NativeLuaFixture','IsolatedLuaProbe','NativeLifecycleTest','NativeStatusTest','QueueCompositionTest','WorkshopDownloadTest','StartupModelTest','RefinementTransformerTest') | ForEach-Object {Join-Path $PSScriptRoot ('java\startup\'+$_+'.java')}
 & javac -encoding UTF-8 --release 17 -classpath ($api+';'+$agent+';'+(Join-Path $GameDirectory 'projectzomboid.jar')) -d $classes $fixtures $tests
 if($LASTEXITCODE -ne 0){throw 'Transition fixtures compilation failed'}
 $fixture=Join-Path $output 'game';$owned=Join-Path $fixture 'OrangeLauncherRuntime\startup'

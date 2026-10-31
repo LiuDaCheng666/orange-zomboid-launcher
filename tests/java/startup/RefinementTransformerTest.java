@@ -33,9 +33,9 @@ public final class RefinementTransformerTest {
         check(!StartupRuntime.snapshot().active,"Required retains native ownership throughout workshop interaction");connect("Post workshop passive");state.enter();
         Poison poison=new Poison();LuaEventManager.triggerEvent("Unrelated",poison,poison,poison,poison);check(LuaEventManager.last==poison,"unrelated payload untouched and original call preserved");
         MainScreenState.instance.render();List<Object> queue=SpriteRenderer.instance.queue;
-        check(queue.size()==3&&queue.get(0).equals("background")&&queue.get(1).getClass().getName().startsWith("ozl.startup.")&&queue.get(2).equals("controls"),"actual generated drawer is queued between background and original controls");
+        check(queue.equals(List.of("background","controls")),"missing native Lua ownership preserves original background and controls without an OZL drawer");
         check(UIManager.useUiFbo,"CPU restores UI flag before deferred GPU command");
-        Object ticket1=queue.get(1);MainScreenState.instance.render();check(queue.get(4)!=ticket1,"two in-flight frames own distinct immutable drawers");SpriteRenderer.instance.drain();SpriteRenderer.instance.recycle();
+        MainScreenState.instance.render();check(queue.equals(List.of("background","controls","background","controls")),"two unowned in-flight frames preserve all original rendering calls without an OZL drawer");SpriteRenderer.instance.drain();SpriteRenderer.instance.recycle();
         MainScreenState.instance.renderBackground();check(queue.size()==1,"unscoped background callers never enqueue");SpriteRenderer.instance.recycle();
         MainScreenState.instance.failBackground=true;thrown=false;try{MainScreenState.instance.render();}catch(IllegalArgumentException original){thrown=true;}MainScreenState.instance.failBackground=false;
         check(thrown&&queue.size()==1,"throwing original background is preserved without owned insertion");SpriteRenderer.instance.recycle();MainScreenState.instance.renderBackground();check(queue.size()==1,"exceptional render restores frame scope");SpriteRenderer.instance.recycle();
@@ -43,7 +43,7 @@ public final class RefinementTransformerTest {
         connect("Second server");LuaEventManager.triggerEvent("OnServerWorkshopItems","Error","ItemQueryNotCompleted");check(!StartupRuntime.snapshot().active,"short workshop query error yields");
         connect("Third server");LuaEventManager.triggerEvent("OnServerWorkshopItems","Error",12L,"ItemInstallFailed");check(!StartupRuntime.snapshot().active,"item workshop error yields");
         connect("Queue server");LuaEventManager.triggerEvent("OnConnected");state.exit();LoadingQueueState q=new LoadingQueueState();q.enter();LoadingQueueState.onPlaceInQueue(4,new HashMap<>());q.render();
-        check(StartupRuntime.snapshot().name.equals("Queue server")&&StartupRuntime.snapshot().queuePosition==4&&queue.size()==5,"queue restores current-operation identity; missing Lua scope keeps native queue controls and original black clear");SpriteRenderer.instance.recycle();
+        check(StartupRuntime.snapshot().name.equals("Queue server")&&StartupRuntime.snapshot().queuePosition==4&&queue.equals(List.of("black","background","controls","queue-controls")),"queue restores current-operation identity; missing Lua scope keeps only native queue controls and original black clear");SpriteRenderer.instance.recycle();
         LoadingQueueState.cancel();check(q.update()==GameStateMachine.StateAction.Continue&&!StartupRuntime.snapshot().active&&q.redirectState() instanceof MainScreenState,"original queue cancellation yields and invalidates tickets");
         GameClient.instance.doConnectCoop("private-coop-id");check(StartupRuntime.snapshot().name.isEmpty(),"coop never reads stale static normal-server name");
         GameClient.instance.serverMods.clear();GameClient.instance.serverMods.addAll(List.of("Mod1","Mod2"));GameLoadingState world=new GameLoadingState();Core.gameSaveWorld="ADDRESS_encrypted-user";world.enter();world.render();

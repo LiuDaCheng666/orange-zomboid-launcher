@@ -14,10 +14,12 @@ public final class QueuedBackdrop {
         public final LoadingModel.Snapshot state;
         public final String scope;
         public final Object bootOwner;
+        private final NativeConnectionPresentation.Lease lease;
         public final double statusBottom,cancelTop,workshopTop;
         public Ticket(LoadingModel.Snapshot state,String scope){this(state,scope,null);}
         public Ticket(LoadingModel.Snapshot state,String scope,NativeConnectionPresentation.Lease lease){this(state,scope,lease,null);}
-        private Ticket(LoadingModel.Snapshot state,String scope,NativeConnectionPresentation.Lease lease,Object bootOwner){this.state=state;this.scope=scope;this.bootOwner=bootOwner;statusBottom=lease==null||lease.queueScope?0:lease.statusBottom;cancelTop=lease==null||lease.queueScope?0:lease.cancelTop;workshopTop=lease==null||lease.queueScope?0:lease.workshopTop;}
+        private Ticket(LoadingModel.Snapshot state,String scope,NativeConnectionPresentation.Lease lease,Object bootOwner){this.state=state;this.scope=scope;this.bootOwner=bootOwner;this.lease=lease;statusBottom=lease==null||lease.queueScope?0:lease.statusBottom;cancelTop=lease==null||lease.queueScope?0:lease.cancelTop;workshopTop=lease==null||lease.queueScope?0:lease.workshopTop;}
+        boolean owned(){return lease!=null&&!lease.revoked;}
         public static Ticket boot(LoadingModel.Snapshot state,LoadingModel owner){return new Ticket(state,"BOOT",null,owner);}
     }
     private static ClassLoader parent;

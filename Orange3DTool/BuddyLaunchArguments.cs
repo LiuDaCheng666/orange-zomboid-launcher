@@ -18,6 +18,8 @@ namespace PZ3D {
  }
  internal static class BuddyLaunchArguments {
   const int Limit=2097152;
+  // A menu client can join a server later: keep Buddy in charge of unknown/changed JAR approval.
+  internal static string InteractiveAgent(string jar){return "-javaagent:"+jar+"=prop_prefix=zb,policy=prompt";}
   internal static BuddyArgumentKind Classify(string argument){
    if(string.IsNullOrWhiteSpace(argument))return BuddyArgumentKind.None;
    string value=argument.Trim();bool quoted=value.IndexOf('"')>=0;

@@ -1,7 +1,7 @@
-param([string]$JdkPath='C:/Program Files/Microsoft/jdk-21.0.12.101-hotspot', [string]$LiveAgentPath='', [switch]$WithoutServerMode, [switch]$ReproduceLegacyGate)
+param([string]$JdkPath='C:/Program Files/Microsoft/jdk-21.0.12.101-hotspot', [string]$LiveAgentPath='', [switch]$WithoutServerMode, [switch]$ReproduceLegacyGate, [switch]$ManualMenuOnly, [switch]$DiagnosticsOnly, [string]$EvidenceDirectory='')
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
-$output=Join-Path $repo ('artifacts/buddy-server-approval-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+$output=if($EvidenceDirectory){[IO.Path]::GetFullPath($EvidenceDirectory)}else{Join-Path $repo ('artifacts/buddy-server-approval-'+[guid]::NewGuid().ToString('N').Substring(0,8))}
 $game=Join-Path $output 'game';$classes=Join-Path $output 'probe-classes';$gameClasses=Join-Path $output 'game-classes';$payloadClasses=Join-Path $output 'payload-classes'
 foreach($directory in @($game,$classes,$gameClasses,$payloadClasses)){New-Item -ItemType Directory -Path $directory -Force|Out-Null}
 $javac=Join-Path $JdkPath 'bin/javac.exe';$java=Join-Path $JdkPath 'bin/java.exe';$jar=Join-Path $JdkPath 'bin/jar.exe'
@@ -39,8 +39,8 @@ function RunCase([string]$name,[string]$answers,[bool]$expected,[int]$payloadInd
     if(-not(Test-Path -LiteralPath (Join-Path $config 'config.json'))){[IO.File]::WriteAllText((Join-Path $config 'config.json'),'{"trusted_authors":[],"preload_mods":{},"auto_fix_mod_order":false,"fix_approval_dialog_cursor":true}')}
     $buddy=Join-Path $context 'ZombieBuddy.jar';Copy-Item -LiteralPath $buddySource -Destination $buddy
     $body="OZLLIVE1`n"+(Record 'game' @($game))+(Record 'user' @($user))+(Record 'context' @($context))+(Record 'choices' @($choices))+(Record 'vanilla' @('false'))+(Record 'buddy' @($buddy,'eb79b9876332010733a8e0d7ce4fe0377846059a9e28859029e2a0fb449f6cf2'))
-    if($callPath.StartsWith('same-id')){$local=Join-Path $context 'local-pin/ServerJava';New-Item -ItemType Directory -Path $local -Force|Out-Null;Copy-Item -LiteralPath $payloads[2] -Destination (Join-Path $local 'payload.jar');[IO.File]::WriteAllText((Join-Path $local 'mod.info'),"id=ServerJava`njavaJarFile=payload.jar`njavaPkgName=fixture.server`n");$body+=(Record 'managed' @('ServerJava'))+(Record 'selected' @('ServerJava',$local))+(Record 'component' @('ServerJava'))+(Record 'order' @('ServerJava'))}
-    if($callPath -eq 'same-id-force'){$extra=Join-Path $context 'local-pin/ClientExtra';New-Item -ItemType Directory -Path $extra -Force|Out-Null;Copy-Item -LiteralPath $extraPayload -Destination (Join-Path $extra 'payload.jar');[IO.File]::WriteAllText((Join-Path $extra 'mod.info'),"id=ClientExtra`njavaJarFile=payload.jar`njavaPkgName=fixture.extra`n");$body+=(Record 'managed' @('ClientExtra'))+(Record 'selected' @('ClientExtra',$extra))+(Record 'component' @('ClientExtra'))+(Record 'order' @('ClientExtra'))}
+    if($callPath.Contains('same-id')){$local=Join-Path $context 'local-pin/ServerJava';New-Item -ItemType Directory -Path $local -Force|Out-Null;Copy-Item -LiteralPath $payloads[2] -Destination (Join-Path $local 'payload.jar');[IO.File]::WriteAllText((Join-Path $local 'mod.info'),"id=ServerJava`njavaJarFile=payload.jar`njavaPkgName=fixture.server`n");$body+=(Record 'managed' @('ServerJava'))+(Record 'selected' @('ServerJava',$local))+(Record 'component' @('ServerJava'))+(Record 'order' @('ServerJava'))}
+    if($callPath -eq 'same-id-force' -or $callPath -eq 'manual-same-id'){$extra=Join-Path $context 'local-pin/ClientExtra';New-Item -ItemType Directory -Path $extra -Force|Out-Null;Copy-Item -LiteralPath $extraPayload -Destination (Join-Path $extra 'payload.jar');[IO.File]::WriteAllText((Join-Path $extra 'mod.info'),"id=ClientExtra`njavaJarFile=payload.jar`njavaPkgName=fixture.extra`n");$body+=(Record 'managed' @('ClientExtra'))+(Record 'selected' @('ClientExtra',$extra))+(Record 'component' @('ClientExtra'))+(Record 'order' @('ClientExtra'))}
     if($serverMode -and -not $ReproduceLegacyGate){$body+=(Record 'server-components' @($(if($callPath -eq 'same-id-force'){'force-local'}else{'follow-server'})))}
     $manifest=Join-Path $choices 'live.manifest';[IO.File]::WriteAllText($manifest,$body,(New-Object Text.UTF8Encoding($false)))
     $executed=Join-Path $caseRoot 'executed.txt'
@@ -49,10 +49,11 @@ function RunCase([string]$name,[string]$answers,[bool]$expected,[int]$payloadInd
     $process=New-Object Diagnostics.Process;$process.StartInfo=$start;$null=$process.Start();$out=$process.StandardOutput.ReadToEndAsync();$err=$process.StandardError.ReadToEndAsync();if($answers){$process.StandardInput.Write($answers)};$process.StandardInput.Close()
     if(-not $process.WaitForExit(45000)){$process.Kill();throw ('Timed out: '+$name)}
     $stdout=$out.Result;$stderr=$err.Result;[IO.File]::WriteAllText((Join-Path $caseRoot 'stdout.txt'),$stdout);[IO.File]::WriteAllText((Join-Path $caseRoot 'stderr.txt'),$stderr)
-    $prompted=$stdout.Contains('Allow this Java mod to load?');$passed=$process.ExitCode -eq 0 -and $prompted -eq $expectPrompt -and $stdout.Contains('PASS real Buddy late-server approval')
+    $prompted=$stdout.Contains('Allow this Java mod to load?');$passed=$process.ExitCode -eq 0 -and $prompted -eq $expectPrompt -and ($stdout.Contains('PASS real Buddy late-server approval') -or ($callPath -eq 'diagnostics' -and $stdout.Contains('PASS real Live load summary')))
     $entry=[pscustomobject]@{name=$name;passed=$passed;exit=$process.ExitCode;prompted=$prompted;expectedExecution=$expected;executed=(Test-Path -LiteralPath $executed);stdout=(Join-Path $caseRoot 'stdout.txt');stderr=(Join-Path $caseRoot 'stderr.txt')};$results.Add($entry);$process.Dispose();Write-Host ($name+': '+$(if($passed){'PASS'}else{'FAIL'}));if(-not $passed){Write-Host (($stdout -split "`n"|Select-Object -Last 20) -join "`n");Write-Host $stderr}
 }
 $server=-not $WithoutServerMode
+if(-not $ManualMenuOnly -and -not $DiagnosticsOnly){
 RunCase 'allow-late-server' "y`ny`n" $server 0 'persist-allow' $server $true
 RunCase 'deny-late-server' "n`ny`n" $false 0 'persist-deny' $server $true
 RunCase 'closed-input-denies' '' $false 0 'closed' $server $true
@@ -64,6 +65,15 @@ RunCase 'client-load-lifecycle-allow' "y`nn`n" $server 0 'client-allow' $server 
 RunCase 'client-load-lifecycle-deny' "n`nn`n" $false 0 'client-deny' $server $true 'client'
 if($server){RunCase 'same-id-server-source-wins' "y`nn`n" $true 0 'same-id' $true $true 'same-id'}
 if($server){RunCase 'force-custom-java-and-server-source' "y`nn`ny`nn`n" $true 0 'same-id-force' $true $true 'same-id-force'}
+}
+if(-not $DiagnosticsOnly){
+RunCase 'manual-menu-client-allow' "y`nn`n" $true 0 'manual-client-allow' $false $true 'manual-client'
+RunCase 'manual-menu-client-deny' "n`nn`n" $false 0 'manual-client-deny' $false $true 'manual-client'
+RunCase 'manual-menu-closed-input' '' $false 0 'manual-closed' $false $true 'manual-client'
+RunCase 'manual-menu-same-id-server-wins' "y`nn`n" $true 0 'manual-same-id' $false $true 'manual-same-id'
+RunCase 'manual-menu-exception-then-retry' "y`nn`n" $true 0 'manual-retry' $false $true 'manual-retry'
+}
+RunCase 'load-summary-scope-isolation' '' $false 0 'diagnostics' $false $false 'diagnostics'
 $record=[pscustomobject]@{scope='Real pinned Buddy 2.3.4 agent + production OrangeLive agent + original ConsoleModApprovalFrontend stdin; game metadata boundary fixture, not a game launch or ImGui acceptance';buddySha256=(Get-FileHash -LiteralPath $buddySource -Algorithm SHA256).Hash;agentSha256=(Get-FileHash -LiteralPath $LiveAgentPath -Algorithm SHA256).Hash;cases=$results}
 $record|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $output 'results.json') -Encoding UTF8
 Write-Host ('Evidence: '+$output)

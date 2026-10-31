@@ -123,7 +123,8 @@ public final class StartupRuntime {
         if(m==null||owner==null||connectionDispatch.get()!=owner||!"ConnectedToServer".equals(reason))return null;
         LoadingModel.Snapshot before=m.snapshot();
         NativeConnectionPresentation.Lease layout=presentation.statusPage(owner.getClass().getClassLoader(),before);
-        long generation=before.generation,epoch=m.serverLuaReloadBegin(layout==null?0:layout.statusBottom,layout==null?0:layout.cancelTop);if(epoch==0)return null;
+        if(layout==null)return null;
+        long generation=before.generation,epoch=m.serverLuaReloadBegin(layout.statusBottom,layout.cancelTop);if(epoch==0)return null;
         presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;
         return new LuaReload(m,generation,epoch);
     }
@@ -181,8 +182,8 @@ public final class StartupRuntime {
     public static void exitFrame(String prior,Throwable error){
         NativeConnectionPresentation.BootMenu pending=bootHandoff;
         if(pending!=null&&(error!=null||!pending.same(presentation.bootMenu(pending.loader()))))menuReady();
-        presentation.clear();cpuFrame.remove();if(prior==null)frame.remove();else frame.set(prior);}
-    static boolean acceptedFrame(long sequence){long[] cpu=cpuFrame.get();return cpu!=null&&cpu[0]==sequence&&cpu[1]!=0;}
+        if(error!=null)presentation.revoke();presentation.clear();cpuFrame.remove();if(prior==null)frame.remove();else frame.set(prior);}
+    static boolean acceptedFrame(long sequence){long[] cpu=cpuFrame.get();return cpu!=null&&cpu[0]==sequence&&cpu[1]==1;}
     public static boolean skipElement(Object element){return presentation.skipElement(element);}
     static void rejectWorkshopRows(){rejectWorkshop();presentation.clear();}
     static boolean workshopList(Object element){return presentation.workshopList(element);}
@@ -194,6 +195,7 @@ public final class StartupRuntime {
     /** Queue place=-1/immediate never call renderBackground; this runs after their black clear. */
     public static void endFrameUI(Object core){
         if("QUEUE".equals(frame.get()))background(core);
+        presentation.finishFrame();
         NativeConnectionPresentation.BootMenu pending=bootHandoff;LoadingModel m=model;
         NativeConnectionPresentation.BootMenu current=pending==null?null:presentation.bootMenu(pending.loader());
         if(pending!=null&&m!=null&&"MENU".equals(frame.get())&&pending.same(current))try{
@@ -207,13 +209,16 @@ public final class StartupRuntime {
     public static void background(Object state){
         LoadingModel.Snapshot s=snapshot();String scope=frame.get();if(s==null||s.context!=LoadingModel.Context.SERVER||s.route!=LoadingModel.Route.BEHIND_UI||scope==null||scope.isEmpty()||state==null)return;
         long[] cpu=cpuFrame.get();if(cpu==null||cpu[1]!=0)return;
+        // EndFrameUI may fill an untouched queue frame, but cannot acquire a
+        // rejected frame after its native controls have already been produced.
+        cpu[1]=-1;
         WorkshopDownload observed=download;if(s.downloadPage&&observed!=null&&observed.owner==connectionOwner&&observed.generation==s.generation){observed.publish(model,System.nanoTime());s=snapshot();}
         WorkshopInteraction interaction=workshopInteraction;
         if(interaction!=null&&interaction.success&&interaction.owner==connectionOwner&&interaction.generation==s.generation&&scope.equals("MENU")&&presentation.resolve(state.getClass().getClassLoader(),s,0,false)!=null){model.nativeInteraction(false);workshopInteraction=null;s=snapshot();}
         if(!s.active)return;
         try{ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use)){rejectWorkshop();return;}
             NativeConnectionPresentation.Lease lease=presentation.resolve(loader,s,cpu[0],scope.equals("QUEUE"));
-            if(s.downloadPage&&lease==null){rejectWorkshop();return;}
+            if(lease==null){if(s.downloadPage)rejectWorkshop();return;}
             if(QueuedBackdrop.enqueue(loader,new QueuedBackdrop.Ticket(s,scope,lease))){cpu[1]=1;presentation.accept(lease);}else rejectWorkshop();
         }
         catch(Throwable error){failed(error);}
@@ -226,7 +231,7 @@ public final class StartupRuntime {
                 // The native bridge runs after CPU menu drawing. Cover only that
                 // already-validated boot frame even if its one connect has begun.
                 if(ticket.bootOwner!=model||ticket.state.context!=LoadingModel.Context.BOOT||!(current.context==LoadingModel.Context.BOOT&&current.generation==ticket.state.generation&&current.epoch==ticket.state.epoch||current.context==LoadingModel.Context.SERVER&&current.route==LoadingModel.Route.BEHIND_UI&&current.generation==ticket.state.generation+1&&current.epoch==ticket.state.epoch+1))return;
-            }else if(current.generation!=ticket.state.generation||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE")))return;
+            }else if(!ticket.owned()||current.generation!=ticket.state.generation||current.epoch!=ticket.state.epoch||current.context!=LoadingModel.Context.SERVER||current.route!=LoadingModel.Route.BEHIND_UI||(!ticket.scope.equals("MENU")&&!ticket.scope.equals("QUEUE")))return;
             if(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING)!=0){if(ticket.state.downloadPage)workshopRestorePending=true;return;}
             draw(ticket.state,ticket.statusBottom,ticket.cancelTop,ticket.workshopTop);
         }catch(Throwable error){failed(error);}

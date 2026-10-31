@@ -41,6 +41,7 @@ public final class LuaReloadTest {
   try{
    GLFW.glfwMakeContextCurrent(window);GL.createCapabilities();Display.created=true;
    AtomicLong clock=new AtomicLong();var renderer=StartupRuntime.class.getDeclaredField("renderer");renderer.setAccessible(true);renderer.set(null,new GameRenderer(clock::get));
+   new NativeLuaFixture(Path.of(args[0]),1440,900);
    MainScreenState.instance.enter();ConnectToServerState owner=connect("First server");
    MainScreenState.instance.render();var stale=(zombie.core.textures.TextureDraw.GenericDrawer)SpriteRenderer.instance.queue.get(1);long oldEpoch=state().epoch,generation=state().generation;
    Core.instance.duringReset=()->{
