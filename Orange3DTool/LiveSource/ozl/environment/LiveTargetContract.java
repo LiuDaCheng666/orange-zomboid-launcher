@@ -1,7 +1,7 @@
 package ozl.environment;
-import java.io.*;import java.nio.file.*;
+import java.io.*;import java.nio.file.*;import java.util.jar.*;import net.bytebuddy.jar.asm.*;
 final class LiveTargetContract {
  static boolean target(String name){return ActiveTargetContract.target(name);}
- static void verifyJar(Path game)throws IOException{ActiveTargetContract.verifyJar(game);}
- static void verify(String name,byte[] bytes){ActiveTargetContract.verify(name,bytes);}
+ static void verifyJar(Path game)throws IOException{ActiveTargetContract.verifyJar(game);try(JarFile jar=new JarFile(game.resolve("projectzomboid.jar").toFile())){JarEntry entry=jar.getJarEntry(TargetContract.TARGET+".class");if(entry==null||entry.getSize()>8388608)throw new IOException("missing or oversized dependency discovery class");try(InputStream in=jar.getInputStream(entry);ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>8388608)throw new IOException("oversized dependency discovery class");out.write(b,0,n);}verify(TargetContract.TARGET,out.toByteArray());}}}
+ static void verify(String name,byte[] bytes){ActiveTargetContract.verify(name,bytes);if(!TargetContract.TARGET.equals(name))return;final int[] matches={0};new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9){@Override public MethodVisitor visitMethod(int access,String method,String descriptor,String signature,String[] exceptions){if(method.equals("loadModsAux")){if(!descriptor.equals("(Ljava/util/List;Ljava/util/List;)Ljava/lang/String;")||(access&(Opcodes.ACC_STATIC|Opcodes.ACC_ABSTRACT|Opcodes.ACC_NATIVE))!=0||(access&Opcodes.ACC_PUBLIC)==0)throw new IllegalArgumentException("unsupported dependency discovery scope");matches[0]++;}return null;}},ClassReader.SKIP_CODE|ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);if(matches[0]!=1)throw new IllegalArgumentException("missing dependency discovery scope");}
 }

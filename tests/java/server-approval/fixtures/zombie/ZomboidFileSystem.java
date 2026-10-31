@@ -8,7 +8,10 @@ import zombie.modding.*;
 public final class ZomboidFileSystem {
  public static final ZomboidFileSystem instance=new ZomboidFileSystem();
  public int liveScans;public List<String> loaded=new ArrayList<String>();
+ public static Runnable discoveryProbe;
+ public String loadModsAux(List<String> ids,List<String> required){if(discoveryProbe!=null)discoveryProbe.run();return null;}
  public void loadMods(String id){
+  if("discovery-cache".equals(id)){if(discoveryProbe!=null)discoveryProbe.run();return;}
   if("diagnostic-nested".equals(id)){getAllModFolders(new ArrayList<String>());zombie.network.GameClient.client=true;try{loadMods("diagnostic-child");}finally{zombie.network.GameClient.client=false;}getAllModFolders(new ArrayList<String>());return;}
   if("diagnostic-child".equals(id)){getAllModFolders(new ArrayList<String>());return;}
   if("diagnostic-exception".equals(id)){getAllModFolders(new ArrayList<String>());throw new IllegalStateException("owned diagnostic failure");}

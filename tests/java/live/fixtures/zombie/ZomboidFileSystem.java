@@ -8,6 +8,7 @@ import zombie.modding.*;
 public final class ZomboidFileSystem {
  public int liveScans;public List<String> loaded=new ArrayList<String>();
  public void loadMods(String id){if(zombie.network.GameClient.client){ArrayList<String> rows=new ArrayList<String>();rows.addAll(zombie.network.GameClient.instance.serverMods);loadMods(rows);return;}ActiveMods active=ActiveMods.getById(id);if(!"default".equalsIgnoreCase(id)){ActiveMods.setLoadedMods(active);loadMods(active.getMods());return;}active=readDefaultModsTxt();ActiveMods.setLoadedMods(active);loadMods(active.getMods());}
+ public String loadModsAux(List<String> ids,List<String> required){return null;}
  public void loadMods(List<String> ids){loaded=new ArrayList<String>(ids);}
 
  public synchronized void getAllModFolders(List<String> folders){liveScans++;folders.clear();folders.add(Core.getMyDocumentFolder()+"/mods/ConflictingMod");folders.add(System.getProperty("ozl.fixture.workshop"));}
