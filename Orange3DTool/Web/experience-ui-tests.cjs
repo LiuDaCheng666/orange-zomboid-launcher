@@ -20,6 +20,8 @@ async function setup(browser,theme='dark'){
   const preflight=()=>{const names=['activity','recovery','workshop','launch-config','launch-guard','mods','java-approvals','memory'],routes=['home','maintenance','maintenance','components','maintenance','mods','java','memory'];return {canLaunch:fx.preflight!=='blocked',checkedUtc:'2026-10-15T00:00:00Z',items:names.map((id,i)=>({id,title:id,status:fx.preflight==='blocked'&&i===3?'error':fx.preflight==='warning'&&i===6?'warning':'ok',message:fx.preflight==='blocked'&&i===3?'缺少 Buddy 启动文件':fx.preflight==='warning'&&i===6?'Java 授权尚未核实':'已核对',route:routes[i]})),message:'请在游戏中核对结果'};};
   const answer=m=>{if(m.action==='configurationRequest'){const prior=receive;receive=reply=>{receive=prior;const r=reply.data;if(r.ok&&m.payload.action==='status')r.data={...r.data,configurationId:m.payload.id,configurationName:fx.configurations.find(r=>r.id===m.payload.id)?.name};prior({data:r.ok?{...r,data:{configurationId:m.payload.id,data:r.data}}:r});};answer({...m,action:m.payload.action,payload:m.payload.payload});receive=prior;return;}if(fx.failure===m.action){receive({data:{id:m.id,ok:false,error:'查询失败 · 合成示例'}});return;}let data;
    switch(m.action){
+    case 'launchOptions':data={forceChineseTranslation:fx.forceChineseTranslation===true};break;
+    case 'launchOptionsSave':fx.forceChineseTranslation=m.payload.forceChineseTranslation;data={forceChineseTranslation:fx.forceChineseTranslation};break;
     case 'launchConfigurations':data=configurationRows();break;
     case 'launchConfigurationSelect':fx.configurationId=m.payload.id;data=configurationRows();break;
     case 'configurationRead':data={...fx.configurations.find(r=>r.id===m.payload.id),ordinaryIds:fx.configurationMods[m.payload.id]||['base']};break;

@@ -1,0 +1,25 @@
+package ozl.environment;
+import java.nio.file.*;import java.nio.charset.*;import java.util.*;
+public class ForcedChineseTest {
+ static final class Cache {private final Map<String,String> modIdToDir=new HashMap<String,String>();private static final Map<String,String> Mods=new HashMap<String,String>();private static final Set<String> MissingMods=new HashSet<String>();}
+ static String line(String k,String...v){String s=k;for(String x:v)s+="\t"+Base64.getEncoder().encodeToString(x.getBytes(StandardCharsets.UTF_8));return s+"\n";}
+ static Path put(Path p,String s)throws Exception{Files.createDirectories(p.getParent());Files.write(p,s.getBytes(StandardCharsets.UTF_8));return p;}
+ static void check(boolean v,String m){if(!v)throw new AssertionError(m);}
+ public static void main(String[] args)throws Exception{
+ Path b=Paths.get(args[0]).toAbsolutePath(),game=Files.createDirectories(b.resolve("game")),user=Files.createDirectories(b.resolve("user")),ctx=Files.createDirectories(b.resolve("context")),choices=Files.createDirectories(ctx.resolve("session")),local=b.resolve("local"),server=b.resolve("server");
+ put(choices.resolve("mods/default.txt"),"original");put(choices.resolve("mods/loaded.txt"),"");put(local.resolve("42/mod.info"),"id=B42Trans_CN\n");put(server.resolve("42/mod.info"),"id=B42Trans_CN\n");
+ String body="OZLLIVE1\n"+line("game",game.toString())+line("user",user.toString())+line("context",ctx.toString())+line("choices",choices.toString())+line("vanilla","false")+line("managed","B42Trans_CN")+line("selected","B42Trans_CN",local.toString())+line("component","B42Trans_CN")+line("order","B42Trans_CN")+line("force-chinese","true");
+ for(String mode:new String[]{"menu","follow-server","force-local","vanilla"}){
+ String content=body;if(mode.equals("vanilla"))content=content.replace(line("vanilla","false"),line("vanilla","true"));else if(!mode.equals("menu"))content+=line("server-components",mode);
+ Path f=put(choices.resolve("live.manifest"),content);LiveEnvironmentManifest m=LiveEnvironmentManifest.read(f,LiveEnvironmentManifest.sha(f),game);
+ Cache cache=new Cache();cache.modIdToDir.put("B42Trans_CN",local.toString());cache.modIdToDir.put("Other","keep");Cache.Mods.put("B42Trans_CN","local");Cache.Mods.put("Other","keep");m.prepareChineseServer(cache,Cache.class,new HashSet<String>(Arrays.asList("B42Trans_CN")));check(!cache.modIdToDir.containsKey("B42Trans_CN")&&!Cache.Mods.containsKey("B42Trans_CN")&&cache.modIdToDir.containsKey("Other")&&Cache.Mods.containsKey("Other"),"server clears only cached local translation");
+ List<String> ids=new ArrayList<String>(Arrays.asList("SaveA","SaveB"));m.normalize(ids);check(ids.get(ids.size()-1).equals("B42Trans_CN"),mode+" menu/save translation remains last");
+ List<String> roots=new ArrayList<String>();m.filter(roots,false,Collections.<String>emptySet());check(roots.contains(local.toString()),mode+" menu source");
+ ids=new ArrayList<String>(Arrays.asList("ServerB","B42Trans_CN","ServerA"));m.mergeClient(ids);check(ids.equals(Arrays.asList("ServerB","B42Trans_CN","ServerA")),mode+" exact server order");
+ roots=new ArrayList<String>(Arrays.asList(local.toString(),server.toString()));m.filter(roots,true,new HashSet<String>(Arrays.asList("B42Trans_CN")));check(roots.equals(Arrays.asList(server.toString())),mode+" server source wins");
+ ids=new ArrayList<String>(Arrays.asList("ServerB","ServerA"));m.mergeClient(ids);check(ids.equals(Arrays.asList("ServerB","ServerA","B42Trans_CN")),mode+" missing server translation appended");
+ }
+ if(args.length>1){try(java.util.jar.JarFile installed=new java.util.jar.JarFile(Paths.get(args[1]).resolve("projectzomboid.jar").toFile())){final Set<String> found=new HashSet<String>();for(String name:Arrays.asList("zombie/ZomboidFileSystem","zombie/gameStates/ChooseGameInfo")){try(java.io.InputStream input=installed.getInputStream(installed.getJarEntry(name+".class"))){new net.bytebuddy.jar.asm.ClassReader(input).accept(new net.bytebuddy.jar.asm.ClassVisitor(net.bytebuddy.jar.asm.Opcodes.ASM9){public net.bytebuddy.jar.asm.FieldVisitor visitField(int access,String name,String desc,String sig,Object value){if(name.equals("modIdToDir")&&desc.equals("Ljava/util/Map;")||name.equals("Mods")&&desc.equals("Ljava/util/HashMap;")||name.equals("MissingMods")&&desc.equals("Ljava/util/HashSet;"))found.add(name);return null;}public net.bytebuddy.jar.asm.MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] exceptions){if(name.equals("loadModsAux")&&desc.equals("(Ljava/util/List;Ljava/util/List;)Ljava/lang/String;"))found.add(name);return null;}},net.bytebuddy.jar.asm.ClassReader.SKIP_CODE|net.bytebuddy.jar.asm.ClassReader.SKIP_DEBUG|net.bytebuddy.jar.asm.ClassReader.SKIP_FRAMES);}}check(found.size()==4,"installed cache and dependency bytecode contract");}System.out.println("PASS installed game cache and dependency signatures (bytecode only; no game initialized)");}
+ System.out.println("PASS forced Chinese menu/save/vanilla/follow-server/force-local source and order");
+ }
+}

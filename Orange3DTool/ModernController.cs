@@ -30,7 +30,7 @@ namespace PZ3D {
   public Action<string,object> Event;
   public bool Busy{get{if(configurationDispatcher&&ConfigurationControllers().Any(child=>child.Busy))return true;lock(gate)return busy||networkRequests.Count>0||workshopPreparation!=null&&workshopPreparation.Active;}}
   public bool NetworkBusy{get{if(configurationDispatcher&&ConfigurationControllers().Any(child=>child.NetworkBusy))return true;lock(gate)return networkRequests.Count>0;}}
-  static ModernController(){foreach(string a in new[]{"frozenConfigurationRead","frozenConfigurationSources","frozenConfigurationCancel","frozenConfigurationReadCancel"})NativeReads.Add(a);foreach(string action in LibraryReads)NativeReads.Add(action);foreach(string action in EnvironmentReads)NativeReads.Add(action);foreach(string action in GuideReads)NativeReads.Add(action);NativeReads.Add("modOpenWorkshop");NativeReads.Add("logAnalysisStatus");NativeReads.Add("logAnalysisLocal");NativeReads.Add("logAnalysisCancel");NativeReads.Add("gameDiagnostics");NativeReads.Add("loadingOptions");NativeReads.Add("gameProcesses");NativeReads.Add("saveDeletePreview");NativeReads.Add("serverWorkshopGet");NativeReads.Add("serverWorkshopStatus");}
+  static ModernController(){foreach(string a in new[]{"frozenConfigurationRead","frozenConfigurationSources","frozenConfigurationCancel","frozenConfigurationReadCancel"})NativeReads.Add(a);foreach(string action in LibraryReads)NativeReads.Add(action);foreach(string action in EnvironmentReads)NativeReads.Add(action);foreach(string action in GuideReads)NativeReads.Add(action);NativeReads.Add("modOpenWorkshop");NativeReads.Add("logAnalysisStatus");NativeReads.Add("logAnalysisLocal");NativeReads.Add("logAnalysisCancel");NativeReads.Add("gameDiagnostics");NativeReads.Add("loadingOptions");NativeReads.Add("launchOptions");NativeReads.Add("gameProcesses");NativeReads.Add("saveDeletePreview");NativeReads.Add("serverWorkshopGet");NativeReads.Add("serverWorkshopStatus");}
   internal static bool ServerWorkshopAction(string action){return new[]{"serverWorkshopGet","serverWorkshopImport","serverWorkshopPrepare","serverWorkshopStatus","serverWorkshopCancel"}.Contains(action);}
   public ModernController(string game,string user,string data,bool test=false):this(game,user,data,test,null){}
   internal ModernController(string game,string user,string data,bool test,Func<Engine,ulong[],Action<int,string>,CancellationToken,bool,Dictionary<ulong,string>> download):this(game,user,data,test,download,null){}
@@ -81,6 +81,7 @@ namespace PZ3D {
    finally{if(acquired)networkLane.Release();lock(gate){networkRequests.Remove(tokenSource);if(hallRequest==tokenSource)hallRequest=null;}tokenSource.Dispose();}
   }
   object ExecuteLocal(string action,Dictionary<string,object> payload){
+   if(StartupPreferenceAction(action)){lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");}return StartupOptions(action,payload);}
    if(action=="openExternal"){string url=ModernHostPolicy.ResolveExternal(payload);lock(gate){if(disposed)throw new ObjectDisposedException("ModernController");}if(test)throw new InvalidOperationException("测试模式禁止打开外部页面。");Links.Open(url);return new{opened=true};}
    if(new[]{"frozenConfigurationRead","frozenConfigurationSources","frozenConfigurationCancel","frozenConfigurationReadCancel"}.Contains(action))return FrozenRead(action,payload);
 
@@ -147,7 +148,7 @@ namespace PZ3D {
    case "playProfileImport":return playProfiles.Import(Text(p,"json"),Text(p,"stamp"),Flag(p,"confirmed"));
    case "playProfileRecover":return playProfiles.Recover(Text(p,"stamp"),Flag(p,"confirmed"));
    case "status":return Status();
-   case "loadingOptions":case "loadingSetEnabled":case "loadingUninstall":return StartupOptions(action,p);
+   case "launchOptions":case "launchOptionsSave":case "loadingOptions":case "loadingSetEnabled":case "loadingUninstall":return StartupOptions(action,p);
    case "gameProcesses":if(p.Count!=0)throw new Exception("进程预览不接受目标参数。");return clientClose.Preview(CurrentRuntimeEngine().Game);
    case "forceCloseGame":return ForceCloseGame(p);
    case "buddyPreview":return BuddyTakeover.Preview(engine,buddyEnvironment);

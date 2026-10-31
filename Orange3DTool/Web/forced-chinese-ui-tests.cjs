@@ -1,0 +1,28 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {setup,route,chromium}=require('./experience-ui-tests.cjs');
+const output=path.resolve(__dirname,'../../artifacts/forced-chinese-ui');fs.mkdirSync(output,{recursive:true});
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
+ const {page,errors}=await setup(browser);
+ await page.locator('#launch-options-toggle').click();
+ const checkbox=page.locator('#force-chinese-translation');await checkbox.waitFor();await page.waitForFunction(()=>!document.querySelector('#force-chinese-translation').disabled);
+ assert.equal(await checkbox.isChecked(),false);await checkbox.check();await page.waitForFunction(()=>sent.some(m=>m.action==='launchOptionsSave')&&!document.querySelector('#force-chinese-translation').disabled);
+ assert.equal(await checkbox.isChecked(),true);assert.deepEqual(await page.evaluate(()=>sent.find(m=>m.action==='launchOptionsSave').payload),{forceChineseTranslation:true});
+ assert.equal(await page.locator('#confirm[open]').count(),0);assert.match(await page.locator('[data-launch-options-panel]').innerText(),/服务器.*顺序/);
+ await route(page,'servers');await route(page,'home');if(!await page.locator('.launch-options').evaluate(el=>el.open))await page.locator('#launch-options-toggle').click();await page.waitForFunction(()=>!document.querySelector('#force-chinese-translation').disabled);assert.equal(await checkbox.isChecked(),true);
+ await page.evaluate(()=>fx.failure='launchOptionsSave');await checkbox.click();await page.waitForFunction(()=>!document.querySelector('#force-chinese-translation').disabled);assert.equal(await checkbox.isChecked(),true);assert.match(await page.locator('[data-launch-options-status]').innerText(),/失败/);assert.equal(await page.locator('#launch').isEnabled(),true);
+ await page.evaluate(()=>fx.failure='');await checkbox.uncheck();await page.waitForFunction(()=>!document.querySelector('#force-chinese-translation').disabled);assert.equal(await checkbox.isChecked(),false);
+ await page.screenshot({path:path.join(output,'desktop.png'),animations:'disabled'});await page.setViewportSize({width:733,height:650});
+ await page.locator('#launch-options-toggle').scrollIntoViewIfNeeded();if(!await page.locator('.launch-options').evaluate(el=>el.open))await page.locator('#launch-options-toggle').click();assert.equal(await page.locator('[data-launch-options-panel]').isVisible(),true);await page.screenshot({path:path.join(output,'narrow.png'),animations:'disabled'});
+ const bounds=await page.locator('[data-launch-options-panel]').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=733);assert.deepEqual(errors,[]);
+ await page.setViewportSize({width:520,height:700});await page.locator('#launch-target-kind').selectOption('save');
+ assert.equal(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'save launch group must stay in the single-column mobile layout');
+ assert.equal(await page.locator('.launch-button-group').evaluate(el=>Math.abs(el.getBoundingClientRect().left-document.querySelector('#launch-target-kind').getBoundingClientRect().left)<1),true,'mobile save launch button must align with the first column');
+ if(!await page.locator('.launch-options').evaluate(el=>el.open))await page.locator('#launch-options-toggle').click();await page.locator('#launch-options-toggle').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,'mobile-save.png'),animations:'disabled'});
+ console.log('PASS launch arrow, persisted checkbox, failure recovery, navigation, no confirmation, desktop/narrow/mobile DOM');await page.close();
+ const delayed=await setup(browser),pending=delayed.page;await pending.locator('#launch-options-toggle').click();await pending.waitForFunction(()=>!document.querySelector('#force-chinese-translation').disabled);
+ await pending.evaluate(()=>fx.hold='launchOptionsSave');await pending.locator('#force-chinese-translation').check();await pending.locator('#launch').click();
+ await pending.evaluate(()=>new Promise(requestAnimationFrame));await pending.evaluate(()=>new Promise(requestAnimationFrame));
+ assert.equal(await pending.evaluate(()=>sent.filter(m=>m.action==='launch').length),0,'launch must wait for the preference write');
+ await pending.evaluate(()=>{fx.hold='';held.splice(0).forEach(replyNative);});await pending.waitForFunction(()=>sent.some(m=>m.action==='launch')&&!orange.state.launchAttempt);
+ assert.equal(await pending.evaluate(()=>fx.forceChineseTranslation),true);assert.deepEqual(delayed.errors,[]);await pending.close();console.log('PASS launch waits only for the pending preference write');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1});

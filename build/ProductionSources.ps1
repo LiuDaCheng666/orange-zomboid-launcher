@@ -1,4 +1,4 @@
-﻿# Explicit release inputs: adding a C# file never silently expands production.
+# Explicit release inputs: adding a C# file never silently expands production.
 function Get-OzlProductionSources {
     param([Parameter(Mandatory=$true)][string]$ProjectDirectory)
     # This module is shipped inline in app.js by the explicit packaging allowlist.
@@ -36,6 +36,7 @@ function Get-OzlProductionSources {
         'FeedbackUpload.cs',
         'FeedbackController.cs',
         'ForceTakeover.cs',
+        'ForcedChineseTranslation.cs',
         'GameDiagnostics.cs',
         'GameLogModels.cs',
         'GameLogAnalyzer.cs',

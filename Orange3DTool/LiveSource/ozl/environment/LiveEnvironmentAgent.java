@@ -33,6 +33,7 @@ public final class LiveEnvironmentAgent {
   boolean matches(Object owner,List<String> roots,boolean client,Set<String> ids,boolean ready){return output!=null&&this.owner==owner&&this.client==client&&this.ready==ready&&serverIds.equals(ids)&&input.equals(roots);}
   void remember(Object owner,List<String> input,List<String> roots,boolean client,Set<String> ids,boolean ready){this.owner=owner;this.input=input;this.output=new ArrayList<String>(roots);this.client=client;this.ready=ready;this.serverIds=new HashSet<String>(ids);}
  }
+ public static void prepareChineseServer(Object filesystem){try{if(!environment.forceChinese||!ActiveSelectionHooks.client(filesystem.getClass().getClassLoader()))return;ClassLoader loader=filesystem.getClass().getClassLoader();Class<?> client=Class.forName("zombie.network.GameClient",false,loader);Object owner=client.getField("instance").get(null);Set<String> ids=new HashSet<String>();for(Object value:(List<?>)client.getField("serverMods").get(owner))ids.add(LiveEnvironmentManifest.id((String)value));environment.prepareChineseServer(filesystem,Class.forName("zombie.gameStates.ChooseGameInfo",false,loader),ids);}catch(Throwable failure){stop("server translation source refresh failed",failure);}}
  public static Object beginDiscovery(){DiscoveryScope previous=discoveryScope.get();discoveryScope.set(new DiscoveryScope());return previous;}
  public static void endDiscovery(Object previous){if(previous==null)discoveryScope.remove();else discoveryScope.set((DiscoveryScope)previous);}
  private static final class LoadScope {final Object previousDiscovery;final boolean client;final long started;int discoveryCalls;long discoveryNanos;LoadScope(boolean client,long started){this.client=client;this.started=started;this.previousDiscovery=beginDiscovery();}}
@@ -45,7 +46,7 @@ public final class LiveEnvironmentAgent {
   @Advice.OnMethodExit(onThrowable=Throwable.class) public static void exit(@Advice.Enter Object previous){LiveEnvironmentAgent.endClientLoad(previous);}
  }
  public static final class DependencyDiscovery {
-  @Advice.OnMethodEnter public static Object enter(){return LiveEnvironmentAgent.beginDiscovery();}
+  @Advice.OnMethodEnter public static Object enter(@Advice.This Object filesystem){LiveEnvironmentAgent.prepareChineseServer(filesystem);return LiveEnvironmentAgent.beginDiscovery();}
   @Advice.OnMethodExit(onThrowable=Throwable.class) public static void exit(@Advice.Enter Object previous){LiveEnvironmentAgent.endDiscovery(previous);}
  }
  public static final class Discovery {@Advice.OnMethodExit public static void exit(@Advice.This Object filesystem,@Advice.Argument(0)List<String> roots){LiveEnvironmentAgent.filter(roots,filesystem);}}
