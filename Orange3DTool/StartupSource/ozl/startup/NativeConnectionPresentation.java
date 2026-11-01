@@ -12,6 +12,11 @@ public final class NativeConnectionPresentation {
     private static final String[] PAGES={"bottomPanel","charCreationMain","charCreationProfession","sandOptions","onlineCoopScreen","soloScreen","creditsScreen","loadScreen","worldSelect","mapSpawnSelect","modSelect","bootstrapConnectPopup","serverConnectPopup","multiplayer","lastStandPlayerSelect","workshopSubmit","serverWorkshopItem","serverSettingsScreen","mainOptions","scoreboard","inviteFriends","modListDetail","seedLabel","threeD","demoMessagePanel"};
     private final ThreadLocal<Lease> current=new ThreadLocal<>();
     private WorkshopGeometry workshopGeometry;
+    private String workshopFailure="stage=unknown";
+    public String workshopFailure(){return workshopFailure;}
+    private Lease workshopUnavailable(String reason){workshopFailure=reason;return null;}
+    private static String describe(Object control){String result="class="+(control==null?"null":control.getClass().getName());if(control==null)return result;try{Object table=control.getClass().getMethod("getTable").invoke(control);Object value=raw(table,"Type");if(value==null)value=type("zombie.ui.UIManager",control.getClass().getClassLoader()).getMethod("tableget",type("se.krka.kahlua.vm.KahluaTable",control.getClass().getClassLoader()),Object.class).invoke(null,table,"Type");if(value instanceof String name&&name.matches("[A-Za-z0-9_]{1,64}"))result+=" type="+name;result+=" visible="+visible(control);}catch(Throwable unavailable){result+=" schema=unavailable";}return result;}
+    private static final class NativeControlMismatch extends IllegalStateException {final String detail;NativeControlMismatch(Object control){detail=describe(control);}}
     public static final class Lease {
         public final double statusBottom,cancelTop,workshopTop;
         final ClassLoader loader;final Object environment,mainTable,connectTable,main,connect,logo,background,arrowBG,arrowFG,queue;
@@ -33,7 +38,7 @@ public final class NativeConnectionPresentation {
     private static Set<Object> identities(){return Collections.newSetFromMap(new IdentityHashMap<>());}
     private static double number(Object table,String key)throws Exception{Object value=raw(table,key);if(!(value instanceof Number n)||!Double.isFinite(n.doubleValue()))throw new IllegalStateException("native geometry");return n.doubleValue();}
     private static List<?> children(Object element)throws Exception{Object list=element.getClass().getMethod("getControls").invoke(element);if(!(list instanceof ArrayList<?> children))throw new IllegalStateException("native controls");return children;}
-    private static void exactChildren(Object parent,Set<Object> allowed,boolean visibleOnly)throws Exception{for(Object child:children(parent))if((!visibleOnly||visible(child))&&!allowed.contains(child))throw new IllegalStateException("unknown native control");}
+    private static void exactChildren(Object parent,Set<Object> allowed,boolean visibleOnly)throws Exception{for(Object child:children(parent))if((!visibleOnly||visible(child))&&!allowed.contains(child))throw new NativeControlMismatch(child);}
     private static void namedType(ClassLoader loader,Object table,String expected)throws Exception{
         Class<?> kahlua=type("se.krka.kahlua.vm.KahluaTable",loader);
         Object actual=type("zombie.ui.UIManager",loader).getMethod("tableget",kahlua,Object.class).invoke(null,table,"Type");
@@ -134,27 +139,27 @@ public final class NativeConnectionPresentation {
     }catch(Throwable unavailable){return declineWorkshop();}}
     private Lease declineWorkshop(){restoreWorkshop();revoke();return null;}
     public boolean skipWorkshopTitle(Object element,String text,double x,double y){Lease lease=valid();try{return lease!=null&&lease.workshopScope&&element==lease.connect&&text!=null&&y==10&&x==number(lease.connectTable,"width")/2;}catch(Exception unavailable){return false;}}
-    private Lease resolveWorkshop(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean reflow){try{
-        if(!StartupRuntime.ownsWorkshop(loader,state.generation))return null;Class<?> font=type("zombie.ui.UIFont",loader),text=type("zombie.ui.TextManager",loader);text.getMethod("MeasureStringX",font,String.class);if(text.getField("instance").get(null)==null)return null;
-        if(!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",loader),"useUiFbo")))return null;
-        Object env=field(type("zombie.Lua.LuaManager",loader),"env"),mt=raw(raw(env,"MainScreen"),"instance"),main=element(mt);namedType(loader,mt,"MainScreen");if(!visible(main)||Boolean.TRUE.equals(raw(mt,"inGame")))return null;
-        Object wt=raw(mt,"serverWorkshopItem"),page=element(wt);namedType(loader,wt,"ServerWorkshopItemScreen");if(!visible(page)||raw(raw(env,"ServerWorkshopItemScreen"),"instance")!=wt)return null;
-        Set<Object> allowed=identities(),ma=identities(),hidden=identities();ma.add(page);
-        for(String name:new String[]{"label","listbox","installButton","disconnectButton"}){Object t=raw(wt,name),e=element(t);namedType(loader,t,name.equals("label")?"ISLabel":name.equals("listbox")?"WorkshopItemList":"ISButton");if(!visible(e))return null;allowed.add(e);if(!name.equals("listbox")&&!children(e).isEmpty())return null;}
-        exactChildren(page,allowed,false);
-        Object listTable=raw(wt,"listbox"),listElement=element(listTable),scrollTable=raw(listTable,"vscroll"),scroll=element(scrollTable);if(scroll==null||raw(listTable,"hscroll")!=null)return null;namedType(loader,scrollTable,"ISScrollBar");if(!children(scroll).isEmpty())return null;Set<Object> scrollAllowed=identities();scrollAllowed.add(scroll);exactChildren(listElement,scrollAllowed,false);
-        for(String name:CHROME){Object e=element(raw(mt,name));if(e!=null)ma.add(e);}
-        Object connection=element(raw(mt,"connectToServer"));if(connection==null||visible(connection)||raw(raw(mt,"connectToServer"),"failMessage")!=null||visible(element(raw(raw(mt,"connectToServer"),"googleAuthPopup"))))return null;ma.add(connection);hidden.add(connection);
-        for(String name:PAGES){if(name.equals("serverWorkshopItem"))continue;Object e=element(raw(mt,name));if(e!=null){if(visible(e))return null;ma.add(e);hidden.add(e);}}
-        exactChildren(main,ma,false);Object roots=type("zombie.ui.UIManager",loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(main))return null;for(Object root:list)if(root!=main&&visible(root))return null;
-        if(!Boolean.FALSE.equals(raw(raw(wt,"installButton"),"enable")))return null;
-        if(workshopGeometry!=null&&(workshopGeometry.page!=wt||workshopGeometry.environment!=env||!workshopGeometry.sameWidgets())){restoreWorkshop();return null;}
+    private Lease resolveWorkshop(ClassLoader loader,LoadingModel.Snapshot state,long frame,boolean reflow){String stage="owner";workshopFailure="stage=owner";try{
+        if(!StartupRuntime.ownsWorkshop(loader,state.generation))return workshopUnavailable("stage="+stage);Class<?> font=type("zombie.ui.UIFont",loader),text=type("zombie.ui.TextManager",loader);text.getMethod("MeasureStringX",font,String.class);if(text.getField("instance").get(null)==null)return workshopUnavailable("stage="+stage);
+        stage="fbo";if(!Boolean.FALSE.equals(field(type("zombie.ui.UIManager",loader),"useUiFbo")))return workshopUnavailable("stage=fbo");
+        stage="main-identity";Object env=field(type("zombie.Lua.LuaManager",loader),"env"),mt=raw(raw(env,"MainScreen"),"instance"),main=element(mt);namedType(loader,mt,"MainScreen");if(!visible(main)||Boolean.TRUE.equals(raw(mt,"inGame")))return workshopUnavailable("stage="+stage+" "+describe(main)+" inGame="+Boolean.TRUE.equals(raw(mt,"inGame")));
+        stage="workshop-identity";Object wt=raw(mt,"serverWorkshopItem"),page=element(wt);namedType(loader,wt,"ServerWorkshopItemScreen");if(!visible(page)||raw(raw(env,"ServerWorkshopItemScreen"),"instance")!=wt)return workshopUnavailable("stage="+stage+" "+describe(page)+" instanceMatch="+(raw(raw(env,"ServerWorkshopItemScreen"),"instance")==wt));
+        stage="workshop-children";Set<Object> allowed=identities(),ma=identities(),hidden=identities();ma.add(page);
+        for(String name:new String[]{"label","listbox","installButton","disconnectButton"}){stage="workshop-widget-"+name;Object t=raw(wt,name),e=element(t);namedType(loader,t,name.equals("label")?"ISLabel":name.equals("listbox")?"WorkshopItemList":"ISButton");if(!visible(e))return workshopUnavailable("stage="+stage);allowed.add(e);if(!name.equals("listbox")&&!children(e).isEmpty())return workshopUnavailable("stage="+stage);}
+        stage="workshop-children";exactChildren(page,allowed,false);
+        stage="list-children";Object listTable=raw(wt,"listbox"),listElement=element(listTable),scrollTable=raw(listTable,"vscroll"),scroll=element(scrollTable);if(scroll==null||raw(listTable,"hscroll")!=null)return workshopUnavailable("stage="+stage);namedType(loader,scrollTable,"ISScrollBar");if(!children(scroll).isEmpty())return workshopUnavailable("stage="+stage);Set<Object> scrollAllowed=identities();scrollAllowed.add(scroll);exactChildren(listElement,scrollAllowed,false);
+        stage="main-children";for(String name:CHROME){Object e=element(raw(mt,name));if(e!=null)ma.add(e);}
+        Object connection=element(raw(mt,"connectToServer"));if(connection==null||visible(connection)||raw(raw(mt,"connectToServer"),"failMessage")!=null||visible(element(raw(raw(mt,"connectToServer"),"googleAuthPopup"))))return workshopUnavailable("stage="+stage);ma.add(connection);hidden.add(connection);
+        for(String name:PAGES){if(name.equals("serverWorkshopItem"))continue;Object e=element(raw(mt,name));if(e!=null){if(visible(e))return workshopUnavailable("stage=main-pages field="+name+" "+describe(e));ma.add(e);hidden.add(e);}}
+        exactChildren(main,ma,false);stage="roots";Object roots=type("zombie.ui.UIManager",loader).getMethod("getUI").invoke(null);if(!(roots instanceof ArrayList<?> list)||!list.contains(main))return workshopUnavailable("stage="+stage);for(Object root:list)if(root!=main&&visible(root))return workshopUnavailable("stage=roots "+describe(root));
+        stage="install-state";if(!Boolean.FALSE.equals(raw(raw(wt,"installButton"),"enable")))return workshopUnavailable("stage="+stage);
+        stage="widget-identity";if(workshopGeometry!=null&&(workshopGeometry.page!=wt||workshopGeometry.environment!=env||!workshopGeometry.sameWidgets())){restoreWorkshop();return workshopUnavailable("stage="+stage);}
         if(workshopGeometry==null)workshopGeometry=new WorkshopGeometry(loader,env,wt);
-        if(reflow){if(!workshopGeometry.apply(number(mt,"height")))return null;}else if(!workshopGeometry.matches())return null;
-        Object logo=raw(mt,"logoTexture");if(logo==null)return null;
+        stage="geometry";if(reflow){if(!workshopGeometry.apply(number(mt,"height")))return workshopUnavailable("stage="+stage);}else if(!workshopGeometry.matches())return workshopUnavailable("stage="+stage);
+        stage="logo";Object logo=raw(mt,"logoTexture");if(logo==null)return workshopUnavailable("stage="+stage);
         double workshopTop=(number(wt,"y")+number(workshopGeometry.label,"y"))/number(mt,"height");
         return new Lease(loader,env,mt,wt,main,page,logo,null,null,null,null,identities(),ma,allowed,hidden,state,frame,false,0,0,workshopTop);
-    }catch(Throwable unavailable){return null;}}
+    }catch(Throwable unavailable){return workshopUnavailable("stage="+stage+" "+(unavailable instanceof NativeControlMismatch mismatch?mismatch.detail:"exception="+unavailable.getClass().getSimpleName()));}}
     /** CPU-only: retained through input, including between rendered frames. */
     public void restoreWorkshop(){WorkshopGeometry geometry=workshopGeometry;workshopGeometry=null;if(geometry!=null)geometry.restore();}
     private static final class WorkshopGeometry {

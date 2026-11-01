@@ -9,13 +9,19 @@ final class SafePaths {
     private SafePaths() {}
     static Path canonical(Path path,boolean required,boolean directory)throws IOException {
         if(path==null||!path.isAbsolute()||!path.normalize().equals(path))throw new IOException("noncanonical path");
+        BasicFileAttributes target=null;Path deepest=null;
         for(Path current=path;current!=null;current=current.getParent()){
-            if(Files.exists(current,LinkOption.NOFOLLOW_LINKS)){
-                BasicFileAttributes attrs=Files.readAttributes(current,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);
-                if(attrs.isSymbolicLink()||attrs.isOther()||!current.toRealPath().equals(current))throw new IOException("linked path");
-            }
+            BasicFileAttributes attrs;
+            try{attrs=Files.readAttributes(current,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);}
+            catch(NoSuchFileException missing){continue;}
+            if(attrs.isSymbolicLink()||attrs.isOther())throw new IOException("linked path");
+            if(deepest==null)deepest=current;
+            if(current.equals(path))target=attrs;
         }
-        if(required&&!(directory?Files.isDirectory(path,LinkOption.NOFOLLOW_LINKS):Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS)))throw new IOException("missing required path");
+        // Resolving the deepest existing path resolves every existing ancestor too.
+        // Keep no cached trust: each call still inspects every ancestor without following links.
+        if(deepest!=null&&!deepest.toRealPath().equals(deepest))throw new IOException("linked path");
+        if(required&&(target==null||!(directory?target.isDirectory():target.isRegularFile())))throw new IOException("missing required path");
         return path;
     }
     static void tree(Path root)throws IOException {

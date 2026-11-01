@@ -26,7 +26,12 @@ public final class StartupRuntime {
     private static NativeConnectionPresentation.BootMenu bootHandoff;
     private static boolean bootAwaitedTick;
     private record BootTick(NativeConnectionPresentation.BootMenu pending) {}
-    private static void rejectWorkshop(){presentation.restoreWorkshop();LoadingModel m=model;if(m!=null&&m.snapshot().downloadPage){m.download(false,"","",-1,-1,-1,-1);m.nativeInteraction(true);if(download!=null)download.valid=false;}}
+    /** A native UI frame may be incomplete while the same game download remains valid. */
+    private static void yieldWorkshop(){presentation.restoreWorkshop();LoadingModel m=model;if(m!=null&&m.snapshot().downloadPage){m.download(false,"","",-1,-1,-1,-1);m.nativeInteraction(true);}}
+    private static void rejectWorkshop(){yieldWorkshop();WorkshopDownload current=download;if(current!=null&&current.owner==connectionOwner&&current.generation==generation())current.valid=false;}
+    private static long workshopDiagnosticGeneration=-1;
+    private static final java.util.HashSet<String> workshopDiagnosticKeys=new java.util.HashSet<>();
+    static synchronized void workshopDiagnostic(String kind,String reason){long operation=generation();if(operation!=workshopDiagnosticGeneration){workshopDiagnosticGeneration=operation;workshopDiagnosticKeys.clear();}if(workshopDiagnosticKeys.size()<12&&workshopDiagnosticKeys.add(kind))System.out.println("[OZL-WORKSHOP] "+kind+" "+reason);}
     private static final class WorkshopInteraction {final Object owner;final long generation;volatile boolean success;WorkshopInteraction(Object owner,long generation){this.owner=owner;this.generation=generation;}}
     private static final ServerQuery publicQuery=new ServerQuery((operation,result)->{LoadingModel m=model;if(m!=null)m.publicInfo(operation,result.name,result.map,result.players,result.maximum);});
     public static void begin(Session accepted){publicQuery.cancel();presentation.restoreWorkshop();presentation.clear();download=null;workshopInteraction=null;connectionOwner=null;bootHandoff=null;IssueSampler previous=issueSampler;if(previous!=null)previous.close();session=accepted;issueSampler=accepted==null?null:new IssueSampler(accepted::readIssue);model=new LoadingModel();issueFloor=0;}
@@ -157,10 +162,10 @@ public final class StartupRuntime {
         if(!label.isEmpty())m.nativeStatus(s.generation,label);
     }
     public static long commandBefore(){return generation();}
-    public static void commandAfter(Object owner,String command,long operation,Throwable error){if(error!=null){if(owner==connectionOwner)rejectWorkshop();return;}if("disconnect".equals(command)){handoff(false);return;}WorkshopDownload d=download;if(error==null&&"install".equals(command)&&d!=null&&d.valid&&d.owner==owner&&owner==connectionOwner&&d.generation==operation&&generation()==operation&&d.state("WorkshopUpdate"))d.installed=true;}
+    public static void commandAfter(Object owner,String command,long operation,Throwable error){if(error!=null){if(owner==connectionOwner&&generation()==operation)rejectWorkshop();return;}if("disconnect".equals(command)){handoff(false);return;}WorkshopDownload d=download;if(error==null&&"install".equals(command)&&d!=null&&d.valid&&d.owner==owner&&owner==connectionOwner&&d.generation==operation&&generation()==operation&&d.state("WorkshopUpdate")){d.installed=true;workshopDiagnostic("install","owner=matched state=WorkshopUpdate");}}
     public static void workshopEvent(Object flag,Object item,Object bytes,Object total){
         LoadingModel m=model;if(m==null||!(flag instanceof String kind))return;
-        switch(kind){case "Error" -> handoff(false);case "Required" -> {presentation.restoreWorkshop();download=new WorkshopDownload(connectionDispatch.get()==connectionOwner?connectionOwner:null,m.snapshot().generation,item);m.workshop(listSize(item),-1,-1);workshopInteraction=new WorkshopInteraction(connectionOwner,m.snapshot().generation);presentation.clear();m.nativeInteraction(true);}
+        switch(kind){case "Error" -> handoff(false);case "Required" -> {presentation.restoreWorkshop();download=new WorkshopDownload(connectionDispatch.get()==connectionOwner?connectionOwner:null,m.snapshot().generation,item);workshopDiagnostic("required","ownerBound="+(download.owner!=null)+" valid="+download.valid+" count="+listSize(item));m.workshop(listSize(item),-1,-1);workshopInteraction=new WorkshopInteraction(connectionOwner,m.snapshot().generation);presentation.clear();m.nativeInteraction(true);}
             case "Details" -> {WorkshopDownload d=download;if(d!=null&&d.owner==connectionDispatch.get()&&d.owner==connectionOwner&&d.generation==generation())d.details(item);}
             case "Progress" -> {WorkshopDownload d=download;if(d!=null&&d.owner==connectionDispatch.get()&&d.owner==connectionOwner&&d.generation==generation())d.progress(item,bytes,total,System.nanoTime());}
             case "Success" -> {WorkshopInteraction interaction=workshopInteraction;if(interaction!=null&&interaction.owner!=null&&interaction.owner==connectionOwner&&interaction.owner==connectionDispatch.get()&&interaction.generation==m.snapshot().generation){Object state=read(connectionOwner.getClass(),connectionOwner,"state");if(state instanceof Enum<?> actual&&actual.name().equals("WorkshopUpdate")){interaction.success=true;download=null;m.download(false,"","",-1,-1,-1,-1);presentation.restoreWorkshop();m.nativeInteraction(true);m.serverStage("CheckMods",-1,-1);}}}default -> {}}
@@ -216,9 +221,9 @@ public final class StartupRuntime {
         WorkshopInteraction interaction=workshopInteraction;
         if(interaction!=null&&interaction.success&&interaction.owner==connectionOwner&&interaction.generation==s.generation&&scope.equals("MENU")&&presentation.resolve(state.getClass().getClassLoader(),s,0,false)!=null){model.nativeInteraction(false);workshopInteraction=null;s=snapshot();}
         if(!s.active)return;
-        try{ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use)){rejectWorkshop();return;}
+        try{ClassLoader loader=state.getClass().getClassLoader();Object use=read(gameType("zombie.ui.UIManager",loader),null,"useUiFbo");if(!Boolean.FALSE.equals(use)){if(s.downloadPage)workshopDiagnostic("unavailable","stage=fbo enabled="+use);yieldWorkshop();return;}
             NativeConnectionPresentation.Lease lease=presentation.resolve(loader,s,cpu[0],scope.equals("QUEUE"));
-            if(lease==null){if(s.downloadPage)rejectWorkshop();return;}
+            if(lease==null){if(s.downloadPage){workshopDiagnostic("unavailable",presentation.workshopFailure());yieldWorkshop();}return;}
             if(QueuedBackdrop.enqueue(loader,new QueuedBackdrop.Ticket(s,scope,lease))){cpu[1]=1;presentation.accept(lease);}else rejectWorkshop();
         }
         catch(Throwable error){failed(error);}
