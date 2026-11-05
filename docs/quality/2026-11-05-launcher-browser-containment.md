@@ -1,5 +1,7 @@
 # 按公开 NIKKE 攻击链补充浏览器约束
 
+本文件记录发布前实现与诊断验证；之后完成的最终候选操作验收及 1.2.52 正式发布见 [发行记录](../releases/2026-11-05-1.2.52-security.md)。
+
 2026-11-05，实际工作树 `C:/Users/MC233/.codex/worktrees/velopack-updates/OrangeLauncher`，HEAD `44d1b0978c102e2d30e20b11b0f89d43939918bb`。用户要求继续处理 DLSS 之外的同类风险。本次没有安装、发布、操作真实游戏、修改 Windows 防护或读取用户凭据。
 
 ## 阅读依据

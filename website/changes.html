@@ -35,6 +35,23 @@
 <section class="change-entry">
 <div class="change-version">
 <span class="pill">当前稳定版</span>
+<h2>1.2.52</h2>
+<p class="muted"><time datetime="2026-11-05">2026 年 11 月 05 日</time></p>
+</div>
+<div class="change-copy">
+<ul>
+<li>收紧启动器网页资源加载范围，仅提供经过认证的界面文件，阻止额外脚本和伪装文件通过网页入口加载。</li>
+<li>界面文件校验后固定在内存中，避免运行期间磁盘替换改变已加载内容；保留原有更新签名与完整性验证。</li>
+<li>限制子页面、后台脚本、表单外发和浏览器下载，关闭浏览器密码自动保存与自动填充。</li>
+<li>删除实验 DLSS 的下载与启用功能；存在旧版部署时，仍可在设置中确认恢复原文件。</li>
+<li>修复内存设置保存成功后仍残留“外部配置已变化”警告的问题，保留真实保存失败和外部修改提示。</li>
+</ul>
+<p><a href="/#download">前往当前版本下载区 →</a></p>
+</div>
+</section>
+<section class="change-entry">
+<div class="change-version">
+<span class="pill">历史版本</span>
 <h2>1.2.51</h2>
 <p class="muted"><time datetime="2026-11-01">2026 年 11 月 01 日</time></p>
 </div>
