@@ -7,6 +7,15 @@ namespace PZ3D {
  static class ModernHostPolicy {
   static readonly HashSet<string> Actions=new HashSet<string>{"launchConfigurations","launchConfigurationSelect","configurationTasks","configurationCancel","launchPreflight","status","componentsAction","memoryGet","memorySave","settingsGet","settingsSave","shadersGet","shaderSelect","importShader","maintenance","launch","chooseGame","cancel","help","theme","logs","reticleGet","reticleSave","open","openExternal","openOfficial","dlss","savesList","modCatalog","saveGet","saveSave","serverList","serverUpsert","serverDelete","serverQuery","profileLaunch","profileRecover","modCover","modDetail","javaList","javaSave","updatesGet","modProfiles","modProfileGet","modSort","saveThumb","serverThumb","taskGet","playtimeGet","serverFavorites","steamConnection","steamSubscriptions","steamSearch","steamDetails","serverHall","modAutoSort","modProfileSave","modProfileDelete","modProfileActivate","steamDownload","favoriteImport","playtimeSettings"};
   internal static bool IsWorkshopImage(string url){Uri uri;return url!=null&&url.Length<=8192&&!url.Any(char.IsControl)&&Uri.TryCreate(url,UriKind.Absolute,out uri)&&uri.Scheme=="https"&&uri.IsDefaultPort&&uri.UserInfo==""&&(uri.Host=="orangezl.com"||uri.Host=="images.steamusercontent.com"||uri.Host=="steamuserimages-a.akamaihd.net");}
+  // Only the five frozen UI entry files may be served; no directory mapping exists.
+  // A new same-origin file or a renamed native payload never gains browser privileges.
+  internal static bool ResourceAllowed(string url,string kind){
+   if(kind=="Image"&&IsWorkshopImage(url))return true;
+   Uri uri;if(url==null||url.Length>8192||url.Any(char.IsControl)||url.Contains("\\")||!Uri.TryCreate(url,UriKind.Absolute,out uri)||uri.Scheme!="https"||uri.Host!="orange.local"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.Fragment!="")return false;
+   int end=url.IndexOfAny(new[]{'?','#'});if((end<0?url:url.Substring(0,end)).Contains("%"))return false;
+   if(uri.Query!=""&&uri.AbsolutePath!="/index.html")return false;
+   switch(uri.AbsolutePath){case "/index.html":return kind=="Document";case "/app.js":return kind=="Script";case "/app.css":return kind=="Stylesheet";case "/home.png":case "/orange-app.ico":return kind=="Image";default:return false;}
+  }
   public static Dictionary<string,object> Validate(string source,string text){
    Uri uri;if(!Uri.TryCreate(source,UriKind.Absolute,out uri)||uri.Scheme!="https"||uri.Host!="orange.local"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.AbsolutePath!="/index.html")throw new Exception("拒绝非本地受信界面的请求。");
    if(text==null||text.Length>262144)throw new Exception("界面请求过大或为空。");
@@ -23,6 +32,7 @@ namespace PZ3D {
    if((string)action=="openContact")LauncherContact.Resolve((Dictionary<string,object>)payload);
    if((string)action=="openExternal")ResolveExternal((Dictionary<string,object>)payload);
    if((string)action=="maintenance")ValidateMaintenancePayload((Dictionary<string,object>)payload);
+   if((string)action=="dlss")ValidateDlssRecoveryPayload((Dictionary<string,object>)payload);
    if(PlayProfiles.Action((string)action))PlayProfiles.ValidatePayload((string)action,(Dictionary<string,object>)payload);
    if(CoreAction((string)action)) {
     var p=(Dictionary<string,object>)payload;object protocol,confirmed,drafts;
@@ -44,6 +54,7 @@ namespace PZ3D {
    if((string)action=="steamSearch")SteamLauncherServices.Normalize("search",(Dictionary<string,object>)payload);
    return request;
   }
+  internal static void ValidateDlssRecoveryPayload(Dictionary<string,object> payload){object operation,confirmed;if(payload==null||payload.Count!=2||!payload.TryGetValue("operation",out operation)||!(operation is string)||(string)operation!="disable"||!payload.TryGetValue("confirmed",out confirmed)||!(confirmed is bool)||!(bool)confirmed)throw new InvalidOperationException("实验 DLSS 下载与启用已移除；仅可确认恢复旧版安装。");}
   internal static string ResolveExternal(Dictionary<string,object> payload){object raw;Uri uri;if(payload==null||payload.Count!=1||!payload.TryGetValue("url",out raw)||!(raw is string)||((string)raw).Length>8192||((string)raw).Any(char.IsControl)||((string)raw).Contains("\\")||!Uri.TryCreate((string)raw,UriKind.Absolute,out uri)||(uri.Scheme!="http"&&uri.Scheme!="https")||string.IsNullOrEmpty(uri.Host))throw new InvalidOperationException("外部链接只接受完整的 HTTP 或 HTTPS 网页地址。");return uri.AbsoluteUri;}
   // Resolve only strictly validated envelopes. Unknown/recursive inner actions never
   // inherit read privileges from the outer configurationRequest name.

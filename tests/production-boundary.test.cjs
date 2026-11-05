@@ -80,16 +80,19 @@ test('dispatcher order, embedded Test class, workers and ordinary UI remain inta
  // Keep the original isolation checks while freezing ordinary UI against the
  // reviewed approved commit; later Engine behavior has its own focused tests.
  assert.equal(program.slice(program.indexOf(' static class Links'),program.indexOf(' sealed class Engine')),baseline.slice(baseline.indexOf(' static class Links'),baseline.indexOf(' sealed class Engine')));
- assert.equal(program.slice(program.indexOf(' sealed partial class MainForm'),program.lastIndexOf('\n}')).trimEnd(),approvedProgram.slice(approvedProgram.indexOf(' sealed partial class MainForm'),approvedProgram.lastIndexOf('\n}')).trimEnd());
+ // DLSS page retirement is intentional and covered by native recovery/DOM tests;
+ // keep the rest of the previously approved ordinary UI byte-for-byte frozen.
+ const ordinaryUi=s=>s.slice(s.indexOf(' sealed partial class MainForm'),s.lastIndexOf('\n}')).trimEnd().replace(/^   var dlss=Page\(tabs,[^\r\n]*\r?\n/m,'');
+ assert.equal(ordinaryUi(program),ordinaryUi(approvedProgram));
  assert.match(diag,/Application.EnableVisualStyles\(\); Application.SetCompatibleTextRenderingDefault\(false\);/);
  assert.match(diag,/Program.PreviewMode=true/);
  for(const s of [diag,self]){assert.match(s,/#if OZL_DIAGNOSTICS/);assert.match(s,/#endif/);}
  assert.match(program,/#if OZL_PRODUCTION && OZL_DIAGNOSTICS\s+#error Production and diagnostic symbols are mutually exclusive/);
 });
-test('all eleven diagnostic flags are rejected before UI and remain available in diagnostics',()=>{
+test('all diagnostic flags are rejected before UI; retired DLSS tools are unavailable in diagnostics too',()=>{
  const p=read('Orange3DTool/Program.cs'),d=read('Orange3DTool/DiagnosticProgram.cs');
  const flags=['--buddy-crash','--buddy-steam-crash','--check-workshop','--subscribe-workshop','--verify-bundle','--verify-cache','--prepare-dlss','--fetch-workshop','--self-test','--preview','--preview-help'];
- for(const f of flags){assert.ok(p.includes('"'+f+'"'));assert.ok(d.includes('"'+f+'"'));}
+ for(const f of flags){assert.ok(p.includes('"'+f+'"'));if(['--verify-cache','--prepare-dlss'].includes(f))assert.ok(!d.includes('"'+f+'"'));else assert.ok(d.includes('"'+f+'"'));}
  assert.ok(p.indexOf('return 2;')<p.indexOf('Application.EnableVisualStyles()'));
  assert.match(p,/args.Any\(arg=>diagnosticFlags.Contains\(arg\)\)/);
 });

@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 namespace PZ3D {
  static class ModernAssets {
@@ -13,6 +14,21 @@ namespace PZ3D {
   }
   static byte[] Resource(string name){using(var source=typeof(ModernAssets).Assembly.GetManifestResourceStream(name)){if(source==null)throw new Exception("缺少内置界面资源："+name);using(var memory=new MemoryStream()){source.CopyTo(memory);return memory.ToArray();}}}
   static string Hash(byte[] bytes){using(var sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","");}
+  // Freeze only the browser's five entry files. Native DLLs and added files are never exposed.
+  internal static Dictionary<string,byte[]> BrowserFiles(string root){
+   List<CoreFile> authenticated=null;string installed=Path.GetDirectoryName(Path.GetFullPath(root));
+#if OZL_VELOPACK
+   if(DistributionPaths.Enabled)authenticated=DistributionBootstrap.Read(installed,CoreUpdateTrust.PublicKeyXml);
+#endif
+   if(authenticated==null&&typeof(ModernAssets).Assembly.GetManifestResourceInfo("Launcher.UpdatePublicKey.xml")!=null)authenticated=CoreDeployment.ReadAuthenticated(installed,CoreUpdateTrust.PublicKeyXml).files;
+   var result=new Dictionary<string,byte[]>(StringComparer.Ordinal);
+   foreach(string name in new[]{"index.html","app.js","app.css","home.png","orange-app.ico"}){
+    string path=EntryTarget(root,name);if(!File.Exists(path)||new FileInfo(path).Length>67108864)throw new InvalidDataException("界面文件缺失或过大："+name);
+    byte[] bytes=File.ReadAllBytes(path);
+    if(authenticated!=null){var expected=authenticated.SingleOrDefault(f=>f.path=="Web/"+name);if(expected==null||expected.length!=bytes.Length||!string.Equals(expected.sha256,Hash(bytes),StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("界面文件校验失败："+name);}
+    result.Add("/"+name,bytes);
+   }return result;
+  }
   static void WriteOwned(string path,byte[] bytes){LauncherMaintenance.NoReparse(path);Directory.CreateDirectory(Path.GetDirectoryName(path));if(File.Exists(path)&&File.ReadAllBytes(path).SequenceEqual(bytes))return;string temp=path+".extract-"+Guid.NewGuid().ToString("N");try{File.WriteAllBytes(temp,bytes);LauncherMaintenance.NoReparse(path);if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);}finally{if(File.Exists(temp))File.Delete(temp);}}
   public static string Prepare(){
 #if OZL_VELOPACK

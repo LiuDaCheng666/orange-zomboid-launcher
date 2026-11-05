@@ -18,7 +18,6 @@ function Get-OzlProductionSources {
         'BundledAssets.cs',
         'ChinesePatch.cs',
         'ComponentBatch.cs',
-        'ComponentCache.cs',
         'ComponentEvidence.cs',
         'ComponentHelp.cs',
         'ComponentPage.cs',
