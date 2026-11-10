@@ -77,7 +77,18 @@ public final class StartupRuntime {
     private static Object read(Class<?> type,Object instance,String name){try{Field f=type.getDeclaredField(name);if(!f.canAccess(instance))f.setAccessible(true);return f.get(instance);}catch(ReflectiveOperationException|RuntimeException unavailable){return null;}}
     private static boolean flag(Class<?> type,String name){return Boolean.TRUE.equals(read(type,null,name));}
     private static int number(Class<?> type,Object instance,String name){Object value=read(type,instance,name);return value instanceof Integer count?count:-1;}
-    private static String string(Class<?> type,String name){Object value=read(type,null,name);return value instanceof String text?text:"";}
+    private static String string(Class<?> type,String name){
+        if(name.equals("gameMode")){
+            try{
+                Field field=type.getDeclaredField(name);
+                if(!java.lang.reflect.Modifier.isStatic(field.getModifiers())&&field.getType().getName().equals("zombie.core.GameMode")){
+                    Object value=read(type,type.getMethod("getInstance").invoke(null),name);
+                    return value==null?"":value.toString();
+                }
+            }catch(ReflectiveOperationException|RuntimeException unavailable){return "";}
+        }
+        Object value=read(type,null,name);return value instanceof String text?text:"";
+    }
     private static int listSize(Object value){return value instanceof ArrayList<?> list?list.size():-1;}
     private static Class<?> gameType(String name,ClassLoader loader)throws ClassNotFoundException{return Class.forName(name,false,loader);}
     public static void worldBegin(Object state){

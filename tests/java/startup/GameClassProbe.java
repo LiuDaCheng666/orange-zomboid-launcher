@@ -1,6 +1,6 @@
 package ozl.startup.tests;
 import ozl.startup.StartupRuntime;
-/** Loads and verifies actual 42.21 classes without initializing them, so this
+/** Loads and verifies supported game classes without initializing them, so this
  * check cannot create a game window or start Steam. */
 public final class GameClassProbe {
     static Class<?> type(String name)throws Exception{return Class.forName(name,false,ClassLoader.getSystemClassLoader());}
@@ -43,7 +43,12 @@ public final class GameClassProbe {
         element.getMethod("DrawTextureScaledAspect3",texture,double.class,double.class,double.class,double.class,double.class,double.class,double.class,double.class);
         type("zombie.ui.LoadingQueueUI").getDeclaredMethod("render");if(type("zombie.gameStates.LoadingQueueState").getDeclaredField("ui").getType()!=type("zombie.ui.LoadingQueueUI"))throw new AssertionError("Native queue identity changed");methods("zombie.core.Core","EndFrameUI");
         fields("zombie.GameWindow",boolean.class,"serverDisconnected");fields("zombie.gameStates.GameLoadingState",boolean.class,"worldVersionError","unexpectedError","playerWrongIP","done","convertingWorld");fields("zombie.gameStates.GameLoadingState",int.class,"convertingFileCount","convertingFileMax");fields("zombie.gameStates.GameLoadingState",String.class,"gameLoadingString");
-        fields("zombie.network.GameClient",boolean.class,"client");fields("zombie.network.GameClient",String.class,"gameMap");fields("zombie.network.GameClient",java.util.ArrayList.class,"serverMods");fields("zombie.core.Core",String.class,"gameSaveWorld","gameMode","gameMap");fields("zombie.gameStates.LoadingQueueState",boolean.class,"cancel","done");
+        fields("zombie.network.GameClient",boolean.class,"client");fields("zombie.network.GameClient",String.class,"gameMap");fields("zombie.network.GameClient",java.util.ArrayList.class,"serverMods");fields("zombie.core.Core",String.class,"gameSaveWorld","gameMap");fields("zombie.gameStates.LoadingQueueState",boolean.class,"cancel","done");
+        Class<?> core=type("zombie.core.Core");java.lang.reflect.Field gameMode=core.getDeclaredField("gameMode");
+        boolean legacyMode=gameMode.getType()==String.class&&java.lang.reflect.Modifier.isStatic(gameMode.getModifiers());
+        boolean currentMode=gameMode.getType().getName().equals("zombie.core.GameMode")&&!java.lang.reflect.Modifier.isStatic(gameMode.getModifiers());
+        if(!legacyMode&&!currentMode)throw new AssertionError("Unsupported game mode observation API");
+        if(currentMode&&(core.getDeclaredMethod("getInstance").getReturnType()!=core||!java.lang.reflect.Modifier.isStatic(core.getDeclaredMethod("getInstance").getModifiers())||gameMode.getType().getDeclaredMethod("toString").getReturnType()!=String.class))throw new AssertionError("Changed current game mode instance API");
         fields("zombie.network.GameClient",String.class,"ip");fields("zombie.network.GameClient",int.class,"port");
         Class<?> reader=type("zombie.core.network.ByteBufferReader");type("zombie.gameStates.ConnectToServerState").getDeclaredMethod("receiveGameTime",reader);type("zombie.gameStates.ConnectToServerState").getDeclaredMethod("receiveServerOptions",reader);
         fields("zombie.GameTime",type("zombie.GameTime"),"instance");for(String method:new String[]{"getYear","getMonth","getDay","getHour","getMinutes"})if(type("zombie.GameTime").getMethod(method).getReturnType()!=int.class)throw new AssertionError("Changed game clock getter");if(type("zombie.GameTime").getMethod("getWorldAgeHours").getReturnType()!=double.class||type("zombie.network.ServerOptions").getMethod("getMaxPlayers").getReturnType()!=int.class)throw new AssertionError("Changed server time/options API");

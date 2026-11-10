@@ -8,7 +8,7 @@ namespace PZ3D {
  static class LauncherGameVersionTests {
   static void Check(bool value,string message){if(!value)throw new Exception("FAIL: "+message);Console.WriteLine("PASS: "+message);}
   static void Put(string file,string text){Directory.CreateDirectory(Path.GetDirectoryName(file));File.WriteAllText(file,text,new UTF8Encoding(false));}
-  public static int Main(){string root=Path.Combine(LauncherTestPaths.Root,"game-version-"+Guid.NewGuid().ToString("N"));try{
+  public static int Main(){LauncherRuntime.Initialize();string root=Path.Combine(LauncherTestPaths.Root,"game-version-"+Guid.NewGuid().ToString("N"));try{
    string game=Path.Combine(root,"steamapps/common/ProjectZomboid"),user=Path.Combine(root,"user"),data=Path.Combine(root,"data");
    Put(Path.Combine(game,"ProjectZomboid64.exe"),"never executed fixture");Put(Path.Combine(game,"ProjectZomboid64.json"),"{\"vmArgs\":[\"-Xmx2g\"]}");Put(Path.Combine(user,"mods/default.txt"),"VERSION = 1,\nmods\n{\n}\nmaps\n{\n}\n");
    byte[] core=(byte[])typeof(GameVersionProbeTests).GetMethod("Compile",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static).Invoke(null,new object[]{root,"new GameVersion(42,21,\".0\")"});
