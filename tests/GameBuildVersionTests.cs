@@ -1,0 +1,21 @@
+using System;using System.IO;using System.IO.Compression;using System.Diagnostics;using System.Text;using System.Linq;
+namespace PZ3D {static class GameBuildVersionTests {
+ static int checks;
+ static void Check(bool value,string message){checks++;if(!value)throw new Exception(message);}
+ static byte[] Compile(string root,string suffix,string getter){string source=Path.Combine(root,"src/zombie/core/Core.java"),output=Path.Combine(root,"classes");Directory.CreateDirectory(Path.GetDirectoryName(source));Directory.CreateDirectory(output);File.WriteAllText(source,"package zombie.core; public class Core { public static GameVersion gameVersion=new GameVersion(42,22,\""+suffix+"\"); public String noise(String x){return \"unrelated\"+x;} "+getter+" } class GameVersion {int major,minor;String suffix; GameVersion(int a,int b,String c){major=a;minor=b;suffix=c;}public String toString(){return major+\".\"+minor+suffix;} }",new UTF8Encoding(false));var start=new ProcessStartInfo("C:/Program Files/Microsoft/jdk-21.0.12.101-hotspot/bin/javac.exe","-encoding UTF-8 -d \""+output+"\" \""+source+"\""){UseShellExecute=false,CreateNoWindow=true,RedirectStandardError=true};using(var p=Process.Start(start)){string error=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception(error);}return File.ReadAllBytes(Path.Combine(output,"zombie/core/Core.class"));}
+ static void Jar(string game,byte[] bytes){Directory.CreateDirectory(game);string file=Path.Combine(game,"projectzomboid.jar");if(File.Exists(file))File.Delete(file);using(var zip=ZipFile.Open(file,ZipArchiveMode.Create))using(var entry=zip.CreateEntry("zombie/core/Core.class").Open())entry.Write(bytes,0,bytes.Length);}
+ static void Main(string[] args){LauncherRuntime.Initialize();try{
+  string root=Path.GetFullPath(args[0]),actual=args.Length>1?Path.GetFullPath(args[1]):null,game=Path.Combine(root,"game");Directory.CreateDirectory(root);
+  if(actual!=null)Check(new Version(args.Length>2?args[2]:"42.22.2").Equals(GameVersionProbe.Read(actual)),"actual installed version must include getGameAndBuildVersion suffix");
+  foreach(string patch in new[]{".1",".2",".300"}){byte[] bytes=Compile(root,"","public String getGameAndBuildVersion(){return gameVersion+\""+patch+"\";}");Jar(game,bytes);byte[] original=File.ReadAllBytes(Path.Combine(game,"projectzomboid.jar"));Check(new Version("42.22"+patch).Equals(GameVersionProbe.Read(game)),"append exact numeric build suffix "+patch);Check(original.SequenceEqual(File.ReadAllBytes(Path.Combine(game,"projectzomboid.jar"))),"probe remains read-only");}
+  Jar(game,Compile(root,".0","public String getGameAndBuildVersion(){return gameVersion.toString();}"));Check(new Version(42,22,0).Equals(GameVersionProbe.Read(game)),"existing constructor patch stays unchanged");
+  Jar(game,Compile(root,"","public String unrelated(){return gameVersion+\".99\";}"));Check(new Version(42,22).Equals(GameVersionProbe.Read(game)),"ignore unrelated version-looking concat");
+  Jar(game,Compile(root,"","public String getGameAndBuildVersion(){return \"prefix\"+gameVersion+\".2\";}"));Check(new Version(42,22).Equals(GameVersionProbe.Read(game)),"do not mistake arbitrary display prefixes for numeric version");
+  Jar(game,Compile(root,"","public String getGameAndBuildVersion(){return gameVersion+\".2-dev\";}"));Check(new Version(42,22).Equals(GameVersionProbe.Read(game)),"do not invent numeric versions from labels");
+  Jar(game,Compile(root,"beta","public String getGameAndBuildVersion(){return gameVersion+\".2\";}"));Check(new Version(42,22).Equals(GameVersionProbe.Read(game)),"do not turn a labeled constructor version into a numeric hotfix");
+  Jar(game,Compile(root,".1","public String getGameAndBuildVersion(){return gameVersion+\".2\";}"));Check(new Version(42,22,1,2).Equals(GameVersionProbe.Read(game)),"retain existing numeric constructor suffix before appending build component");
+  Check(GameVersionProbeTests.Main()==0,"legacy typed-version regressions");
+  Check(LauncherGameVersionTests.Main()==0,"launcher version status regressions");
+  Console.WriteLine("PASS "+checks+" full game build version assertions");
+ }catch(Exception error){Console.Error.WriteLine(error);Environment.Exit(1);}}
+}}
