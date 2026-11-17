@@ -45,6 +45,7 @@ function Get-OzlProductionSources {
         'GameDiscovery.cs',
         'GameFavorites.cs',
         'GameProcessGuard.cs',
+        'GameGraphicsPreference.cs',
         'GameStartupModels.cs',
         'GameStartupComponent.cs',
         'StartupOptionsController.cs',

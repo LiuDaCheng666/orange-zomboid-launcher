@@ -68,7 +68,7 @@ namespace PZ3D {
    var engine=GetEngine();bool running=Process.GetProcessesByName("ProjectZomboid64").Length>0||Process.GetProcessesByName("ProjectZomboid32").Length>0;
    string reason=LauncherLaunch.Reason(engine,busy,running);if(reason!="")throw new Exception(reason);
    if(Program.PreviewMode){Write("预览模式：未启动 Steam 或游戏。");return;}
-   engine.Guard();Process.Start(new ProcessStartInfo("steam://rungameid/108600"){UseShellExecute=true});Write("已向 Steam 发送启动请求。");
+   engine.Guard();GameGraphicsPreference.PrepareSteamGame(engine.Game);Process.Start(new ProcessStartInfo("steam://rungameid/108600"){UseShellExecute=true});Write("已向 Steam 发送启动请求。");
   }
  }
 }

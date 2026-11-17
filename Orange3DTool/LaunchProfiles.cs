@@ -159,7 +159,7 @@ namespace PZ3D {
      try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}
      if(!acquired)throw new Exception("另一个启动器正在准备游戏。");
      watch.Restart();Recover(e);Timed(timing,"session-recover",watch);Stage(e,new ProfileLaunchRequest{Kind="normal",StartupSessionId=sessionId,ValidateBeforeStage=validateBeforeStage,Timing=timing,Cancellation=cancellation});
-     watch.Restart();try{openSteam();}catch{Recover(e,true);throw;}finally{Timed(timing,"steam-submit",watch);}
+     watch.Restart();try{GameGraphicsPreference.PrepareSteamGame(e.Game);openSteam();}catch{Recover(e,true);throw;}finally{Timed(timing,"steam-submit",watch);}
      watch.Restart();
      var record=Load(e);record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));
      Timed(timing,"session-record",watch);watch.Restart();try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }
@@ -220,6 +220,10 @@ namespace PZ3D {
    }finally{if(client!=null)client.Dispose();}
   }
   internal static ProfileSessionRecord RecordStartedProcess(Engine e,Process process){var record=Load(e);record.Pid=process.Id;record.Birth=process.StartTime.ToUniversalTime().Ticks;record.State="launched";Atomic(Journal(e),Encoding.UTF8.GetBytes(Json.Serialize(record)));return record;}
+  internal static Process StartGameProcess(ProcessStartInfo start){
+   GameGraphicsPreference.PreferHighPerformance(start.FileName);
+   return Process.Start(start);
+  }
   public static GameLaunchOutcome Launch(Engine e,ProfileLaunchRequest r){
    if(e.TestMode)throw new Exception("测试模式禁止真实游戏启动。");
    var watch=Stopwatch.StartNew();string reason=r.Kind=="server"?ServerReason(e,false,e.RuntimeRunning(true)):LauncherLaunch.Reason(e,false,e.RuntimeRunning(true));Timed(r.Timing,"launch-check",watch);if(reason!="")throw new Exception(reason);
@@ -227,7 +231,7 @@ namespace PZ3D {
     try{acquired=mutex.WaitOne(0);}catch(AbandonedMutexException){acquired=true;}if(!acquired)throw new Exception("另一个启动器正在准备游戏。");
     watch.Restart();Recover(e);Timed(r.Timing,"session-recover",watch);Stage(e,r);
     Process game;
-    watch.Restart();try{r.Cancellation.ThrowIfCancellationRequested();var start=BuildStartInfo(e);game=Process.Start(start);}catch{Recover(e,true);throw;}finally{Timed(r.Timing,"process-submit",watch);}
+    watch.Restart();try{r.Cancellation.ThrowIfCancellationRequested();var start=BuildStartInfo(e);game=StartGameProcess(start);}catch{Recover(e,true);throw;}finally{Timed(r.Timing,"process-submit",watch);}
     watch.Restart();var record=RecordStartedProcess(e,game);game.Dispose();Timed(r.Timing,"session-record",watch);
     watch.Restart();try{using(var worker=ManagedBackgroundWorker.Start("--session-watch",Key(e),record.Nonce)){} }
     catch{return new GameLaunchOutcome{message="游戏已启动，但退出监控未启动；请保留启动器，退出后刷新状态恢复配置。",stage="游戏启动请求已发送",warning="启动监控未能启动，请在退出游戏后打开“修复”处理启动状态。"};}
