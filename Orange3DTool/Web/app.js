@@ -160,31 +160,99 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
 function localDate(value){const date=new Date(value);return Number.isFinite(date.getTime())?date.toLocaleString('zh-CN',{hour12:false}):String(value||'未查询');}
 function applyRichDescription(root){root.querySelectorAll('[data-rich-size]').forEach(el=>{const n=Number(el.dataset.richSize);if(n>=0.75&&n<=1.8)el.style.fontSize='max(12px, '+n+'em)';if(/^rgb\(\d{1,3},\d{1,3},\d{1,3}\)$/.test(el.dataset.richColor||''))el.style.color=el.dataset.richColor;});}
 function richDescription(value,maximum=65536){let color='',size='1',result='';const pieces=String(value||'').slice(0,maximum).split(/(<[^>]{0,160}>)/g);for(const p of pieces){let m;if(/^<(?:LINE|BR)>$/i.test(p)){result+='<br>';continue;}if((m=p.match(/^<RGB:\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*>$/i))){const values=m.slice(1).map(Number);if(values.every(v=>Number.isFinite(v)&&v>=0&&v<=1))color='rgb('+values.map(v=>Math.round(v*255)).join(',')+')';continue;}if((m=p.match(/^<SIZE:\s*([0-9.]+)\s*>$/i))){const v=Number(m[1]);if(Number.isFinite(v)&&v>=0.75&&v<=1.8)size=String(v);continue;}if(/^<TEXT>$/i.test(p)){color='';size='1';continue;}if(p)result+='<span data-rich-color="'+color+'" data-rich-size="'+size+'">'+esc(p).replace(/\r?\n/g,'<br>')+'</span>';}return result;}
-function componentUpdate(c){const rows=state.updates?.items?.filter(r=>(c.manifests||[{item:c.item}]).some(m=>m.item===r.item))||[];if(!rows.length)return '尚未在线检查';return rows.some(r=>r.state==='available')?'工坊有更新':rows.every(r=>r.state==='latest')?'工坊版本一致':rows.some(r=>r.state==='missing')?'本地待下载':'在线版本未知';}
+let componentCheck=null;
+const newWorkshopDownloads=new Map();
+function componentUpdateOwner(){return JSON.stringify([modWorkspaceKey(),launchConfigurationUi.model.epoch]);}
+function componentUpdate(c){
+ const items=state.updates?.owner===componentUpdateOwner()?state.updates.items:[];
+ const row=items.find(item=>String(item.item)===String(c.item));
+ const date=new Date(row?.updatedUtc||'');
+ const updated=Number.isNaN(date.getTime())?'':date.toLocaleDateString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'});
+ const enabled=c.enabled??c.configured;
+ const frozen=launchConfigurationUi.model.selected?.kind==='frozen';
+ const details=frozen?['快照使用固定文件','','neutral']:
+  enabled&&row?.copyState==='behind'?['配置副本待应用',state.status?.running?'退出游戏后应用':'应用后下次启动生效','warning']:
+  enabled&&row?.copyState==='incompatible'?['配置副本待适配','工坊新版需要兼容适配','warning']:
+  enabled&&(c.needsReapply||c.bridgeRetirementNeeded)?['组件待应用','应用后下次启动生效','warning']:
+  enabled&&!c.installed&&c.usesWorkshop===false?['此配置使用本地来源','','neutral']:
+  row?.state==='available'?['新版待下载','在 Steam 等待下载完成','warning']:
+  row?.state==='missing'&&enabled?['新版待下载','在 Steam 等待下载完成','warning']:
+  row?.state==='latest'&&row.steamUpdated&&!c.installed&&enabled?['Steam 已更新','完全退出游戏后重开即可','positive']:
+  row?.state==='latest'&&row.copyState==='unknown'?['副本版本待核对','','neutral']:
+  row?.state==='latest'?['工坊版本一致','','neutral']:
+  row?.state==='missing'?['工坊可下载','','neutral']:
+  row||state.updates?.owner===componentUpdateOwner()?['在线版本未知','','neutral']:
+  ['正在检查工坊版本','','neutral'];
+ return {updated,label:details[0],hint:details[1],tone:details[2],apply:!frozen&&enabled&&(row?.copyState==='behind'||c.needsReapply||c.bridgeRetirementNeeded),incompatible:row?.copyState==='incompatible'};
+}
 const coreComponentIds=['buddy','viewpoint','chinese'];
 const knownComponentIds=['buddy','viewpoint',...Object.keys(items)];
 const illustratedInstallerModIds=['ZombieBuddy','Viewpoint','PZVoxelStudioViewpoint','LaoYuTranslationJava'];
 const componentModIds={buddy:'ZombieBuddy',viewpoint:'Viewpoint',base:'Viewpoint',models:'PZVoxelStudioViewpoint',shoot:'ShootToThrillMultiplayer',chinese:'LaoYuTranslationJava',shelves:'ProjectViewpointShelves',surface:'ViewpointSurface',door:'ViewpointDoor',roofs:'ViewpointTileFix',foraging:'ViewpointForaging',fishing:'FishingView',weather:'ViewpointTrueWeathers',trees:'ProjectViewpointNearVegetation'};
 const knownComponentDetails={buddy:['ZombieBuddy · Java 框架','为 Java 组件提供加载支持，可单独安装和管理。'],viewpoint:['Viewpoint · 第一／第三人称','在第一人称与第三人称之间切换，需要 ZombieBuddy。'],models:['3D 模型扩展','让物件拥有立体模型，需要 Viewpoint 视角组件。'],shoot:['第一人称枪械瞄准','Shoot to Thrill 多人版，使用作者原生控制与个人校准。'],chinese:['游戏内中文 · 老余汉化','游戏界面、菜单与 Java 模组汉化。'],shelves:['KK 动态货架','按货架实际库存显示立体物品。'],surface:['Surface Fix · 表面修复','修复墙面、窗户和天花板贴图。'],door:['Door Fix · 门修复','修复门两侧光照、贴图与开关外观。'],roofs:['Complete Roofs · 完整屋顶','补齐缺失屋顶、山墙与拐角，移除前请阅读作者说明。'],foraging:['Viewpoint 搜寻与追踪','3D 搜寻标记、踪迹和搜索范围。'],fishing:['Viewpoint 钓鱼','鱼线、浮漂、抛竿与水面效果。'],weather:['True Weathers · 天气与光照','可选视觉效果，按作者说明搭配光影。'],trees:['KK 动态季节树木','3D 树冠、风动、落叶与积雪。']};
 function independentCore(list){return list.some(c=>c.id==='buddy'||c.id==='viewpoint');}
-function componentCover(key,item,title){const id=componentModIds[key],local=id&&state.modCatalog?.mods?.find(row=>String(row.id||'').replace(/^\\+/,'')===id),cached=local?.coverToken&&coverCache.get(local.coverToken);if(local&&(local.cover||cached||local.coverToken&&!coverCache.has(local.coverToken)))return coverMarkup(local);const preview=state.updates?.items?.find(row=>String(row.item)===String(item)&&workshopImage(row.previewUrl))||state.quickPreviews?.find(row=>String(row.item)===String(item)&&workshopImage(row.previewUrl));return workshopCover({id:item,title,previewUrl:preview?.previewUrl},true);}
-async function loadQuickPreviews(){if(state.quickPreviews||state.quickPreviewsLoading)return;state.quickPreviewsLoading=true;try{const data=await request('updatesGet');state.quickPreviews=data.items||[];}catch{state.quickPreviews=[];}finally{state.quickPreviewsLoading=false;if(state.route==='components')render();}}
+function componentCover(key,item,title){const id=componentModIds[key],local=id&&state.modCatalog?.mods?.find(row=>String(row.id||'').replace(/^\\+/,'')===id),cached=local?.coverToken&&coverCache.get(local.coverToken);if(local&&(local.cover||cached||local.coverToken&&!coverCache.has(local.coverToken)))return coverMarkup(local);const preview=state.updates?.items?.find(row=>String(row.item)===String(item)&&workshopImage(row.previewUrl));return workshopCover({id:item,title,previewUrl:preview?.previewUrl},true);}
+function observeWorkshopDownloads(items,game){
+ const key='orange.componentWorkshop.'+game.toLowerCase();
+ let remembered={};try{const saved=JSON.parse(localStorage.getItem(key)||'{}');if(saved&&typeof saved==='object'&&!Array.isArray(saved))remembered=saved;}catch{}
+ const changed=newWorkshopDownloads.get(key)||new Map();
+ newWorkshopDownloads.set(key,changed);
+ const rows=items.map(row=>{
+  if(!/^\d+$/.test(row.local||'')||!/^\d+$/.test(row.item))return row;
+  if(row.state!=='latest'){if(row.state==='available'&&!remembered[row.item])remembered[row.item]=row.local;return row;}
+  if(remembered[row.item]&&remembered[row.item]!==row.local)changed.set(row.item,row.local);
+  remembered[row.item]=row.local;
+  return {...row,steamUpdated:changed.get(row.item)===row.local};
+ });
+ try{localStorage.setItem(key,JSON.stringify(remembered));}catch{}
+ return rows;
+}
+function checkComponentUpdates(force=false,replace=false){
+ const game=state.status?.gamePath,owner=componentUpdateOwner();
+ if(!game||state.status.configurationId&&launchConfigurationUi.model.selected?.id!==state.status.configurationId)return Promise.resolve();
+ if(!replace&&componentCheck?.owner===owner)return componentCheck.promise;
+ if(!force&&state.updates?.owner===owner&&Date.now()-state.updates.fetchedAt<60000)return Promise.resolve();
+ const check={owner};
+ componentCheck=check;
+ const button=$('[data-check-updates]');
+ if(state.route==='components'&&button){button.disabled=true;button.textContent='正在检查…';}
+ check.promise=(async()=>{
+  const matches=()=>componentCheck===check&&componentUpdateOwner()===owner;
+  try{
+   const data=await request('updatesGet');
+   if(matches()){
+    const items=observeWorkshopDownloads(data.items||[],game);
+    state.updates={...data,items,owner,fetchedAt:Date.now(),failed:!items.some(row=>row.state!=='unknown')};
+   }
+  }catch{
+   if(matches())state.updates={items:[],owner,fetchedAt:Date.now(),failed:true};
+  }finally{
+   if(componentCheck===check){componentCheck=null;if(state.route==='components')render();}
+  }
+ })();
+ return check.promise;
+}
 function componentCard(c){
  if(!knownComponentIds.includes(c.id))return '';
  if(knownComponentDetails[c.id])c={...c,title:knownComponentDetails[c.id][0],description:knownComponentDetails[c.id][1]};
- const support=c.id==='buddy'||c.id==='viewpoint',enabled=typeof c.enabled==='boolean'?c.enabled:!!c.configured,update=componentUpdate(c),needsReapply=c.needsReapply||c.bridgeRetirementNeeded,hasUpdate=update==='工坊有更新'||needsReapply;
+ const support=c.id==='buddy'||c.id==='viewpoint',enabled=typeof c.enabled==='boolean'?c.enabled:!!c.configured,update=componentUpdate(c),needsReapply=c.needsReapply||c.bridgeRetirementNeeded,hasUpdate=update.tone!=='neutral'||needsReapply;
  const operation=support?(enabled?'disable':'enable'):(enabled?'uninstall':'install'),label=enabled?'停用':'启用',pending=state.componentOperation?.owner===modWorkspaceKey()&&state.componentOperation.component===c.id?state.componentOperation.operation:'',canManage=support&&(c.canEnable||c.canDisable||c.canUninstall),canToggle=!support||(enabled?c.canDisable:c.canEnable);
  const toggle=`<button class="${enabled?'secondary':'primary'}" aria-label="${label} ${esc(c.title)}" data-component="${esc(c.id)}" data-operation="${operation}" ${pending||!canToggle?'disabled':''}>${pending===operation?(enabled?'停用中…':'启用中…'):label}</button>`;
  const missing=(c.missingDependencies||[]).map(row=>typeof row==='string'?row:row.name||row.id).filter(Boolean),dependency=enabled&&missing.length?'<p class="component-dependencies status-negative" data-component-dependencies>依赖未就绪：'+missing.map(esc).join('、')+'</p>':'';
  const uninstall=support?`<button class="danger" data-component="${esc(c.id)}" data-operation="uninstall" ${pending||c.canUninstall!==true?'disabled':''} title="${c.canUninstall===true?'只清理当前配置的安装和启用记录；保留工坊来源、其他配置和依赖模组选择。':'当前配置没有可卸载的内容。'}">${pending==='uninstall'?'卸载中…':'卸载'}</button>`:'';
  const sourceMissing=support&&enabled&&typeof c.installed==='boolean'&&((!c.installed&&c.downloaded===false)||!!c.warning),availability=sourceMissing?'<p class="component-dependencies status-negative" data-component-source-missing>组件文件不可用；可在“来源与更新”中重新获取。</p>':'';
- return `<article class="card component-card" data-card="${esc(c.id)}">${componentCover(c.id,c.item||items[c.id],c.title)}<div class="component-body"><div class="component-title"><h3>${esc(c.title)}</h3><span class="badge ${sourceMissing?'status-warning':enabled?'status-positive':'status-neutral'}">${sourceMissing?'已启用 · 文件缺失':enabled?'已启用':'未启用'}</span></div><p class="component-description">${esc(c.description)}</p>${availability}${dependency}<div class="actions component-actions">${toggle}${uninstall}</div><details><summary>${hasUpdate?'有更新 · ':''}来源与更新</summary><p class="component-version small">版本 ${esc(c.version||'未声明')} · ${esc(update)}</p><p class="small">${c.downloaded?'安装源已找到':c.downloaded===false?'安装源未找到':'安装源待读取'}</p>${c.warning?'<p class="notice small status-warning">'+esc(c.warning)+'</p>':''}<p class="small">需要 Java 授权时，请核对文件后允许。</p><div class="actions"><button data-component="${esc(c.id)}" data-operation="update" ${support&&!canManage?'disabled':''}>下载更新并应用</button>${button('原作者工坊 ↗','openOfficial',`data-item="${esc(c.item)}"`)}</div></details></div></article>`;
+ const metadata=`<p class="component-update-meta small">${esc(c.version?'版本 '+c.version:'版本未声明')}${update.updated?' · 工坊更新于 '+esc(update.updated):''}</p>`;
+ const notice=hasUpdate?`<p class="component-update-notice small" data-component-update><strong class="status-${update.tone}">${esc(update.label)}</strong>${update.hint?' <span>'+esc(update.hint)+'</span>':''}</p>`:'';
+ const apply=`<button data-component="${esc(c.id)}" data-operation="update" ${pending||support&&(!canManage||state.status?.running)||update.incompatible?'disabled':''}>${pending==='update'?'应用中…':'下载更新并应用'}</button>`;
+ return `<article class="card component-card" data-card="${esc(c.id)}">${componentCover(c.id,c.item||items[c.id],c.title)}<div class="component-body"><div class="component-title"><h3>${esc(c.title)}</h3><span class="badge ${sourceMissing?'status-warning':enabled?'status-positive':'status-neutral'}">${sourceMissing?'已启用 · 文件缺失':enabled?'已启用':'未启用'}</span></div><p class="component-description">${esc(c.description)}</p>${metadata}${notice}${availability}${dependency}<div class="actions component-actions">${toggle}${uninstall}${update.apply?apply:''}</div><details><summary>来源与更新</summary>${hasUpdate?'':`<p class="component-version small">${esc(update.label)}</p>`}<p class="small">${c.downloaded?'安装源已找到':c.downloaded===false?'安装源未找到':'安装源待读取'}</p>${c.warning?'<p class="notice small status-warning">'+esc(c.warning)+'</p>':''}<p class="small">需要 Java 授权时，请核对文件后允许。</p><div class="actions">${update.apply?'':apply}${button('原作者工坊 ↗','openOfficial',`data-item="${esc(c.item)}"`)}</div></details></div></article>`;
 }
 function components(){
- queueMicrotask(loadQuickPreviews);
+ queueMicrotask(()=>checkComponentUpdates());
  const list=state.status?.components;if(!list)return heading()+placeholder('status');
  const supports=['buddy','viewpoint'].map(id=>list.find(card=>card.id===id)).filter(Boolean),cards=['shelves','weather','models','chinese','trees'].map(id=>list.find(card=>card.id===id)).filter(Boolean);
- return heading('<button data-check-updates>检查更新（不下载）</button><button data-refresh>刷新状态</button>')+`<div data-quick-config-slot></div><section class="component-section support-section" data-support-section><h2>基础支持</h2><div class="grid support-components" data-support-components>${supports.map(componentCard).join('')}</div></section><section class="component-section" data-quick-section><h2>常用 3D</h2><p class="small quick-explainer">启用时自动准备缺少的文件，并同步到当前配置的模组清单。</p><div class="grid quick-components" data-quick-components>${cards.map(componentCard).join('')}</div></section>`;
+ const owner=componentUpdateOwner(),checking=componentCheck?.owner===owner,failed=state.updates?.owner===owner&&state.updates.failed;
+ const actions=`<button data-check-updates ${checking?'disabled':''}>${checking?'正在检查…':'检查更新（不下载）'}</button><button data-refresh>刷新状态</button>${!checking&&failed?'<span class="small status-warning" role="status">暂时无法确认工坊版本，可再次检查。</span>':''}`;
+ return heading(actions)+`<div data-quick-config-slot></div><section class="component-section support-section" data-support-section><h2>基础支持</h2><div class="grid support-components" data-support-components>${supports.map(componentCard).join('')}</div></section><section class="component-section" data-quick-section><h2>常用 3D</h2><p class="small quick-explainer">启用时自动准备缺少的文件，并同步到当前配置的模组清单。</p><div class="grid quick-components" data-quick-components>${cards.map(componentCard).join('')}</div></section>`;
 }
 function shootUsage(){return`<section class="drawer shoot-help" data-shoot-help><h3>作者枪械使用说明</h3><p>默认 O 开关第一人称，右键瞄准；Ctrl+V 切换腰射 / 精瞄。实际按键以游戏内绑定为准。</p><p>联机使用时，服务器需启用 Shoot to Thrill，客户端安装枪械组件并完成 Java 授权。</p><p class="small">旧本地瞄准补丁已退役。主动安装或更新枪械组件时清理旧补丁，保留作者枪械、Viewpoint、汉化和个人校准；游戏中已加载的旧 Java 会在你下次完全重启游戏后退出。</p></section>`;}
 function memory(){
@@ -234,9 +302,9 @@ if(b.id==='cancel'){await run('cancel');return;}
 if(b.hasAttribute('data-refresh')){refresh();return;}
 if(b.dataset.reload){const name=b.dataset.reload;if(state[name+'Dirty']&&!await confirm('重新读取配置？','这会放弃当前页面未保存的修改，并读取外部最新配置。'))return;state[name+'Dirty']=false;state[name+'Conflict']=false;state[name]=null;load(name,name==='modCatalog');return;}
 if(b.hasAttribute('data-addon-select')){const key=b.dataset.addonSelect;addonSelection.has(key)?addonSelection.delete(key):addonSelection.add(key);render();return;}
-if(b.hasAttribute('data-check-updates')){try{notify('正在查询工坊版本；不下载、不占用游戏身份…');state.updates=await request('updatesGet');notify('版本检查结束，结果已显示在组件卡片。');render();}catch(e){notify(e.message);}return;}
+if(b.hasAttribute('data-check-updates')){await checkComponentUpdates(true);return;}
 if(b.hasAttribute('data-core-install')||b.hasAttribute('data-addons-install')){const keys=b.hasAttribute('data-core-install')?['base','chinese']:[...addonSelection],batch=keys.map(component=>({payload:{component,operation:'install',confirmed:true},warning:state.status?.components.find(c=>c.id===component)?.warning||'',warningConfirmed:false}));state.buddyInstall=null;await installComponentsBatch(batch);return;}
-if(b.dataset.component){const component=b.dataset.component,operation=b.dataset.operation,support=['buddy','viewpoint'].includes(component);const card=state.status?.components.find(c=>c.id===component);const roofWarning=component==='base'&&operation==='uninstall'?state.status?.components.find(c=>c.id==='roofs'&&c.configured)?.warning||'':'';if(support&&operation==='uninstall'){const name=component==='buddy'?'Buddy':'Viewpoint';if(!await confirm('卸载 '+name+'？','将清理当前配置的安装内容和启用记录，并停用本项。\n保留工坊来源、其他配置、存档及其余模组选择。'+(card?.warning?'\n\n'+card.warning:'')))return;}else if(!support&&card?.warning&&!await confirm(operation==='uninstall'?'卸载前说明':'扩展兼容说明',card.warning))return;if(operation==='uninstall'&&component==='base'&&!await confirm('卸载基础视角组件？','基础视角、Buddy及依赖它的物件、枪械、汉化和扩展一并关闭；下载文件及个人配置保留。'+(roofWarning?'\n\n完整屋顶移除要求：'+roofWarning:'')))return;const payload={component,operation,confirmed:true};if(operation==='uninstall'&&(component==='roofs'&&card?.warning||component==='base'&&roofWarning))payload.roofRemovalAcknowledged=true;state.componentOperation={component,operation,owner:modWorkspaceKey()};render();let result;try{result=await run('componentsAction',payload);}finally{state.componentOperation=null;if(state.route==='components')render();}if(result&&['install','enable','update'].includes(operation)){await load('java');if(state.java?.jars?.some(j=>j.decision==null))openJavaReview();}return;}
+if(b.dataset.component){const component=b.dataset.component,operation=b.dataset.operation,support=['buddy','viewpoint'].includes(component);const card=state.status?.components.find(c=>c.id===component);const roofWarning=component==='base'&&operation==='uninstall'?state.status?.components.find(c=>c.id==='roofs'&&c.configured)?.warning||'':'';if(support&&operation==='uninstall'){const name=component==='buddy'?'Buddy':'Viewpoint';if(!await confirm('卸载 '+name+'？','将清理当前配置的安装内容和启用记录，并停用本项。\n保留工坊来源、其他配置、存档及其余模组选择。'+(card?.warning?'\n\n'+card.warning:'')))return;}else if(!support&&card?.warning&&!await confirm(operation==='uninstall'?'卸载前说明':'扩展兼容说明',card.warning))return;if(operation==='uninstall'&&component==='base'&&!await confirm('卸载基础视角组件？','基础视角、Buddy及依赖它的物件、枪械、汉化和扩展一并关闭；下载文件及个人配置保留。'+(roofWarning?'\n\n完整屋顶移除要求：'+roofWarning:'')))return;const payload={component,operation,confirmed:true};if(operation==='uninstall'&&(component==='roofs'&&card?.warning||component==='base'&&roofWarning))payload.roofRemovalAcknowledged=true;state.componentOperation={component,operation,owner:modWorkspaceKey()};render();let result;try{result=await run('componentsAction',payload);}finally{state.componentOperation=null;if(state.route==='components')render();}if(result&&!result.cancelled&&state.route==='components')void checkComponentUpdates(true,true);if(result&&['install','enable','update'].includes(operation)){await load('java');if(state.java?.jars?.some(j=>j.decision==null))openJavaReview();}return;}
 if(b.hasAttribute('data-shoot-usage')){state.shootHelp=!state.shootHelp;render();return;}
 if(b.dataset.memory){memoryEdit(b.dataset.memory);return;}
 if(b.hasAttribute('data-save-memory')){if(!state.memoryDirty||state.memoryConflict||!Number.isInteger(state.memoryEdit)||state.memoryEdit<1||state.memoryEdit>state.memory.maximumGiB)return;await persistEditor('memorySave',{value:state.memoryEdit,stamp:state.memory.stamp},async result=>{state.memoryDirty=false;state.memoryConflict=false;await load('memory');if(state.route==='memory'&&!state.errors.memory&&state.notice==='外部配置已变化，未保存编辑已保留。请重新读取后再保存。')notify(result.message||'内存设置已保存。');});return;}
@@ -1319,6 +1387,7 @@ const launchConfigurationUi = (() => {
     "javaComponentsReconcile",
     "javaComponentsInspectDownloaded",
     "componentsAction",
+    "updatesGet",
     "modSort",
     "steamDownload",
     "forceTakeoverPreview",

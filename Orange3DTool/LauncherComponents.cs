@@ -4,7 +4,7 @@ namespace PZ3D {
  sealed class LauncherComponents {
   internal sealed class Selection {public string Id,SourceRoot;public bool Enabled;}
   internal sealed class State {public int Version=1;public List<Selection> Selections=new List<Selection>();public List<string> Managed=new List<string>();public Dictionary<string,bool> Decisions=new Dictionary<string,bool>();}
-  internal sealed class Row {public string Id,Name,SourceRoot,Jar,Package,Sha256,ApprovalStamp,SourceEvidence,Warning="";public bool Enabled,Selected,installationComponent,requiresBuddy;public bool? Decision;public string[] Requires=new string[0],LoadAfter=new string[0],LoadBefore=new string[0],Conflicts=new string[0];}
+  internal sealed class Row {public string Id,Name,Version,SourceRoot,Jar,Package,Sha256,ApprovalStamp,SourceEvidence,Warning="";public bool Enabled,Selected,installationComponent,requiresBuddy;public bool? Decision;public string[] Requires=new string[0],LoadAfter=new string[0],LoadBefore=new string[0],Conflicts=new string[0];}
   internal sealed class Capture {internal Row[] Rows;internal string[] Managed,OrdinaryIds;internal byte[] Ordinary;internal string StateStamp;}
   sealed class OrdinaryState {public int Version=1;public bool Committed;public string TargetHash;public Dictionary<string,string> Sources=new Dictionary<string,string>(StringComparer.Ordinal);}
   readonly LauncherConfiguration context;readonly Version version;readonly string statePath;readonly Action<int,string> progress;

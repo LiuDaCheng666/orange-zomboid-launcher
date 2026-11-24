@@ -38,6 +38,7 @@ const launchConfigurationUi = (() => {
     "javaComponentsReconcile",
     "javaComponentsInspectDownloaded",
     "componentsAction",
+    "updatesGet",
     "modSort",
     "steamDownload",
     "forceTakeoverPreview",

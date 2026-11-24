@@ -4,12 +4,12 @@ const {setup,route,chromium}=require('./experience-ui-tests.cjs');
 const output=path.resolve(__dirname,'../../artifacts/component-configuration-20261029');
 fs.mkdirSync(output,{recursive:true});
 const cases=[];const test=(name,run)=>cases.push({name,run});
-async function fixture(page,count=23){await page.evaluate(count=>{
+async function fixture(page,count=23){await page.evaluate(({count,theme})=>{
  const owner='live:'+'a'.repeat(32),other='live:'+'b'.repeat(32),canvas=document.createElement('canvas');canvas.width=canvas.height=96;const context=canvas.getContext('2d');context.fillStyle='#304957';context.fillRect(0,0,96,96);context.fillStyle='#f2ac55';context.fillRect(22,20,52,56);context.fillStyle='#94cdad';context.fillRect(32,30,32,36);context.fillStyle='#142b39';context.font='bold 22px sans-serif';context.fillText('3D',33,56);const pixel=canvas.toDataURL('image/png');
  const known=[['buddy','ZombieBuddy','3619862853','ZombieBuddy · Java 框架'],['viewpoint','Viewpoint','3809306528','Viewpoint · 第一／第三人称'],['models','PZVoxelStudioViewpoint','3810302175','6244 3D Models · 物件模型'],['chinese','LaoYuTranslationJava','3810637496','游戏内中文'],['weather','ViewpointTrueWeathers','3813908957','True Weathers'],['shelves','ProjectViewpointShelves','3815931973','KK 动态货架'],['trees','ProjectViewpointNearVegetation','3813172420','KK 动态季节树木']];
  const rows=Array.from({length:count},(_,i)=>({token:'source-'+i,modId:known[i]?.[1]||'JavaExtra'+i,name:known[i]?.[3]||'额外 Java '+i,workshopId:known[i]?.[2]||String(4000000000+i),installationComponent:i===0,sourceKind:'workshop',sourceLabel:'工坊 '+i,jarState:'ready',packageName:'example.mod'+i,enabled:false,canEnable:true,canDisable:false,canUninstall:false,limitations:[],requires:[]}));
  fx.configurationMods={launcher:['base'],[owner]:['base'],[other]:['base']};
- window.componentFixture={owners:Object.fromEntries(['launcher',owner,other].map(id=>[id,structuredClone(rows)])),known,revision:1,calls:[],plans:{},hold:'',held:[],holdAction:false,heldActions:[],cancelAction:false,fail:''};
+ window.componentFixture={theme,owners:Object.fromEntries(['launcher',owner,other].map(id=>[id,structuredClone(rows)])),known,revision:1,calls:[],plans:{},hold:'',held:[],holdAction:false,heldActions:[],cancelAction:false,fail:''};
  fx.catalog=known.map(([key,id,workshopId,name])=>({id,name,workshopId,cover:pixel,componentManaged:key==='buddy',javaComponent:key!=='buddy',requiresBuddy:key!=='buddy',requires:key==='buddy'?[]:['ZombieBuddy']}));fx.catalog.push({id:'JavaExtra4',name:'普通 Buddy 扩展',source:'local',requiresBuddy:true,javaComponent:true,componentManaged:false,requires:['ZombieBuddy'],cover:pixel});orange.state.modCatalog=null;
  const original=chrome.webview.postMessage;
  chrome.webview.postMessage=m=>{const scoped=m.action==='configurationRequest',action=scoped?m.payload.action:m.action,payload=scoped?m.payload.payload:m.payload,id=scoped?m.payload.id:fx.configurationId,f=componentFixture,rows=f.owners[id]||[];
@@ -18,7 +18,7 @@ async function fixture(page,count=23){await page.evaluate(count=>{
   sent.push(m);f.calls.push({id,action,payload});
   const perform=()=>{if(f.fail===action)return reply(null,'测试读取失败');let data;
    const update=(token,enabled,remove=false)=>{const row=rows.find(r=>r.token===token);if(!row)throw Error('Fixture source missing');row.enabled=enabled;if(enabled){row.installed=true;row.registered=true;}if(remove){row.installed=false;row.registered=false;}row.canEnable=!enabled;row.canDisable=enabled;row.canUninstall=!remove;f.revision++;};
-   if(action==='status')data={gamePath:'Fixture Game',configurationId:id,configurationName:fx.configurations.find(r=>r.id===id)?.name,validGame:true,running:false,theme:'dark',configStamp:'components-'+f.revision,components:[...known.map(([key,modId,item,title])=>{const row=rows.find(r=>r.modId===modId),enabled=key==='buddy'?!!row?.enabled:(fx.configurationMods[id]||[]).includes(modId),support=key==='buddy'||key==='viewpoint',missing=enabled&&key!=='buddy'&&!rows[0].enabled?[{id:'ZombieBuddy',name:'Buddy'}]:[];return {id:key,title,description:'作者组件说明',item,downloaded:true,installed:support?!!row?.installed:undefined,enabled,configured:enabled,registered:support&&(!!row?.registered||enabled),missingDependencies:missing,canEnable:!enabled,canDisable:enabled,canUninstall:support?!!row?.installed||!!row?.registered||enabled:true,installationComponent:key==='buddy',optional:!support};}),...rows.filter(r=>r.enabled&&!known.some(k=>k[1]===r.modId)).map(r=>({id:r.modId,title:r.name,installationComponent:r.installationComponent,configured:true,downloaded:true,optional:true,item:''}))],task:{active:false}};
+   if(action==='status')data={gamePath:'Fixture Game',configurationId:id,configurationName:fx.configurations.find(r=>r.id===id)?.name,validGame:true,running:false,theme:f.theme,configStamp:'components-'+f.revision,components:[...known.map(([key,modId,item,title])=>{const row=rows.find(r=>r.modId===modId),enabled=key==='buddy'?!!row?.enabled:(fx.configurationMods[id]||[]).includes(modId),support=key==='buddy'||key==='viewpoint',missing=enabled&&key!=='buddy'&&!rows[0].enabled?[{id:'ZombieBuddy',name:'Buddy'}]:[];return {id:key,title,description:'作者组件说明',item,version:({buddy:'2.3.4',viewpoint:'0.1.7',shelves:'0.4.9',weather:'3.21.4',models:'1.0',chinese:'1.23.0',trees:'0.3.17'})[key],downloaded:true,installed:support?!!row?.installed:undefined,usesWorkshop:!row?.manualSource,enabled,configured:enabled,registered:support&&(!!row?.registered||enabled),missingDependencies:missing,canEnable:!enabled,canDisable:enabled,canUninstall:support?!!row?.installed||!!row?.registered||enabled:true,installationComponent:key==='buddy',optional:!support};}),...rows.filter(r=>r.enabled&&!known.some(k=>k[1]===r.modId)).map(r=>({id:r.modId,title:r.name,installationComponent:r.installationComponent,configured:true,downloaded:true,optional:true,item:''}))],task:{active:false}};
    else if(action==='javaComponentsList')data={owned:true,stamp:'inventory-'+f.revision,rows:structuredClone(rows),warnings:[]};
    else if(action==='javaComponentsRecovery')data={pending:false,supported:true};
    else if(action==='javaComponentsPreview'){const key='plan-'+f.revision;f.plans[key]={token:payload.token,operation:payload.operation};data={supported:true,previewStamp:key,message:'仅修改当前配置选择。',changes:[],warnings:[]};}
@@ -33,11 +33,81 @@ async function fixture(page,count=23){await page.evaluate(count=>{
   };
   if(action==='componentsAction'&&f.holdAction)f.heldActions.push(perform);else if(action==='status'&&f.hold===id)f.held.push(perform);else queueMicrotask(perform);
  };
-},count);await page.evaluate(()=>orange.launchConfigurationUi.reload());}
+},{count,theme:process.env.OZL_TEST_THEME||"dark"});await page.evaluate(()=>orange.launchConfigurationUi.reload());}
 async function settled(page){await page.evaluate(()=>Promise.all(document.getAnimations().filter(a=>Number.isFinite(a.effect?.getComputedTiming().endTime)).map(a=>a.finished.catch(()=>{}))));}
 async function save(page){await page.locator('[data-mod-save-activate]').click();await page.waitForFunction(()=>orange.state.modProfileSaveFeedback==='已保存并启用'&&!document.querySelector('[data-mod-save-activate]').disabled);}
 
 // The earlier combined-page/no-overlap requirements were superseded by the approved three-entry workflow.
+test('Workshop notices distinguish download, newly downloaded files and configuration copy',async page=>{
+ await page.evaluate(()=>{
+  componentFixture.owners.launcher[0].enabled=true;
+  componentFixture.owners.launcher[0].installed=true;
+  fx.configurationMods.launcher.push('ViewpointTrueWeathers','ProjectViewpointShelves');
+  fx.configurationMods.launcher.push('Viewpoint','PZVoxelStudioViewpoint');
+  componentFixture.owners.launcher.find(row=>row.modId==='PZVoxelStudioViewpoint').manualSource=true;
+  window.workshopNoticeFixture={revision:1,calls:0};
+  const native=chrome.webview.postMessage;
+  chrome.webview.postMessage=m=>{
+   const action=m.action==='configurationRequest'?m.payload.action:m.action;
+   if(action!=='updatesGet')return native(m);
+   const fixture=workshopNoticeFixture;fixture.calls++;
+   if(fixture.revision===4){queueMicrotask(()=>emitNative({id:m.id,ok:false,error:'测试工坊暂不可用'}));return;}
+   const row=(item,local,remote,extra={})=>({item,local,remote,state:local===remote?'latest':local?'available':'missing',updatedUtc:'2026-11-24T07:52:00Z',...extra});
+   const data={items:[row('3619862853','2','2',{copyState:fixture.revision<3?'behind':'current'}),row('3809306528','2','2'),row('3810302175',fixture.revision===1?'1':'2','2'),row('3815931973',fixture.revision<3?'10':'11','11'),row('3813908957',fixture.revision===1?'11':'12',fixture.revision===1?'11':'12')]};
+   const send=()=>emitNative({id:m.id,ok:true,data:m.action==='configurationRequest'?{configurationId:m.payload.id,data}:data});
+   if(fixture.hold&&m.payload.id==='launcher')fixture.delayed=send;else queueMicrotask(send);
+  };
+ });
+ await page.evaluate(()=>orange.launchConfigurationUi.reload());
+ await route(page,'components');
+ const card=id=>page.locator(`[data-card="${id}"]`);
+ await card('buddy').getByText('配置副本待应用',{exact:true}).waitFor();
+ assert.match(await card('shelves').innerText(),/新版待下载/);
+ assert.match(await card('weather').innerText(),/2026.*11.*24/);
+ assert.doesNotMatch(await card('weather').innerText(),/Steam 已更新/,'the first observation is a baseline');
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('orange.componentWorkshop.fixture game'))['3815931973']),'10','store the observed installed manifest while Steam downloads');
+ await page.evaluate(()=>workshopNoticeFixture.revision++);
+ await page.locator('[data-check-updates]').click();
+ await card('weather').getByText('Steam 已更新',{exact:true}).waitFor();
+ assert.equal(await card('models').locator('[data-component-update]').count(),0,'a local override must not promise a restart will load the Steam update');
+ await page.locator('[data-check-updates]').click();
+ await card('weather').getByText('Steam 已更新',{exact:true}).waitFor();
+ assert.equal(await page.evaluate(()=>componentFixture.calls.filter(x=>x.action==='componentsAction').length),0);
+ const theme=process.env.OZL_TEST_THEME||'dark';
+ assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('light')),theme==='light','capture matches requested theme');
+ await page.locator('main').evaluate(el=>el.scrollTop=0);
+ await settled(page);
+ await page.screenshot({path:path.join(output,`workshop-notices-${theme}.png`)});
+ await page.setViewportSize({width:940,height:850});
+ await page.screenshot({path:path.join(output,`workshop-notices-${theme}-940.png`)});
+ await page.locator('[data-quick-section] h2').scrollIntoViewIfNeeded();
+ await page.locator('main').evaluate(main=>{const h=main.querySelector('[data-quick-section] h2');main.scrollTop+=h.getBoundingClientRect().top-main.getBoundingClientRect().top-5;});
+ await settled(page);
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.screenshot({path:path.join(output,`workshop-notices-${theme}-common.png`)});
+ await page.evaluate(()=>workshopNoticeFixture.revision=3);
+ await card('buddy').getByRole('button',{name:'下载更新并应用',exact:true}).click();
+ await card('shelves').getByText('Steam 已更新',{exact:true}).waitFor();
+ assert.equal(await card('buddy').getByText('配置副本待应用',{exact:true}).count(),0);
+ assert.equal(await page.evaluate(()=>componentFixture.calls.filter(x=>x.action==='componentsAction'&&x.payload.operation==='update').length),1);
+ await page.evaluate(()=>workshopNoticeFixture.revision=4);
+ await page.locator('[data-check-updates]').click();
+ await page.getByText('暂时无法确认工坊版本，可再次检查。',{exact:true}).waitFor();
+ await page.evaluate(()=>workshopNoticeFixture.revision=5);
+ await page.locator('[data-check-updates]').click();
+ await page.waitForFunction(()=>!document.querySelector('[data-check-updates]').disabled&&!orange.state.updates.failed);
+ await page.evaluate(()=>{workshopNoticeFixture.hold=true;workshopNoticeFixture.revision=2;});
+ await page.locator('[data-check-updates]').click();
+ await page.waitForFunction(()=>typeof workshopNoticeFixture.delayed==='function');
+ const other='live:'+'b'.repeat(32);
+ await page.evaluate(()=>workshopNoticeFixture.revision=5);
+ await page.locator('#launch-configuration-select').selectOption(other);
+ await page.waitForFunction(id=>orange.state.status.configurationId===id&&orange.state.updates?.owner.includes(id)&&orange.state.updates.items.some(r=>r.copyState==='current'),other);
+ await page.evaluate(()=>workshopNoticeFixture.delayed());
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(resolve)));
+ assert.equal(await page.evaluate(()=>orange.state.updates.items.find(r=>r.item==='3619862853').copyState),'current','late update metadata must stay with its original configuration');
+});
+
 test('quick page offers two base support cards and exactly five common 3D projects on one page',async page=>{
  await fixture(page,500);await route(page,'components');await page.waitForSelector('[data-quick-components]');
  assert.deepEqual(await page.locator('[data-quick-components] .component-card').evaluateAll(rows=>rows.map(row=>row.dataset.card)),['shelves','weather','models','chinese','trees']);
@@ -118,16 +188,16 @@ test('uninstalled quick projects receive official previews without blocking enab
 });
 
 test('failed cover metadata leaves the shortcut usable with a placeholder',async page=>{
- await page.evaluate(()=>{fx.catalog=fx.catalog.filter(row=>row.id!=='ProjectViewpointShelves');orange.state.modCatalog=null;const original=chrome.webview.postMessage;chrome.webview.postMessage=m=>{const action=m.action==='configurationRequest'?m.payload.action:m.action;if(action!=='updatesGet')return original(m);emitNative({id:m.id,ok:false,error:'封面元数据暂不可用'});};});await route(page,'components');await page.waitForFunction(()=>Array.isArray(orange.state.quickPreviews)&&!orange.state.quickPreviewsLoading);
+ await page.evaluate(()=>{fx.catalog=fx.catalog.filter(row=>row.id!=='ProjectViewpointShelves');orange.state.modCatalog=null;const original=chrome.webview.postMessage;chrome.webview.postMessage=m=>{const action=m.action==='configurationRequest'?m.payload.action:m.action;if(action!=='updatesGet')return original(m);emitNative({id:m.id,ok:false,error:'封面元数据暂不可用'});};});await route(page,'components');await page.waitForFunction(()=>orange.state.updates?.failed===true);
  assert.equal(await page.locator('[data-card="shelves"] .cover img').count(),0);assert.equal(await page.locator('[data-component="shelves"][data-operation="install"]').isEnabled(),true);await page.locator('[data-component="shelves"][data-operation="install"]').click();await page.waitForFunction(()=>!orange.state.busy&&fx.configurationMods.launcher.includes('ProjectViewpointShelves'));assert.equal(await page.locator('[data-component="shelves"][data-operation="uninstall"]').isEnabled(),true,'finished shortcut remains usable after metadata failure');
 });
 
 test('a failed remote preview becomes a readable placeholder while controls remain usable',async page=>{
- await page.route('https://images.steamusercontent.com/ugc/fixture/broken.png',route=>route.abort());await page.evaluate(()=>{fx.catalog=fx.catalog.filter(row=>row.id!=='ProjectViewpointShelves');orange.state.modCatalog=null;orange.state.quickPreviews=[{item:'3815931973',previewUrl:'https://images.steamusercontent.com/ugc/fixture/broken.png'}];});await route(page,'components');await page.locator('[data-card="shelves"]').scrollIntoViewIfNeeded();await page.waitForSelector('[data-card="shelves"] .cover-missing');assert.equal(await page.locator('[data-card="shelves"] .cover-missing').innerText(),'封面暂不可用');assert.equal(await page.locator('[data-component="shelves"][data-operation="install"]').isEnabled(),true);
+ await page.route('https://images.steamusercontent.com/ugc/fixture/broken.png',route=>route.abort());await page.evaluate(()=>{fx.catalog=fx.catalog.filter(row=>row.id!=='ProjectViewpointShelves');orange.state.modCatalog=null;const original=chrome.webview.postMessage;chrome.webview.postMessage=m=>{if(m.action!=='configurationRequest'||m.payload.action!=='updatesGet')return original(m);queueMicrotask(()=>emitNative({id:m.id,ok:true,data:{configurationId:m.payload.id,data:{items:[{item:'3815931973',state:'latest',previewUrl:'https://images.steamusercontent.com/ugc/fixture/broken.png'}]}}}));};});await route(page,'components');await page.locator('[data-card="shelves"]').scrollIntoViewIfNeeded();await page.locator('[data-card="shelves"] .cover-missing').getByText('封面暂不可用',{exact:true}).waitFor();assert.equal(await page.locator('[data-component="shelves"][data-operation="install"]').isEnabled(),true);
 });
 
 test('manual metadata retry restores a cover after an earlier empty result',async page=>{
- const image=await page.evaluate(()=>fx.catalog[0].cover.split(',')[1]);await page.route('https://images.steamusercontent.com/ugc/fixture/retry.png',route=>route.fulfill({status:200,contentType:'image/png',body:Buffer.from(image,'base64')}));await page.evaluate(()=>{fx.catalog=fx.catalog.filter(row=>row.id!=='ProjectViewpointShelves');orange.state.modCatalog=null;orange.state.quickPreviews=[{item:'3815931973',previewUrl:''}];const original=chrome.webview.postMessage;chrome.webview.postMessage=m=>{if(m.action!=='updatesGet')return original(m);emitNative({id:m.id,ok:true,data:{items:[{item:'3815931973',previewUrl:'https://images.steamusercontent.com/ugc/fixture/retry.png'}]}});};});await route(page,'components');await page.locator('[data-check-updates]').click();await page.waitForFunction(()=>document.querySelector('[data-card="shelves"] .cover img')?.src==='https://images.steamusercontent.com/ugc/fixture/retry.png');
+ const image=await page.evaluate(()=>fx.catalog[0].cover.split(',')[1]);await page.route('https://images.steamusercontent.com/ugc/fixture/retry.png',route=>route.fulfill({status:200,contentType:'image/png',body:Buffer.from(image,'base64')}));await page.evaluate(()=>{fx.catalog=fx.catalog.filter(row=>row.id!=='ProjectViewpointShelves');orange.state.modCatalog=null;let called=0;const original=chrome.webview.postMessage;chrome.webview.postMessage=m=>{if(m.action!=='configurationRequest'||m.payload.action!=='updatesGet')return original(m);const items=called++===0?[]:[{item:'3815931973',state:'latest',previewUrl:'https://images.steamusercontent.com/ugc/fixture/retry.png'}];queueMicrotask(()=>emitNative({id:m.id,ok:true,data:{configurationId:m.payload.id,data:{items}}}));};});await route(page,'components');await page.waitForFunction(()=>orange.state.updates?.failed===true);await page.locator('[data-check-updates]').click();await page.waitForFunction(()=>document.querySelector('[data-card="shelves"] .cover img')?.src==='https://images.steamusercontent.com/ugc/fixture/retry.png');
 });
 
 test('quick enable and normal mod configuration share one selection and preserve other checkboxes',async page=>{
@@ -163,4 +233,4 @@ test('a failed shortcut can be retried without changing another configuration',a
  await page.locator('#launch-configuration-select').selectOption('live:'+'b'.repeat(32));await page.waitForFunction(()=>orange.state.status?.configurationId==='live:'+'b'.repeat(32));assert.equal(await page.locator('[data-card="weather"] [data-operation="install"]').first().isEnabled(),true);assert.deepEqual(await page.evaluate(()=>fx.configurationMods['live:'+'b'.repeat(32)]),['base']);
 });
 
-(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});let failed=0;const results=[];try{for(const item of cases.filter(c=>!process.env.OZL_TEST_FILTER||c.name.includes(process.env.OZL_TEST_FILTER))){const {page,errors}=await setup(browser);try{await fixture(page);await item.run(page);assert.deepEqual(errors,[]);results.push({name:item.name,status:'PASS'});console.log('PASS '+item.name);}catch(error){failed++;results.push({name:item.name,status:'FAIL',error:error.stack});console.error('FAIL '+item.name+'\n'+error.stack);await page.screenshot({path:path.join(output,'failure-'+results.length+'.png')}).catch(()=>{});}finally{await page.close();}}}finally{await browser.close();}fs.writeFileSync(path.join(output,'ui-results.json'),JSON.stringify(results,null,2));console.log(`${results.length-failed}/${results.length} component configuration groups passed`);if(failed)process.exitCode=1;})().catch(error=>{console.error(error);process.exitCode=1;});
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});let failed=0;const results=[];try{for(const item of cases.filter(c=>!process.env.OZL_TEST_FILTER||c.name.includes(process.env.OZL_TEST_FILTER))){const {page,errors}=await setup(browser,process.env.OZL_TEST_THEME||"dark");try{await fixture(page);await item.run(page);assert.deepEqual(errors,[]);results.push({name:item.name,status:'PASS'});console.log('PASS '+item.name);}catch(error){failed++;results.push({name:item.name,status:'FAIL',error:error.stack});console.error('FAIL '+item.name+'\n'+error.stack);await page.screenshot({path:path.join(output,'failure-'+results.length+'.png')}).catch(()=>{});}finally{await page.close();}}}finally{await browser.close();}fs.writeFileSync(path.join(output,'ui-results.json'),JSON.stringify(results,null,2));console.log(`${results.length-failed}/${results.length} component configuration groups passed`);if(failed)process.exitCode=1;})().catch(error=>{console.error(error);process.exitCode=1;});

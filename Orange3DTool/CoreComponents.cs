@@ -9,8 +9,11 @@ namespace PZ3D {
   public static bool FrameworkReady(Engine e){try{return e.FrameworkConfigured&&File.Exists(Path.Combine(e.Game,"ZombieBuddy.jar"))&&File.Exists(Path.Combine(e.Game,"zbNative.dll"))&&Regex.IsMatch(File.ReadAllText(e.Mods),@"(?m)^\s*mod\s*=\s*\\?ZombieBuddy\s*,");}catch{return false;}}
   public static bool ViewpointConfigured(Engine e){return FrameworkReady(e)&&File.Exists(e.Mods)&&Regex.IsMatch(File.ReadAllText(e.Mods),@"(?m)^\s*mod\s*=\s*\\?Viewpoint\s*,");}
   public static string Version(Engine e){
+   string jar=Path.Combine(e.Game,"ZombieBuddy.jar");if(!File.Exists(jar))jar=Path.Combine(e.BuddyLib,"ZombieBuddy.jar");
+   return JarVersion(jar);
+  }
+  internal static string JarVersion(string jar){
    try{
-    string jar=Path.Combine(e.Game,"ZombieBuddy.jar");if(!File.Exists(jar))jar=Path.Combine(e.BuddyLib,"ZombieBuddy.jar");
     using(var zip=ZipFile.OpenRead(jar)){
      var entry=zip.GetEntry("META-INF/MANIFEST.MF");if(entry==null)return "未读取到版本";
      using(var reader=new StreamReader(entry.Open())){

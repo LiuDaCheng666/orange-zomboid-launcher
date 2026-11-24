@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Web.Script.Serialization;
 namespace PZ3D {
  static class SteamSearchFilters {
@@ -31,10 +33,34 @@ namespace PZ3D {
    Check(SteamLauncherServices.SearchOrder("cars")==11,"legacy callers retain relevance ordering");
    var json=new JavaScriptSerializer();Func<Dictionary<string,object>,string> request=p=>json.Serialize(new{id="filters",action="steamSearch",payload=p});ModernHostPolicy.Validate("https://orange.local/index.html",request(Args()));passed++;
    var invalid=Args();invalid["category"]="Invented";Reject(()=>ModernHostPolicy.Validate("https://orange.local/index.html",request(invalid)),"host must reject unsupported tags before native worker");
-   var parse=typeof(ComponentEvidence).GetMethod("ReadPublishedDetails",BindingFlags.Static|BindingFlags.NonPublic);Check(parse!=null,"public Workshop metadata must retain validated preview_url before installation");var manifests=new Dictionary<ulong,string>();var previews=new Dictionary<ulong,string>();
-   string details="{\"response\":{\"publishedfiledetails\":[{\"publishedfileid\":\"3815931973\",\"result\":1,\"consumer_app_id\":108600,\"hcontent_file\":\"22\",\"preview_url\":\"https://images.steamusercontent.com/ugc/fixture/poster.jpg\"},{\"publishedfileid\":\"3813908957\",\"result\":1,\"consumer_app_id\":108600,\"preview_url\":\"https://attacker.invalid/poster.jpg\"},{\"publishedfileid\":\"1\",\"result\":1,\"consumer_app_id\":108600,\"preview_url\":\"https://images.steamusercontent.com/ugc/unrequested.jpg\"}]}}";
-   parse.Invoke(null,new object[]{details,new ulong[]{3815931973,3813908957},manifests,previews});Check(manifests[3815931973]=="22"&&previews[3815931973]=="https://images.steamusercontent.com/ugc/fixture/poster.jpg","official requested preview is returned independently of local installation");Check(previews.Count==1,"unrequested IDs and unsupported image hosts never become quick covers");
-   Console.WriteLine("PASS "+passed+" Steam filter/preview checks (production normalization/query configuration/host validation/metadata parser; no live Steam SDK query)");
+   var parse=typeof(ComponentEvidence).GetMethod("ReadPublishedDetails",BindingFlags.Static|BindingFlags.NonPublic);Check(parse!=null,"public Workshop metadata must retain validated preview_url before installation");var manifests=new Dictionary<ulong,string>();var previews=new Dictionary<ulong,string>();var dates=new Dictionary<ulong,string>();
+   string details="{\"response\":{\"publishedfiledetails\":[{\"publishedfileid\":\"3815931973\",\"result\":1,\"consumer_app_id\":108600,\"hcontent_file\":\"22\",\"time_updated\":1795506720,\"preview_url\":\"https://images.steamusercontent.com/ugc/fixture/poster.jpg\"},{\"publishedfileid\":\"3813908957\",\"result\":1,\"consumer_app_id\":108600,\"preview_url\":\"https://attacker.invalid/poster.jpg\"},{\"publishedfileid\":\"1\",\"result\":1,\"consumer_app_id\":108600,\"preview_url\":\"https://images.steamusercontent.com/ugc/unrequested.jpg\"}]}}";
+   parse.Invoke(null,new object[]{details,new ulong[]{3815931973,3813908957},manifests,previews,dates});Check(manifests[3815931973]=="22"&&previews[3815931973]=="https://images.steamusercontent.com/ugc/fixture/poster.jpg","official requested preview is returned independently of local installation");Check(dates[3815931973]=="2026-11-24T07:52:00.0000000Z","official UTC publication time is retained");Check(previews.Count==1,"unrequested IDs and unsupported image hosts never become quick covers");
+   CheckOwnedUpdate();
+   Console.WriteLine("PASS "+passed+" Steam and component update checks (fixture data; actual isolated file replacement)");
+  }
+  static void CheckOwnedUpdate(){
+   string root=Path.Combine(Path.GetTempPath(),"ozl-update-evidence-"+Guid.NewGuid().ToString("N"));
+   try{
+    string game=Path.Combine(root,"game"),user=Path.Combine(root,"user");
+    Directory.CreateDirectory(game);
+    Directory.CreateDirectory(user);
+    var updateOwner=new LauncherComponents(LauncherConfiguration.Resolve(Path.Combine(root,"update-data"),game,user),new Version(42,21));
+    var copies=new OwnedSupportInstallations(updateOwner);
+    string upstream=Path.Combine(root,"update","mods","Viewpoint"),updatedFile=Path.Combine(upstream,"42","test.lua");
+    Directory.CreateDirectory(Path.GetDirectoryName(updatedFile));
+    File.WriteAllText(Path.Combine(upstream,"42","mod.info"),"id=Viewpoint\nname=Viewpoint");
+    File.WriteAllText(updatedFile,"version one");
+    Check(copies.SourceChanged("Viewpoint",upstream,CancellationToken.None)==null,"no local copy has no apply state");
+    string installed=copies.Enable("Viewpoint",upstream,CancellationToken.None);
+    Check(copies.SourceChanged("Viewpoint",upstream,CancellationToken.None)==false,"same files do not produce an apply notice");
+    File.WriteAllText(Path.Combine(upstream,"42","AuthorSource.java"),"class AuthorSource {}");
+    Check(copies.SourceChanged("Viewpoint",upstream,CancellationToken.None)==false,"author sources alone don't require a runtime reapply");
+    File.WriteAllText(updatedFile,"version two");
+    Check(copies.SourceChanged("Viewpoint",upstream,CancellationToken.None)==true&&File.ReadAllText(Path.Combine(installed,"42","test.lua"))=="version one","same-size workshop replacement marks the old configuration copy without touching it");
+    copies.Enable("Viewpoint",upstream,CancellationToken.None,true);
+    Check(copies.SourceChanged("Viewpoint",upstream,CancellationToken.None)==false&&File.ReadAllText(Path.Combine(installed,"42","test.lua"))=="version two","applying the update copies real files and clears the pending state");
+   }finally{if(Directory.Exists(root))Directory.Delete(root,true);}
   }
  }
 }

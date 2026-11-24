@@ -1223,6 +1223,9 @@ main:has(#page[data-route=mods]) .secondary-tabs{margin:0;padding:0;border-top:0
 #page[data-route=components] .quick-support-status{margin:0;font-size:11px;white-space:nowrap}
 #page[data-route=components] .quick-explainer{margin:0 0 10px}
 #page[data-route=components] .component-description{min-height:38px}
+#page[data-route=components] .component-update-meta{margin:4px 0;color:var(--muted);font-size:12px}
+#page[data-route=components] .component-update-notice{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 8px;margin:4px 0;font-size:12px}
+#page[data-route=components] .component-update-notice strong{font-weight:650}
 #page[data-route=components] .component-body>details{margin-top:10px}
 @media(max-width:800px){#page[data-route=components] .component-configuration-label>label{width:100%}#page[data-route=components] .component-configuration-label .quick-support-status{white-space:normal}}
 .component-section>h2{font-size:17px;margin:14px 0 9px}.support-components{grid-template-columns:repeat(2,minmax(0,1fr))!important}.support-components .component-card{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:start;gap:12px;padding:14px}.support-components .component-card>.cover{width:64px;height:64px;margin:0;border-radius:8px}.support-components .component-title{flex-direction:row;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.support-components .component-title h3{font-size:15px;margin:0}.support-components .component-description{font-size:12px;min-height:0!important;margin:5px 0}.support-components .component-installation{font-size:11px;margin:4px 0 8px}.support-components .component-actions{flex-wrap:wrap;margin-top:8px}.support-components .component-body>details{margin-top:8px!important}.component-dependencies{font-size:12px;margin:6px 0 9px;overflow-wrap:anywhere}.support-components .component-body{min-width:0}@media(max-width:800px){.support-components{grid-template-columns:1fr!important}}

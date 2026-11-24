@@ -17,6 +17,24 @@ namespace PZ3D {
   internal Receipt Read(string id){string folder=Container(id),path=Inside(folder,"installation.json");if(!File.Exists(path))return null;var r=Json().Deserialize<Receipt>(ReadText(path));if(r==null||r.Version!=1||r.Id!=id||!VersionLibrary.Same(r.ConfigurationRoot,context.Root)||r.Files==null||r.Directories==null||string.IsNullOrEmpty(r.SourceRoot)||!Path.IsPathRooted(r.SourceRoot)||r.Files.Any(f=>f==null||f.Path==null||f.Length<0||f.Sha256==null)||r.Files.Select(f=>f.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=r.Files.Length)throw new IOException(id+"：本配置安装记录无效。");foreach(var f in r.Files)Inside(Payload(id),f.Path);foreach(string dir in r.Directories)Inside(Payload(id),dir);return r;}
   internal bool Installed(string id){try{var r=Read(id);return r!=null&&Directory.Exists(Payload(id))&&r.Files.All(f=>{string path=Inside(Payload(id),f.Path);return File.Exists(path)&&new FileInfo(path).Length==f.Length;});}catch(IOException){return false;}}
   internal string OriginalSource(string id){var r=Read(id);return r==null?null:r.SourceRoot;}
+  internal bool? SourceChanged(string id,string source,CancellationToken token){
+   var receipt=Read(id);
+   if(receipt==null||!Directory.Exists(source))return null;
+   var previous=receipt.Files.Where(file=>RuntimeFile(file.Path)).ToDictionary(file=>file.Path,StringComparer.OrdinalIgnoreCase);
+   string[] directories;
+   var current=Files(source,token,out directories).Where(RuntimeFile).ToArray();
+   if(current.Length!=previous.Count)return true;
+   foreach(string file in current){
+    token.ThrowIfCancellationRequested();
+    OwnedFile old;
+    if(!previous.TryGetValue(file.Substring(source.Length+1),out old)||new FileInfo(file).Length!=old.Length)return true;
+    using(var input=new FileStream(file,FileMode.Open,FileAccess.Read,FileShare.Read))
+     if(Digest(input,token)!=old.Sha256)return true;
+   }
+   return false;
+  }
+  // .java sources are not loaded at runtime and are absent in some older copies.
+  static bool RuntimeFile(string path){return !string.Equals(Path.GetExtension(path),".java",StringComparison.OrdinalIgnoreCase);}
   void Progress(string stage,long count,long total,long bytes,long size){if(report!=null)report(total==0?-1:(int)(count*100/total),stage+" · "+count+" / "+total+" 个文件 · "+bytes+" / "+size+" 字节");}
   static string Digest(Stream input,CancellationToken token){using(var sha=SHA256.Create()){byte[] buffer=new byte[65536];int count;while((count=input.Read(buffer,0,buffer.Length))>0){token.ThrowIfCancellationRequested();sha.TransformBlock(buffer,0,count,null,0);}sha.TransformFinalBlock(new byte[0],0,0);return BitConverter.ToString(sha.Hash).Replace("-","").ToLowerInvariant();}}
   string[] Files(string root,CancellationToken token,out string[] directories){var files=new List<string>();var dirs=new List<string>();var queue=new Queue<string>();queue.Enqueue(root);while(queue.Count>0){token.ThrowIfCancellationRequested();string dir=queue.Dequeue();SnapshotFileSystem.NoReparse(dir);if(report!=null&&dirs.Count%20==0)report(-1,"正在扫描安装内容 · 已发现 "+files.Count+" 个文件、"+dirs.Count+" 个目录");foreach(string child in Directory.EnumerateFileSystemEntries(dir)){token.ThrowIfCancellationRequested();SnapshotFileSystem.NoReparse(child);if((File.GetAttributes(child)&FileAttributes.Directory)!=0){dirs.Add(child.Substring(root.Length+1));queue.Enqueue(child);}else files.Add(child);}}directories=dirs.ToArray();return files.OrderBy(path=>path,StringComparer.OrdinalIgnoreCase).ToArray();}
